@@ -1,0 +1,1004 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Expense Management — UCC Pabna Admin</title>
+  
+  <!-- FontAwesome Icons & Google Fonts -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  
+  <!-- CSS Stylesheets -->
+  <link rel="stylesheet" href="assets/css/design-system.css?v=2">
+  <link rel="stylesheet" href="assets/css/dashboard.css">
+  <link rel="stylesheet" href="assets/css/expense-voucher-print.css?v=2">
+  
+  <style>
+    :root {
+      --indigo: #4f46e5;
+      --indigo-dark: #4338ca;
+      --indigo-light: #eef2ff;
+      --purple: #7c3aed;
+      --purple-light: #f5f3ff;
+      --bg-card: #ffffff;
+      --border-color: #cbd5e1;
+      --text-main: #0f172a;
+      --text-muted: #64748b;
+    }
+
+    /* Executive KPI Grid */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 18px;
+      margin-bottom: 24px;
+    }
+    .kpi-card {
+      background: #ffffff;
+      border-radius: 16px;
+      padding: 20px 22px;
+      border: 1px solid #cbd5e1;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .kpi-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 4px;
+      height: 100%;
+    }
+    .kpi-card.expense::before { background: #dc2626; }
+    .kpi-card.month::before { background: #4f46e5; }
+    .kpi-card.today::before { background: #d97706; }
+    .kpi-card.category::before { background: #7c3aed; }
+
+    .kpi-card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 10px 20px rgba(0, 0, 0, 0.06);
+    }
+    .kpi-icon {
+      width: 46px;
+      height: 46px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+    }
+    .kpi-icon.expense { background: #fef2f2; color: #dc2626; }
+    .kpi-icon.month { background: #eef2ff; color: #4338ca; }
+    .kpi-icon.today { background: #fffbeb; color: #d97706; }
+    .kpi-icon.category { background: #f3e8ff; color: #7c3aed; }
+    .kpi-info h4 { font-size: 0.72rem; text-transform: uppercase; color: #64748b; font-weight: 800; letter-spacing: 0.05em; margin-bottom: 4px; }
+    .kpi-info .val { font-size: 1.5rem; font-weight: 900; color: #0f172a; line-height: 1.2; }
+    
+    /* Executive Filter Bar */
+    .filter-card {
+      background: #ffffff;
+      border-radius: 16px;
+      padding: 18px 22px;
+      border: 1px solid #cbd5e1;
+      margin-bottom: 24px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+    }
+    .filter-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .form-group-sm label {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.72rem;
+      font-weight: 800;
+      color: #64748b;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .form-group-sm input, .form-group-sm select {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #0f172a;
+      background: #f8fafc;
+      transition: all 0.2s ease;
+      outline: none;
+    }
+    .form-group-sm input:focus, .form-group-sm select:focus {
+      border-color: var(--indigo);
+      background: #ffffff;
+      box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+    }
+    .filter-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      padding-top: 10px;
+      border-top: 1px solid #f1f5f9;
+    }
+
+    /* Table & Badges */
+    .voucher-no {
+      color: #dc2626;
+      font-weight: 800;
+      font-family: 'Consolas', 'JetBrains Mono', monospace;
+      font-size: 0.82rem;
+      background: #fef2f2;
+      padding: 2px 7px;
+      border-radius: 5px;
+      border: 1px solid #fecaca;
+      display: inline-block;
+    }
+    .type-pill {
+      display: inline-block;
+      padding: 3px 9px;
+      border-radius: 99px;
+      font-size: 0.75rem;
+      font-weight: 800;
+      white-space: nowrap;
+      background: #f3e8ff;
+      color: #6b21a8;
+      border: 1px solid #e9d5ff;
+    }
+    .method-cell { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; font-weight: 700; font-size: 0.82rem; color: #334155; }
+    .method-cell i { font-size: 0.85rem; width: 14px; text-align: center; }
+    .method-cash  i { color: #059669; }
+    .method-bkash i { color: #e2136e; }
+    .method-nagad i { color: #f6921e; }
+    .method-bank  i { color: #2563eb; }
+
+    /* Status Badges */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 800;
+    }
+    .badge-approved { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+    .badge-pending  { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+    .badge-rejected { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+    
+    /* Centered Modal Design */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      max-width: none;
+      max-height: none;
+      background: rgba(15, 23, 42, 0.65);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      z-index: 99999;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      margin: 0;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease-in-out;
+      overflow-y: auto;
+    }
+    .modal.active {
+      display: flex !important;
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .modal-content {
+      background: #ffffff;
+      border-radius: 20px;
+      width: 100%;
+      max-width: 650px;
+      max-height: 85vh;
+      overflow-y: auto;
+      box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.35);
+      border: 1px solid rgba(226, 232, 240, 0.8);
+      transform: scale(0.9);
+      transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      margin: auto;
+    }
+    .modal.active .modal-content {
+      transform: scale(1);
+    }
+    .modal-header {
+      padding: 18px 24px;
+      background: linear-gradient(135deg, #1e1b4b 0%, #312e81 55%, #4f46e5 100%);
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-top-left-radius: 19px;
+      border-top-right-radius: 19px;
+    }
+    .modal-header h3 {
+      font-size: 1.15rem;
+      font-weight: 900;
+      color: #ffffff !important;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn-close-modal {
+      background: rgba(255, 255, 255, 0.18);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      color: #ffffff;
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background 0.2s;
+    }
+    .btn-close-modal:hover {
+      background: rgba(255, 255, 255, 0.35);
+    }
+    .modal-body { padding: 24px; }
+    .modal-footer {
+      padding: 16px 24px;
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+      background: #f8fafc;
+      border-bottom-left-radius: 19px;
+      border-bottom-right-radius: 19px;
+    }
+
+    /* In-Page Print Voucher (No New Window/Tab) */
+    @media print {
+      @page { size: auto; margin: 5mm 7mm !important; }
+      body > *:not(#printableVoucherArea) { display: none !important; }
+      #printableVoucherArea { display: block !important; visibility: visible !important; width: 100% !important; margin: 0 !important; padding: 0 !important; position: absolute; left: 0; top: 0; }
+      #printableVoucherArea * { visibility: visible !important; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- LOADING OVERLAY -->
+<div class="ucc-loading" id="uccLoading">
+  <div class="ucc-spinner"></div>
+  <div class="ucc-loading-text" id="uccLoadingText">Loading UCC Expenses...</div>
+  <div class="ucc-loading-sub">Please wait a moment</div>
+</div>
+
+<!-- SIDEBAR -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <a href="index.html" class="sidebar-logo">
+      <div class="logo-icon"><i class="fas fa-graduation-cap"></i></div>
+      <span>UCC <span class="gradient-text">Pabna</span> <small class="admin-badge">Admin</small></span>
+    </a>
+    <button class="sidebar-toggle" id="sidebarToggle" aria-label="Toggle sidebar">
+      <i class="fas fa-chevron-left"></i>
+    </button>
+  </div>
+  <nav class="sidebar-nav">
+    <a href="dashboard.html" class="nav-item">
+      <i class="fas fa-tachometer-alt"></i><span>Dashboard</span>
+    </a>
+    <a href="students.html" class="nav-item">
+      <i class="fas fa-users"></i><span>Students</span>
+    </a>
+    <a href="admission.html" class="nav-item">
+      <i class="fas fa-user-plus"></i><span>Admission</span>
+    </a>
+    <a href="payment.html" class="nav-item">
+      <i class="fas fa-money-bill-wave"></i><span>Payment</span>
+    </a>
+    <a href="finance.html" class="nav-item">
+      <i class="fas fa-chart-line"></i><span>Finance</span>
+    </a>
+    <a href="expenses.html" class="nav-item active">
+      <i class="fas fa-shopping-cart"></i><span>Expenses</span>
+    </a>
+    <a href="exams.html" class="nav-item">
+      <i class="fas fa-pencil-alt"></i><span>Exams</span>
+    </a>
+    <a href="distribution.html" class="nav-item">
+      <i class="fas fa-book-open"></i><span>Distribution</span>
+    </a>
+    <a href="batches.html" class="nav-item">
+      <i class="fas fa-layer-group"></i><span>Batches</span>
+    </a>
+    <a href="batch-transfer.html" class="nav-item">
+      <i class="fas fa-exchange-alt"></i><span>Batch Transfer</span>
+    </a>
+    <a href="reports.html" class="nav-item">
+      <i class="fas fa-chart-bar"></i><span>Reports</span>
+    </a>
+    <a href="settings.html" class="nav-item">
+      <i class="fas fa-cog"></i><span>Settings</span>
+    </a>
+  </nav>
+</aside>
+
+<!-- MAIN CONTENT -->
+<main class="main-content" id="mainContent">
+
+  <!-- Top Header -->
+  <header class="top-header">
+    <div style="display:flex;align-items:center;gap:14px;">
+      <button class="menu-toggle" id="menuToggle"><i class="fas fa-bars"></i></button>
+      <div>
+        <h1 class="page-title"><i class="fas fa-receipt" style="color:var(--indigo);"></i> UCC Expense Management</h1>
+        <div style="font-size:12.5px;color:var(--text-muted);margin-top:2px;">
+          UCC Pabna Branch — Track, Manage, and Approve Operational Expenses & Vouchers
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;">
+      <a href="finance.html#printableDailySection" class="btn btn-secondary">
+        <i class="fas fa-chart-line"></i> View Financial Audit
+      </a>
+      <button class="btn btn-primary" onclick="openAddModal()">
+        <i class="fas fa-plus-circle"></i> Add New Expense
+      </button>
+    </div>
+  </header>
+
+  <!-- KPI SUMMARY CARDS -->
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-icon expense"><i class="fas fa-wallet"></i></div>
+      <div class="kpi-info">
+        <h4>Total Expenses</h4>
+        <div class="val" id="kpiTotalExpense">৳ 0</div>
+      </div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-icon month"><i class="fas fa-calendar-alt"></i></div>
+      <div class="kpi-info">
+        <h4>This Month</h4>
+        <div class="val" id="kpiMonthExpense">৳ 0</div>
+      </div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-icon today"><i class="fas fa-clock"></i></div>
+      <div class="kpi-info">
+        <h4>Today's Expense</h4>
+        <div class="val" id="kpiTodayExpense">৳ 0</div>
+      </div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-icon category"><i class="fas fa-tags"></i></div>
+      <div class="kpi-info">
+        <h4>Active Categories</h4>
+        <div class="val" id="kpiCategoriesCount">9 Categories</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ADVANCED FILTERS -->
+  <div class="filter-card">
+    <div class="filter-grid">
+      <div class="form-group-sm">
+        <label><i class="fas fa-search"></i> Search</label>
+        <input type="text" id="searchInput" placeholder="Expense title, vendor, ID...">
+      </div>
+      <div class="form-group-sm">
+        <label><i class="fas fa-tag"></i> Category</label>
+        <select id="categoryFilter">
+          <option value="all">All Categories</option>
+          <option value="Teacher Honorarium">Teacher Honorarium (শিক্ষক সম্মানী)</option>
+          <option value="Sheet & Exam Printing">Sheet & Exam Printing (প্রিন্টিং)</option>
+          <option value="Office & Branch Rent">Office & Branch Rent (শাখা ভাড়া)</option>
+          <option value="Electricity & Utilities">Electricity & Utilities (বিদ্যুৎ ও ওয়াইফাই)</option>
+          <option value="Banner, Poster & Marketing">Banner & Marketing (প্রচারণা)</option>
+          <option value="Staff & Assistant Salary">Staff & Assistant Salary (স্টাফ বেতন)</option>
+          <option value="Entertainment & Refreshments">Entertainment & Refreshments (আপ্যায়ন)</option>
+          <option value="SMS & Software Utility">SMS & Software Utility (সফটওয়্যার)</option>
+          <option value="Stationery & Materials">Stationery & Materials (স্টেশনরি)</option>
+        </select>
+      </div>
+      <div class="form-group-sm">
+        <label><i class="fas fa-credit-card"></i> Payment Method</label>
+        <select id="methodFilter">
+          <option value="all">All Methods</option>
+          <option value="Cash">Cash</option>
+          <option value="bKash">bKash</option>
+          <option value="Nagad">Nagad</option>
+          <option value="Bank">Bank Transfer</option>
+        </select>
+      </div>
+      <div class="form-group-sm">
+        <label><i class="fas fa-info-circle"></i> Status</label>
+        <select id="statusFilter">
+          <option value="all">All Status</option>
+          <option value="Approved">Approved</option>
+          <option value="Pending Approval">Pending Approval</option>
+          <option value="Rejected">Rejected</option>
+        </select>
+      </div>
+      <div class="form-group-sm">
+        <label><i class="fas fa-calendar"></i> From Date</label>
+        <input type="date" id="fromDateFilter">
+      </div>
+      <div class="form-group-sm">
+        <label><i class="fas fa-calendar"></i> To Date</label>
+        <input type="date" id="toDateFilter">
+      </div>
+    </div>
+    <div class="filter-actions">
+      <button class="btn btn-secondary" onclick="clearFilters()"><i class="fas fa-undo"></i> Reset Filters</button>
+      <button class="btn btn-primary" onclick="loadExpenses()"><i class="fas fa-filter"></i> Apply Filters</button>
+    </div>
+  </div>
+
+  <!-- EXPENSE DATA TABLE CARD -->
+  <div class="data-card">
+    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+      <h3><i class="fas fa-list-alt"></i> UCC Expense Records</h3>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-sm btn-secondary" onclick="exportToCSV()"><i class="fas fa-file-csv"></i> Export CSV</button>
+        <button class="btn btn-sm btn-secondary" onclick="window.print()"><i class="fas fa-print"></i> Print Statement</button>
+      </div>
+    </div>
+    <div class="table-responsive">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Date & Time</th>
+            <th>Voucher / Title</th>
+            <th>Category</th>
+            <th>Branch / Unit</th>
+            <th>Payment Method</th>
+            <th>Amount</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="expenseTableBody">
+          <tr>
+            <td colspan="8" style="text-align:center;padding:40px;color:var(--text-muted);">
+              <i class="fas fa-spinner fa-spin fa-2x"></i><br><br>Loading UCC Expenses...
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</main>
+
+<!-- ADD / EDIT EXPENSE MODAL -->
+<div class="modal" id="expenseModal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3 id="modalTitle"><i class="fas fa-plus-circle" style="color:var(--indigo);"></i> Add UCC Expense Record</h3>
+      <button class="btn-icon" onclick="closeExpenseModal()" style="border:none;background:none;cursor:pointer;font-size:16px;"><i class="fas fa-times"></i></button>
+    </div>
+    <form id="expenseForm">
+      <div class="modal-body" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <input type="hidden" id="expenseId">
+        <div style="grid-column: span 2;">
+          <label style="font-size:0.8rem;font-weight:700;display:block;margin-bottom:6px;">Expense Title / Purpose *</label>
+          <input type="text" id="expenseTitle" placeholder="e.g. Farmgate Branch Rent for August / Model Test Sheet Printing" required style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;">
+        </div>
+        <div>
+          <label style="font-size:0.8rem;font-weight:700;display:block;margin-bottom:6px;">Category *</label>
+          <select id="expenseCategory" required style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;">
+            <option value="">Select Category</option>
+            <option value="Teacher Honorarium">Teacher Honorarium (শিক্ষক সম্মানী)</option>
+            <option value="Sheet & Exam Printing">Sheet & Exam Printing (প্রিন্টিং)</option>
+            <option value="Office & Branch Rent">Office & Branch Rent (শাখা ভাড়া)</option>
+            <option value="Electricity & Utilities">Electricity & Utilities (বিদ্যুৎ ও ওয়াইফাই)</option>
+            <option value="Banner, Poster & Marketing">Banner & Marketing (প্রচারণা)</option>
+            <option value="Staff & Assistant Salary">Staff & Assistant Salary (স্টাফ বেতন)</option>
+            <option value="Entertainment & Refreshments">Entertainment & Refreshments (আপ্যায়ন)</option>
+            <option value="SMS & Software Utility">SMS & Software Utility (সফটওয়্যার)</option>
+            <option value="Stationery & Materials">Stationery & Materials (স্টেশনরি)</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:0.8rem;font-weight:700;display:block;margin-bottom:6px;">Amount (৳ BDT) *</label>
+          <input type="number" id="expenseAmount" min="1" step="1" placeholder="e.g. 5000" required style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;">
+        </div>
+        <div>
+          <label style="font-size:0.8rem;font-weight:700;display:block;margin-bottom:6px;">Branch / Unit</label>
+          <select id="expenseBranch" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;">
+            <option value="UCC Pabna Main">UCC Pabna Main</option>
+            <option value="UCC Farmgate Branch">UCC Farmgate Branch</option>
+            <option value="UCC Mirpur Branch">UCC Mirpur Branch</option>
+            <option value="UCC Uttara Branch">UCC Uttara Branch</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:0.8rem;font-weight:700;display:block;margin-bottom:6px;">Payment Method *</label>
+          <select id="expenseMethod" required style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;">
+            <option value="Cash">Cash</option>
+            <option value="bKash">bKash</option>
+            <option value="Nagad">Nagad</option>
+            <option value="Bank">Bank Transfer</option>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:0.8rem;font-weight:700;display:block;margin-bottom:6px;">Date *</label>
+          <input type="date" id="expenseDate" required style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;">
+        </div>
+        <div>
+          <label style="font-size:0.8rem;font-weight:700;display:block;margin-bottom:6px;">Spent By / Vendor</label>
+          <input type="text" id="expenseVendor" placeholder="e.g. Ideal Press / Accountant Rahim" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;">
+        </div>
+        <div style="grid-column: span 2;">
+          <label style="font-size:0.8rem;font-weight:700;display:block;margin-bottom:6px;">Remarks / Note</label>
+          <textarea id="expenseNotes" rows="2" placeholder="Additional details..." style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeExpenseModal()">Cancel</button>
+        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Expense</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- SCRIPT LOGIC -->
+<script src="assets/js/sidebar.js?v=2"></script>
+<script>
+  let expensesData = [];
+
+  document.addEventListener('DOMContentLoaded', () => {
+    // Set default date filter
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('expenseDate').value = today;
+
+    // Load initial data
+    loadExpenses();
+
+    // Event listeners
+    document.getElementById('expenseForm').addEventListener('submit', handleSaveExpense);
+    document.getElementById('searchInput').addEventListener('keyup', filterLocalData);
+    document.getElementById('categoryFilter').addEventListener('change', filterLocalData);
+    document.getElementById('methodFilter').addEventListener('change', filterLocalData);
+    document.getElementById('statusFilter').addEventListener('change', filterLocalData);
+
+    setTimeout(() => {
+      document.getElementById('uccLoading').style.display = 'none';
+    }, 400);
+  });
+
+  async function loadExpenses() {
+    const API_BASE = window.location.origin.includes('5002') || window.location.origin.includes('5000') 
+      ? window.location.origin 
+      : 'http://localhost:5002';
+    try {
+      const res = await fetch(API_BASE + '/api/ucc/expenses');
+      const data = await res.json();
+      if (data.success && Array.isArray(data.expenses)) {
+        expensesData = data.expenses.map(e => ({
+          id: e.expenseId || e._id,
+          _id: e._id,
+          title: e.description || e.title || e.subCategory || 'Untitled Expense',
+          category: e.category || 'Office',
+          branch: e.branch || 'UCC Pabna Main',
+          method: e.paymentMethod || e.method || 'Cash',
+          amount: Number(e.amount || 0),
+          status: e.status || 'Approved',
+          date: e.date || new Date().toISOString().split('T')[0],
+          vendor: e.vendor || 'N/A',
+          notes: e.description || e.notes || ''
+        }));
+      } else {
+        expensesData = [];
+      }
+    } catch (err) {
+      console.warn('API error, loading UCC Expenses:', err);
+      expensesData = [];
+    }
+    renderExpensesTable(expensesData);
+    updateKpis(expensesData);
+  }
+
+  function getSampleUccExpenses() {
+    return [];
+  }
+
+  function renderExpensesTable(items) {
+    const tbody = document.getElementById('expenseTableBody');
+    if (!tbody) return;
+    if (!items || items.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:35px;color:var(--text-muted);font-weight:600;"><i class="fas fa-inbox fa-2x" style="margin-bottom:8px;color:#94a3b8;display:block;"></i>No UCC expense records found in uccexpenses collection.</td></tr>`;
+      return;
+    }
+
+    const METHOD_ICONS = {
+      Cash: 'fa-solid fa-money-bill-wave',
+      bKash: 'fa-brands fa-bkash',
+      Nagad: 'fa-solid fa-mobile-screen-button',
+      Bank: 'fa-solid fa-building-columns'
+    };
+
+    tbody.innerHTML = items.map(item => {
+      const mIcon = METHOD_ICONS[item.method] || 'fa-solid fa-money-bill';
+      const mCls = item.method === 'Cash' ? 'method-cash' : (item.method === 'bKash' ? 'method-bkash' : (item.method === 'Nagad' ? 'method-nagad' : 'method-bank'));
+      const statusCls = item.status === 'Approved' ? 'badge-approved' : (item.status === 'Rejected' ? 'badge-rejected' : 'badge-pending');
+      const statusIcon = item.status === 'Approved' ? 'fa-check-circle' : (item.status === 'Rejected' ? 'fa-times-circle' : 'fa-clock');
+      
+      return `
+        <tr>
+          <td style="font-weight:600;font-size:0.82rem;color:#475569;">
+            ${item.date || 'N/A'}<br>
+            <span class="voucher-no" style="margin-top:3px;">${item.id || item._id}</span>
+          </td>
+          <td>
+            <div style="font-weight:800;color:#0f172a;font-size:0.88rem;">${escapeHtml(item.title || 'Untitled Expense')}</div>
+            <small style="color:#64748b;font-weight:600;"><i class="fas fa-building" style="font-size:0.75rem;margin-right:3px;color:#94a3b8;"></i> ${escapeHtml(item.vendor || 'N/A')}</small>
+          </td>
+          <td><span class="type-pill">${escapeHtml(item.category)}</span></td>
+          <td><span style="font-weight:700;font-size:0.8rem;color:#334155;">${escapeHtml(item.branch || 'UCC Pabna Main')}</span></td>
+          <td><span class="method-cell ${mCls}"><i class="${mIcon}"></i> ${escapeHtml(item.method || 'Cash')}</span></td>
+          <td style="font-weight:900;color:#dc2626;font-size:0.92rem;">৳ ${(item.amount || 0).toLocaleString()}</td>
+          <td>
+            <span class="badge ${statusCls}">
+              <i class="fas ${statusIcon}"></i> ${item.status || 'Approved'}
+            </span>
+          </td>
+          <td>
+            <div style="display:flex;gap:6px;">
+              <button class="btn-icon" title="View & Print Voucher" onclick="printVoucher('${item.id || item._id}')" style="border:none;background:#eef2ff;color:#4338ca;padding:6px 10px;border-radius:8px;cursor:pointer;transition:all 0.2s;">
+                <i class="fas fa-print"></i>
+              </button>
+              <button class="btn-icon" title="Delete Voucher" onclick="deleteExpense('${item.id || item._id}')" style="border:none;background:#fef2f2;color:#dc2626;padding:6px 10px;border-radius:8px;cursor:pointer;transition:all 0.2s;">
+                <i class="fas fa-trash"></i>
+              </button>
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  function updateKpis(items) {
+    const total = items.reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
+    const todayStr = new Date().toISOString().split('T')[0];
+    const todayTotal = items
+      .filter(i => i.date === todayStr)
+      .reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
+
+    const monthStr = todayStr.substring(0, 7);
+    const monthTotal = items
+      .filter(i => i.date && i.date.startsWith(monthStr))
+      .reduce((acc, curr) => acc + (Number(curr.amount) || 0), 0);
+
+    document.getElementById('kpiTotalExpense').innerText = '৳ ' + total.toLocaleString();
+    document.getElementById('kpiMonthExpense').innerText = '৳ ' + monthTotal.toLocaleString();
+    document.getElementById('kpiTodayExpense').innerText = '৳ ' + todayTotal.toLocaleString();
+  }
+
+  function filterLocalData() {
+    const search = document.getElementById('searchInput').value.toLowerCase();
+    const cat = document.getElementById('categoryFilter').value;
+    const method = document.getElementById('methodFilter').value;
+    const status = document.getElementById('statusFilter').value;
+
+    const filtered = expensesData.filter(item => {
+      const matchSearch = !search || 
+        (item.title && item.title.toLowerCase().includes(search)) || 
+        (item.vendor && item.vendor.toLowerCase().includes(search)) ||
+        (item.id && item.id.toLowerCase().includes(search));
+      
+      const matchCat = (cat === 'all') || (item.category === cat);
+      const matchMethod = (method === 'all') || (item.method === method);
+      const matchStatus = (status === 'all') || (item.status === status);
+
+      return matchSearch && matchCat && matchMethod && matchStatus;
+    });
+
+    renderExpensesTable(filtered);
+    updateKpis(filtered);
+  }
+
+  function openAddModal() {
+    document.getElementById('expenseTitle').value = '';
+    document.getElementById('expenseCategory').value = '';
+    document.getElementById('expenseAmount').value = '';
+    document.getElementById('expenseVendor').value = '';
+    document.getElementById('expenseNotes').value = '';
+    document.getElementById('expenseModal').classList.add('active');
+  }
+
+  function closeExpenseModal() {
+    document.getElementById('expenseModal').classList.remove('active');
+  }
+
+  async function handleSaveExpense(e) {
+    e.preventDefault();
+    const API_BASE = window.location.origin.includes('5002') || window.location.origin.includes('5000') 
+      ? window.location.origin 
+      : 'http://localhost:5002';
+
+    const title = document.getElementById('expenseTitle').value;
+    const category = document.getElementById('expenseCategory').value;
+    const amount = Number(document.getElementById('expenseAmount').value);
+    const branchElem = document.getElementById('expenseBranch');
+    const branch = branchElem ? branchElem.value : 'UCC Pabna Main';
+    const method = document.getElementById('expenseMethod').value;
+    const date = document.getElementById('expenseDate').value;
+    const vendor = document.getElementById('expenseVendor').value || 'General Vendor';
+    const notes = document.getElementById('expenseNotes').value;
+
+    const payload = {
+      expenseId: 'UCC-EXP-' + Date.now().toString().slice(-6),
+      description: title,
+      category: category,
+      amount: amount,
+      branch: branch,
+      paymentMethod: method,
+      date: date,
+      vendor: vendor,
+      notes: notes,
+      status: 'Approved'
+    };
+
+    try {
+      const res = await fetch(API_BASE + '/api/ucc/expenses', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const result = await res.json();
+      if (result.success) {
+        await loadExpenses();
+      } else {
+        expensesData.unshift({ ...payload, id: payload.expenseId, title: payload.description, method: payload.paymentMethod });
+        renderExpensesTable(expensesData);
+        updateKpis(expensesData);
+      }
+    } catch (err) {
+      console.warn('Backend API save error:', err);
+      expensesData.unshift({ ...payload, id: payload.expenseId, title: payload.description, method: payload.paymentMethod });
+      renderExpensesTable(expensesData);
+      updateKpis(expensesData);
+    }
+    closeExpenseModal();
+    alert('UCC Expense saved to uccexpenses collection successfully!');
+  }
+
+  async function deleteExpense(id) {
+    if (!confirm('Are you sure you want to delete this UCC expense voucher?')) return;
+    const API_BASE = window.location.origin.includes('5002') || window.location.origin.includes('5000') 
+      ? window.location.origin 
+      : 'http://localhost:5002';
+
+    const item = expensesData.find(i => i.id === id || i._id === id);
+    const mongoId = item ? item._id : id;
+
+    try {
+      await fetch(API_BASE + '/api/ucc/expenses/' + mongoId, { method: 'DELETE' });
+    } catch (err) {
+      console.warn('API delete error:', err);
+    }
+
+    expensesData = expensesData.filter(i => i.id !== id && i._id !== id && i._id !== mongoId);
+    renderExpensesTable(expensesData);
+    updateKpis(expensesData);
+  }
+
+  function generateVoucherHTMLForPrint(item) {
+    const id = item.id || item._id || 'EXP-000';
+    const date = item.date || new Date().toISOString().split('T')[0];
+    const purpose = escapeHtml(item.title || item.description || 'Untitled Expense');
+    const category = escapeHtml(item.category || 'General');
+    const branch = escapeHtml(item.branch || 'UCC Pabna Main');
+    const vendor = escapeHtml(item.vendor || 'N/A');
+    const method = escapeHtml(item.method || 'Cash');
+    const amount = Number(item.amount || 0);
+    const status = escapeHtml(item.status || 'Approved');
+    const notes = escapeHtml(item.notes || item.description || 'No remarks.');
+    const formattedAmount = '৳ ' + amount.toLocaleString('en-US');
+
+    return `
+    <div class="ev-a4-sheet" style="box-shadow:none; margin:0; padding:15px;">
+      <div class="ev-content">
+        <!-- 1. HEADER -->
+        <header class="ev-header">
+          <div class="ev-header-main">
+            <div class="ev-institute">
+              <h1>UCC পাবনা শাখা</h1>
+              <p class="ev-address"><i class="fas fa-map-marker-alt"></i> এডওয়ার্ড কলেজ, রথঘর সংলগ্ন, রাধানগর, পাবনা</p>
+              <p class="ev-contact">
+                <span class="ev-contact-item"><i class="fas fa-phone"></i> 01312-427799</span>
+                <span class="ev-contact-item"><i class="fas fa-envelope"></i> uccpabna@gmail.com</span>
+              </p>
+            </div>
+            <div class="ev-header-right">
+              <div class="ev-report-label">Expense Voucher</div>
+              <div class="ev-voucher-badge">
+                <small>Voucher No.</small>
+                <strong>${id}</strong>
+              </div>
+            </div>
+          </div>
+          <div class="ev-header-line"></div>
+        </header>
+
+        <!-- 2. BANNER -->
+        <div class="ev-voucher-banner">
+          <h2><i class="fas fa-receipt"></i> ব্যয় ভাউচার / Expense Voucher</h2>
+          <div class="banner-sub">UCC Pabna Branch — Official Expense Payment Voucher</div>
+        </div>
+
+        <!-- 3. SUMMARY STRIP (5 KPI CARDS - FINANCE MATCH) -->
+        <div class="ev-summary-strip">
+          <div class="ev-summary-box total">
+            <span class="ev-summary-icon total-icon"><i class="fas fa-receipt"></i></span>
+            <div class="ev-summary-info">
+              <div class="ev-sum-label">Amount / পরিমাণ</div>
+              <div class="ev-sum-value">${formattedAmount}</div>
+            </div>
+          </div>
+          <div class="ev-summary-box date">
+            <span class="ev-summary-icon date-icon"><i class="fas fa-calendar-alt"></i></span>
+            <div class="ev-summary-info">
+              <div class="ev-sum-label">Date / তারিখ</div>
+              <div class="ev-sum-value">${date}</div>
+            </div>
+          </div>
+          <div class="ev-summary-box method">
+            <span class="ev-summary-icon method-icon"><i class="fas fa-wallet"></i></span>
+            <div class="ev-summary-info">
+              <div class="ev-sum-label">Method / পদ্ধতি</div>
+              <div class="ev-sum-value">${method}</div>
+            </div>
+          </div>
+          <div class="ev-summary-box category">
+            <span class="ev-summary-icon category-icon"><i class="fas fa-tags"></i></span>
+            <div class="ev-summary-info">
+              <div class="ev-sum-label">Category / বিভাগ</div>
+              <div class="ev-sum-value">${category}</div>
+            </div>
+          </div>
+          <div class="ev-summary-box status">
+            <span class="ev-summary-icon status-icon"><i class="fas fa-check-circle"></i></span>
+            <div class="ev-summary-info">
+              <div class="ev-sum-label">Status / স্ট্যাটাস</div>
+              <div class="ev-sum-value">${status}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. OPERATING EXPENSES BREAKDOWN TABLE -->
+        <div style="margin-top:10px; margin-bottom:12px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px; padding-bottom:3px; border-bottom:1.5px solid #e2e8f0;">
+            <h3 style="margin:0; font-size:10.5px; font-weight:800; color:#0f172a; display:flex; align-items:center; gap:5px;">
+              <i class="fas fa-receipt" style="color:#dc2626; font-size:9px; width:16px; height:16px; display:flex; align-items:center; justify-content:center; background:#fef2f2; border-radius:4px;"></i>
+              2. Operating Expenses Breakdown (আজকের মোট ব্যয় বিবরণী)
+            </h3>
+            <span style="font-size:7.5px; color:#64748b;">Expense Statement Breakdown</span>
+          </div>
+          <table class="details-table" style="width:100%; border-collapse:separate; border-spacing:0; font-size:7.8px; table-layout:fixed; border:1px solid #cbd5e1; border-radius:8px; overflow:hidden;">
+            <colgroup>
+              <col style="width:13%">
+              <col style="width:16%">
+              <col style="width:27%">
+              <col style="width:14%">
+              <col style="width:12%">
+              <col style="width:9%">
+              <col style="width:9%">
+            </colgroup>
+            <thead>
+              <tr style="background-color:#dc2626 !important; background:#dc2626 !important; color:#ffffff !important;">
+                <th class="exp-th" style="display:table-cell !important; background-color:#dc2626 !important; background:#dc2626 !important; color:#ffffff !important; border:none; border-bottom:1px solid #b91c1c !important; border-right:1px solid #b91c1c !important; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; word-break:break-word;">Date / Time</th>
+                <th class="exp-th" style="display:table-cell !important; background-color:#dc2626 !important; background:#dc2626 !important; color:#ffffff !important; border:none; border-bottom:1px solid #b91c1c !important; border-right:1px solid #b91c1c !important; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; word-break:break-word;">Voucher No</th>
+                <th class="exp-th" style="display:table-cell !important; background-color:#dc2626 !important; background:#dc2626 !important; color:#ffffff !important; border:none; border-bottom:1px solid #b91c1c !important; border-right:1px solid #b91c1c !important; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; word-break:break-word;">Expense Title / Purpose</th>
+                <th class="exp-th" style="display:table-cell !important; background-color:#dc2626 !important; background:#dc2626 !important; color:#ffffff !important; border:none; border-bottom:1px solid #b91c1c !important; border-right:1px solid #b91c1c !important; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; word-break:break-word;">Category</th>
+                <th class="exp-th" style="display:table-cell !important; background-color:#dc2626 !important; background:#dc2626 !important; color:#ffffff !important; border:none; border-bottom:1px solid #b91c1c !important; border-right:1px solid #b91c1c !important; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; word-break:break-word;">Paid To / Vendor</th>
+                <th class="exp-th" style="display:table-cell !important; background-color:#dc2626 !important; background:#dc2626 !important; color:#ffffff !important; border:none; border-bottom:1px solid #b91c1c !important; border-right:1px solid #b91c1c !important; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; word-break:break-word;">Method</th>
+                <th class="exp-th num" style="display:table-cell !important; background-color:#dc2626 !important; background:#dc2626 !important; color:#ffffff !important; border:none; border-bottom:1px solid #b91c1c !important; text-align:right; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; word-break:break-word;">Amount (৳)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="background:#fff;">
+                <td style="display:table-cell !important; padding:4px 5px; border-bottom:1px solid #e2e8f0; border-right:1px solid #f1f5f9;">${date}</td>
+                <td style="display:table-cell !important; padding:4px 5px; border-bottom:1px solid #e2e8f0; border-right:1px solid #f1f5f9; font-family:monospace; font-weight:700; color:#dc2626; font-size:7.5px; word-break:break-all; overflow:hidden;">${id}</td>
+                <td style="display:table-cell !important; padding:4px 5px; border-bottom:1px solid #e2e8f0; border-right:1px solid #f1f5f9; font-weight:600; color:#1e293b; word-break:break-word;">${purpose}</td>
+                <td style="display:table-cell !important; padding:4px 5px; border-bottom:1px solid #e2e8f0; border-right:1px solid #f1f5f9;"><span style="background:#fef2f2; color:#dc2626; padding:1px 4px; border-radius:3px; font-weight:700; font-size:7px;">${category}</span></td>
+                <td style="display:table-cell !important; padding:4px 5px; border-bottom:1px solid #e2e8f0; border-right:1px solid #f1f5f9; color:#475569; word-break:break-word;">${vendor}</td>
+                <td style="display:table-cell !important; padding:4px 5px; border-bottom:1px solid #e2e8f0; border-right:1px solid #f1f5f9;">${method}</td>
+                <td class="num" style="display:table-cell !important; padding:4px 5px; border-bottom:1px solid #e2e8f0; text-align:right; font-weight:800; color:#dc2626;">${formattedAmount}</td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr style="background:#fef2f2; font-weight:800; color:#dc2626;">
+                <td colspan="6" style="padding:4px 6px; border-top:1.5px solid #dc2626; text-transform:uppercase; font-size:7px;">Total Operating Expense (মোট ব্যয়)</td>
+                <td class="num" style="padding:4px 6px; border-top:1.5px solid #dc2626; text-align:right; font-size:8.5px;">${formattedAmount}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+
+        <!-- 5. PURPOSE & REMARKS -->
+        <div class="ev-info-section" style="margin-bottom:12px;">
+          <div class="ev-info-section-title">
+            <i class="fas fa-clipboard-edit"></i> বিস্তারিত উদ্দেশ্য ও মন্তব্য / Purpose & Remarks
+          </div>
+          <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:8px 12px; font-size:8.5px; color:#1e293b; display:flex; flex-direction:column; gap:4px;">
+            <div><strong style="color:#475569;">উদ্দেশ্য / Purpose:</strong> ${purpose}</div>
+            <div><strong style="color:#475569;">রেফারেন্স / Reference:</strong> <span style="font-family:monospace;">${id}</span> · <strong style="color:#475569;">ভেন্ডর / Vendor:</strong> ${vendor} · <strong style="color:#475569;">শাখা / Branch:</strong> ${branch}</div>
+            <div><strong style="color:#475569;">মন্তব্য / Notes:</strong> ${notes}</div>
+          </div>
+        </div>
+
+        <!-- 6. SIGNATURES -->
+        <div class="ev-signatures">
+          <div class="ev-sig"><div class="ev-sig-line"></div><div class="ev-sig-role">Prepared By</div></div>
+          <div class="ev-sig"><div class="ev-sig-line"></div><div class="ev-sig-role">Checked By</div></div>
+          <div class="ev-sig"><div class="ev-sig-line"></div><div class="ev-sig-role">Branch Head</div></div>
+        </div>
+
+        <!-- 7. FOOTER -->
+        <div class="ev-final-note">
+          <b>UCC পাবনা শাখা</b> · Computer Generated Expense Voucher Statement
+        </div>
+      </div>
+    </div>`;
+  }
+
+  function printVoucher(id) {
+    const item = expensesData.find(i => i.id === id || i._id === id);
+    if (!item) return;
+
+    let printArea = document.getElementById('printableVoucherArea');
+    if (!printArea) {
+      printArea = document.createElement('div');
+      printArea.id = 'printableVoucherArea';
+      document.body.appendChild(printArea);
+    }
+
+    printArea.innerHTML = generateVoucherHTMLForPrint(item);
+    printArea.style.display = 'block';
+
+    // Direct in-page print (No new window/tab)
+    window.print();
+
+    setTimeout(() => {
+      printArea.style.display = 'none';
+    }, 500);
+  }
+
+  function exportToCSV() {
+    let csv = 'ID,Date,Title,Category,Branch,Payment Method,Amount,Status\n';
+    expensesData.forEach(row => {
+      csv += `"${row.id}","${row.date}","${row.title}","${row.category}","${row.branch}","${row.method}","${row.amount}","${row.status}"\n`;
+    });
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `UCC_Expenses_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+  }
+
+  function escapeHtml(text) {
+    if (!text) return '';
+    return text.toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+</script>
+
+</body>
+</html>

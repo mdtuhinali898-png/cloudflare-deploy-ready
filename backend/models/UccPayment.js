@@ -9,7 +9,7 @@ const uccPaymentSchema = new mongoose.Schema({
   
   amount: { type: Number, required: true },
   paymentType: { type: String, enum: ['Admission', 'Installment', 'Due Clear'], default: 'Installment' },
-  paymentMethod: { type: String, enum: ['Cash', 'bKash', 'Nagad', 'Bank', 'Card'], default: 'Cash' },
+  paymentMethod: { type: String, enum: ['Cash', 'bKash', 'Nagad', 'Bank', 'Bank Transfer', 'Card', 'POS Card', 'Online', 'Other'], default: 'Cash' },
   transactionId: { type: String, default: '' },
   
   previousDue: { type: Number, default: 0 },

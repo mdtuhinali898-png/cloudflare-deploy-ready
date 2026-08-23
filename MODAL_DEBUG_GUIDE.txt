@@ -1,0 +1,16 @@
+﻿Testing Modal Functions:
+
+1. Open browser and go to Tab 3
+2. Open Browser Console (F12)
+3. Click 'Add Stock' button
+4. Check console for messages:
+   - Should see: 'openStockModal called: [id] [title]'
+   - Should see: 'Modal display set to flex'
+5. If modal doesn't appear, check if modal element exists:
+   - In console type: document.getElementById('addStockModal')
+   - Should NOT be null
+
+Common Issues:
+- If 'Modal element not found!' → Modal HTML not loaded
+- If onclick error → JavaScript syntax error in button HTML
+- If no console message → Button onclick not firing

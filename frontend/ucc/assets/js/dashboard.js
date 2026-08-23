@@ -79,6 +79,7 @@ async function loadDashboardData() {
     populateBatchDropdown();
     renderSummaryCards();
     renderOverviewTab();
+    renderMaterialStatus();
     renderDistributionTab();
     renderDueTab();
     renderTransactionsTab();
@@ -164,6 +165,34 @@ function renderOverviewTab() {
       </div>
     </div>
   `).join('');
+}
+
+function renderMaterialStatus() {
+  const container = document.getElementById('materialProgressBars');
+  if (!container) return;
+
+  if (!liveMaterials.length) {
+    container.innerHTML = '<div style="text-align:center;padding:12px;color:#9ca3af;font-size:13px;">No materials in catalog</div>';
+    return;
+  }
+
+  const colors = ['var(--success-color)', 'var(--primary)', 'var(--warning-color)', '#8b5cf6', '#06b6d4', '#ec4899'];
+  container.innerHTML = liveMaterials.map((m, i) => {
+    const stock = m.stockQuantity || 100;
+    const issued = m.distributedCount || 0;
+    const pct = stock > 0 ? Math.round((issued / stock) * 100) : 0;
+    const color = colors[i % colors.length];
+    return `
+      <div>
+        <div style="display:flex;justify-content:space-between;font-size:12.5px;font-weight:600;margin-bottom:4px;">
+          <span>${m.title || m.materialCode}</span>
+          <span style="color:${color};">${pct}% Issued (${issued}/${stock})</span>
+        </div>
+        <div style="background:#e2e8f0;height:8px;border-radius:4px;overflow:hidden;">
+          <div style="background:${color};width:${pct}%;height:100%;transition:width 0.5s;"></div>
+        </div>
+      </div>`;
+  }).join('');
 }
 
 function renderDistributionTab() {

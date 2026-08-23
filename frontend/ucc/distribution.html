@@ -82,6 +82,19 @@
       to { opacity: 1; transform: translateY(0); }
     }
 
+    /* Stock Summary Cards */
+    .stat-value {
+      font-size: 2.5rem;
+      font-weight: 800;
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+    .stat-label {
+      font-size: 0.875rem;
+      font-weight: 700;
+      opacity: 0.9;
+    }
+
     /* Search Wrapper & Isolated Icon Container */
     .search-wrapper-pro {
       display: flex;
@@ -153,6 +166,22 @@
       padding: 20px;
     }
     .modal-backdrop-custom.active { opacity: 1; pointer-events: auto; }
+
+    .modal-dialog-custom {
+      background: #ffffff;
+      border-radius: var(--radius-lg);
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      max-height: 90vh;
+      overflow-y: auto;
+      width: 100%;
+      animation: modalSlideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      padding: 28px;
+    }
+
+    @keyframes modalSlideIn {
+      from { opacity: 0; transform: translateY(-30px) scale(0.95); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
 
     #voucherArea { 
       width: 148mm; 
@@ -242,38 +271,56 @@
     }
 
     @media print {
-      body * { visibility: hidden; }
-      #voucherArea, #voucherArea * { visibility: visible; }
+      /* সব hide */
+      body > * { display: none !important; }
+
+      /* শুধু voucherArea দেখাও */
       #voucherArea {
-        position: absolute !important;
-        left: 0 !important;
+        display: block !important;
+        visibility: visible !important;
+        position: fixed !important;
         top: 0 !important;
+        left: 0 !important;
         width: 148mm !important;
-        height: 210mm !important;
+        min-height: 210mm !important;
+        max-height: 210mm !important;
         margin: 0 !important;
-        padding: 16px 20px !important;
-        border: 3px double #000 !important;
+        padding: 12px 16px !important;
+        border: 2px double #000 !important;
         background: white !important;
         box-shadow: none !important;
+        overflow: visible !important;
         -webkit-print-color-adjust: exact !important;
         print-color-adjust: exact !important;
+        z-index: 99999 !important;
       }
 
-      /* Keep flex layout in print so signatures + footer stay at bottom together */
+      #voucherArea * {
+        visibility: visible !important;
+      }
+
+      /* flex layout — signatures ও footer নিচে থাকবে */
       #voucherArea { display: flex !important; flex-direction: column !important; }
-      #voucherArea .receipt-inner { flex: 1 !important; display: flex !important; flex-direction: column !important; }
+      #voucherArea .receipt-inner { flex: 1 !important; display: flex !important; flex-direction: column !important; overflow: hidden !important; }
       #voucherArea .receipt-signatures { margin-top: auto !important; }
       #voucherArea .receipt-footer-main { margin-top: 0 !important; }
 
-      /* 2-column div grid — preserve borders in print */
-      #vItemsGrid { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 8px !important; width: 100% !important; }
+      /* 2-column items grid */
+      #vItemsGrid { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 6px !important; width: 100% !important; }
       #vItemsGrid .v-item-row { border: 1px solid #000 !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 
-      /* Hide voucher modal wrapper — only #voucherArea itself visible */
-      #voucherModal,
-      .modal-backdrop-custom,
-      .receipt-print-page,
-      .receipt-print-actions { visibility: hidden !important; }
+      /* Materials table print */
+      #vItemsTable { width: 100% !important; border-collapse: collapse !important; }
+      #vItemsTable thead tr { background: linear-gradient(135deg, #4f46e5, #7c3aed) !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      #vItemsTable thead th { color: #ffffff !important; padding: 5px 8px !important; }
+      #vItemsTable tbody tr { border-bottom: 1px solid #e5e7eb !important; }
+      #vItemsTable tbody td { padding: 5px 8px !important; }
+
+      /* page setup — A5, 1 page only */
+      @page {
+        size: A5 portrait;
+        margin: 0;
+      }
     }
   </style>
 </head>
@@ -320,6 +367,14 @@
       <i class="fas fa-money-bill-wave"></i><span>Payment</span>
       <span class="nav-tooltip">Payment</span>
     </a>
+    <a href="finance.html" class="nav-item">
+      <i class="fas fa-chart-line"></i><span>Finance</span>
+      <span class="nav-tooltip">Finance</span>
+    </a>
+    <a href="expenses.html" class="nav-item">
+      <i class="fas fa-shopping-cart"></i><span>Expenses</span>
+      <span class="nav-tooltip">Expenses</span>
+    </a>
     <a href="exams.html" class="nav-item">
       <i class="fas fa-pencil-alt"></i><span>Exams</span>
       <span class="nav-tooltip">Exams</span>
@@ -331,6 +386,10 @@
     <a href="batches.html" class="nav-item">
       <i class="fas fa-layer-group"></i><span>Batches</span>
       <span class="nav-tooltip">Batches</span>
+    </a>
+    <a href="batch-transfer.html" class="nav-item">
+      <i class="fas fa-exchange-alt"></i><span>Batch Transfer</span>
+      <span class="nav-tooltip">Batch Transfer</span>
     </a>
     <a href="reports.html" class="nav-item">
       <i class="fas fa-chart-bar"></i><span>Reports</span>
@@ -390,6 +449,9 @@
       </button>
       <button class="tab-btn-custom" id="tabManageBtn" onclick="switchTab('manage')">
         <i class="fas fa-sliders-h"></i> 2. Batch Book & Sheet Manager (CRUD)
+      </button>
+      <button class="tab-btn-custom" id="tabStockBtn" onclick="switchTab('stock')">
+        <i class="fas fa-boxes"></i> 3. Stock & Inventory Management
       </button>
     </div>
 
@@ -542,12 +604,79 @@
                 <th>ID</th>
                 <th>Material Title</th>
                 <th>Category</th>
-                <th>Target Batch</th>
-                <th>Required Payment Limit (৳)</th>
+                <th>Scope</th>
+                <th>Required Payment (৳)</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody id="manageMaterialsBody">
+              <!-- JS Injected -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+
+    <!-- ==========================================================================
+         TAB 3: STOCK & INVENTORY MANAGEMENT
+         ========================================================================== -->
+    <div id="tabStockView" style="display:none;">
+      
+      <!-- Stock Summary Cards -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:20px;margin-bottom:28px;">
+        
+        <div class="stat-card" style="background:linear-gradient(135deg,#dcfce7 0%,#bbf7d0 100%);border-left:5px solid #15803d;">
+          <div class="stat-value" id="stockCardAvailable" style="color:#15803d;">0</div>
+          <div class="stat-label" style="color:#166534;font-weight:700;">Available Stock</div>
+        </div>
+
+        <div class="stat-card" style="background:linear-gradient(135deg,#fef3c7 0%,#fde68a 100%);border-left:5px solid #d97706;">
+          <div class="stat-value" id="stockCardLow" style="color:#d97706;">0</div>
+          <div class="stat-label" style="color:#b45309;font-weight:700;">Low Stock</div>
+        </div>
+
+        <div class="stat-card" style="background:linear-gradient(135deg,#fee2e2 0%,#fecaca 100%);border-left:5px solid #dc2626;">
+          <div class="stat-value" id="stockCardOut" style="color:#dc2626;">0</div>
+          <div class="stat-label" style="color:#b91c1c;font-weight:700;">Out of Stock</div>
+        </div>
+
+        <div class="stat-card" style="background:linear-gradient(135deg,#e0e7ff 0%,#c7d2fe 100%);border-left:5px solid #4f46e5;">
+          <div class="stat-value" id="stockCardTotal" style="color:#4f46e5;">0</div>
+          <div class="stat-label" style="color:#4338ca;font-weight:700;">Total Materials</div>
+        </div>
+
+      </div>
+
+      <!-- Stock Inventory Table -->
+      <div class="pro-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;border-bottom:1px solid var(--border-color);padding-bottom:14px;">
+          <div>
+            <h3 style="margin:0;font-size:18px;font-weight:800;color:var(--text-main);">
+              <i class="fas fa-boxes" style="color:var(--primary);margin-right:8px;"></i> Stock & Inventory Status
+            </h3>
+            <p style="margin:4px 0 0 0;font-size:13px;color:var(--text-muted);">
+              Monitor stock levels, add new stock entries, and view stock history for all materials.
+            </p>
+          </div>
+        </div>
+
+        <!-- Stock Table -->
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Material Title</th>
+                <th>Category</th>
+                <th>Total Received</th>
+                <th>Distributed</th>
+                <th>Available Stock</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="stockTableBody">
               <!-- JS Injected -->
             </tbody>
           </table>
@@ -603,12 +732,46 @@
       </div>
 
       <div class="form-group" style="margin-bottom:16px;">
-        <label style="font-weight:700;font-size:13.5px;display:block;margin-bottom:6px;">Target Course Batch *</label>
-        <select id="mBatch" class="form-control" required>
-          <option value="Medical-2026-A">Medical Admission 2026 (Batch A)</option>
-          <option value="Engineering-2026">Engineering Admission 2026</option>
-          <option value="Varsity-A-2026">Varsity Unit-A (Science) 2026</option>
+        <label style="font-weight:700;font-size:13.5px;display:block;margin-bottom:6px;">Target Scope *</label>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 14px;border:2px solid var(--border-color);border-radius:8px;font-weight:600;font-size:13px;flex:1;" id="scopeLabel_all">
+            <input type="radio" name="mScope" id="mScope_all" value="all" onchange="onScopeChange()" checked>
+            <i class="fas fa-globe" style="color:#6366f1;"></i> All Batches
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 14px;border:2px solid var(--border-color);border-radius:8px;font-weight:600;font-size:13px;flex:1;" id="scopeLabel_program">
+            <input type="radio" name="mScope" id="mScope_program" value="program" onchange="onScopeChange()">
+            <i class="fas fa-graduation-cap" style="color:#059669;"></i> By Program
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;padding:8px 14px;border:2px solid var(--border-color);border-radius:8px;font-weight:600;font-size:13px;flex:1;" id="scopeLabel_batch">
+            <input type="radio" name="mScope" id="mScope_batch" value="batch" onchange="onScopeChange()">
+            <i class="fas fa-layer-group" style="color:#f59e0b;"></i> Specific Batch
+          </label>
+        </div>
+        <small style="color:var(--text-muted);display:block;margin-top:6px;" id="scopeHint">
+          সব batch এর সব student পাবে।
+        </small>
+      </div>
+
+      <!-- Program selector — scope=program হলে দেখাবে -->
+      <div class="form-group" style="margin-bottom:16px;display:none;" id="programGroup">
+        <label style="font-weight:700;font-size:13.5px;display:block;margin-bottom:6px;">Program *</label>
+        <select id="mProgram" class="form-control">
+          <option value="">-- Select Program --</option>
         </select>
+        <small style="color:var(--text-muted);display:block;margin-top:4px;">
+          এই program এর সব batch এর student পাবে।
+        </small>
+      </div>
+
+      <!-- Batch selector — scope=batch হলে দেখাবে -->
+      <div class="form-group" style="margin-bottom:16px;display:none;" id="batchGroup">
+        <label style="font-weight:700;font-size:13.5px;display:block;margin-bottom:6px;">Specific Batch *</label>
+        <select id="mBatch" class="form-control">
+          <option value="">-- Select Batch --</option>
+        </select>
+        <small style="color:var(--text-muted);display:block;margin-top:4px;">
+          শুধুমাত্র এই batch এর student পাবে।
+        </small>
       </div>
 
       <div class="form-group" style="margin-bottom:24px;">
@@ -643,7 +806,7 @@
       <button class="btn btn-secondary" onclick="closeVoucherModal()">✕ Close</button>
     </div>
 
-    <!-- Printable A5 Voucher Container (Auto-Fitting Premium Layout) -->
+    <!-- Printable A5 Voucher Container -->
     <div id="voucherArea" class="receipt-container">
       <div class="receipt-watermark">DELIVERED</div>
       <div class="receipt-inner">
@@ -653,7 +816,7 @@
           <div class="header-shine"></div>
           <div class="receipt-header-content">
             <div class="receipt-brand">
-              <div class="receipt-logo"><i class="fas fa-box-open"></i></div>
+              <div class="receipt-logo"><i class="fas fa-book-open"></i></div>
               <div class="institute-info">
                 <h1>UCC পাবনা শাখা</h1>
                 <div class="address"><i class="fas fa-map-marker-alt"></i> Edward College, Rathghar Area, Radhanagar, Pabna</div>
@@ -662,41 +825,70 @@
             </div>
             <div class="receipt-id-badge">
               <small>Voucher No</small>
-              <strong id="vVoucherNo">#DST-2026-0042</strong>
+              <strong id="vVoucherNo">UCC-VOU-2026-0001</strong>
             </div>
           </div>
         </div>
+
+        <!-- Gold divider line -->
         <div class="header-bottom-line"></div>
 
         <!-- Title Banner -->
-        <div class="receipt-title-banner">Official Material Delivery Voucher</div>
+        <div class="receipt-title-banner">
+          <i class="fas fa-box-open" style="margin-right:8px;font-size:13px;"></i>
+          Official Material Delivery Voucher
+        </div>
 
-        <!-- Student Information -->
-        <div class="receipt-section">
-          <div class="section-title"><i class="fas fa-user-graduate"></i> Student Information</div>
+        <!-- Student Info Grid -->
+        <div class="receipt-section" style="margin-top:10px;">
+          <div class="section-title">
+            <i class="fas fa-user-graduate"></i> Student Information
+          </div>
           <div class="receipt-info-grid">
-            <div class="receipt-info-item"><span class="label">Roll Number</span><span class="value" id="vRoll">105</span></div>
-            <div class="receipt-info-item"><span class="label">Student Name</span><span class="value" id="vName">Tanvir Ahmed</span></div>
-            <div class="receipt-info-item"><span class="label">Course Batch</span><span class="value" id="vBatch">Medical-2026-A</span></div>
-            <div class="receipt-info-item"><span class="label">Delivery Date</span><span class="value" id="vDate">--</span></div>
+            <div class="receipt-info-item">
+              <span class="label"><i class="fas fa-id-badge" style="margin-right:3px;color:#6366f1;"></i> Roll No</span>
+              <span class="value" id="vRoll">—</span>
+            </div>
+            <div class="receipt-info-item">
+              <span class="label"><i class="fas fa-user" style="margin-right:3px;color:#6366f1;"></i> Name</span>
+              <span class="value" id="vName">—</span>
+            </div>
+            <div class="receipt-info-item">
+              <span class="label"><i class="fas fa-layer-group" style="margin-right:3px;color:#6366f1;"></i> Batch</span>
+              <span class="value" id="vBatch">—</span>
+            </div>
+            <div class="receipt-info-item">
+              <span class="label"><i class="fas fa-calendar-check" style="margin-right:3px;color:#6366f1;"></i> Date</span>
+              <span class="value" id="vDate">—</span>
+            </div>
           </div>
         </div>
 
-        <!-- Delivered Materials Section -->
-        <div class="receipt-section" style="display:flex;flex-direction:column;margin-top:10px;">
+        <!-- Delivered Materials Table -->
+        <div class="receipt-section" style="margin-top:10px;flex:1;">
           <div class="section-title" style="justify-content:space-between;">
-            <span><i class="fas fa-book"></i> Delivered Books & Lecture Sheets</span>
-            <span style="font-size:10px;color:var(--ucc-muted);" id="vItemCountTag">Total: 0 Items</span>
+            <span><i class="fas fa-books" style="margin-right:6px;"></i>Delivered Books & Lecture Sheets</span>
+            <span id="vItemCountTag" style="font-size:10px;background:#e0e7ff;color:#3730a3;padding:2px 8px;border-radius:99px;font-weight:800;letter-spacing:0;">0 Items</span>
           </div>
 
-          <!-- 2-column div-based grid (replaces old single-column table) -->
-          <div id="vItemsGrid" class="v-items-grid">
-            <!-- JS Injected: 2-column div-based layout -->
-          </div>
+          <!-- Professional Table -->
+          <table id="vItemsTable" style="width:100%;border-collapse:collapse;font-size:10px;margin-top:4px;">
+            <thead>
+              <tr style="background:linear-gradient(135deg,#4f46e5,#7c3aed);color:#fff;">
+                <th style="padding:5px 8px;text-align:center;font-weight:800;width:32px;border-radius:6px 0 0 0;">#</th>
+                <th style="padding:5px 8px;text-align:left;font-weight:800;">Material Title</th>
+                <th style="padding:5px 8px;text-align:center;font-weight:800;width:60px;">Category</th>
+                <th style="padding:5px 8px;text-align:center;font-weight:800;width:50px;border-radius:0 6px 0 0;">Received</th>
+              </tr>
+            </thead>
+            <tbody id="vItemsTableBody">
+              <!-- JS Injected -->
+            </tbody>
+          </table>
         </div>
 
         <!-- Signatures -->
-        <div class="receipt-signatures">
+        <div class="receipt-signatures" style="margin-top:14px;">
           <div class="receipt-sig-box">
             <div class="sig-line"></div>
             <div class="sig-role">Student Signature</div>
@@ -715,9 +907,7 @@
         <div class="receipt-footer-main">
           <div class="thank-you-msg"><i class="fas fa-heart"></i> Thank you for choosing UCC Pabna!</div>
           <div class="institute-name-footer">UCC Pabna Branch · Edward College, Radhanagar, Pabna</div>
-          <div class="institute-details-footer">
-            ফোন: 01312-427799 | ৩য় পতি প্রতিষ্ঠান: uccpabna@gmail.com | www.uccpabna.edu.bd
-          </div>
+          <div class="institute-details-footer">ফোন: 01312-427799 | uccpabna@gmail.com</div>
           <div class="tagline-footer">Your Future, Our Commitment — UCC Pabna Branch</div>
         </div>
 
@@ -726,80 +916,231 @@
   </div>
 </div>
 
+
+<!-- ==========================================================================
+     MODAL: ADD STOCK ENTRY
+     ========================================================================== -->
+<div id="addStockModal" class="modal-backdrop-custom" style="display:none;">
+  <div class="modal-dialog-custom" style="max-width:540px;">
+    
+    <!-- Header -->
+    <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid var(--border-color);padding-bottom:12px;margin-bottom:20px;">
+      <h3 style="margin:0;font-size:18px;font-weight:800;" id="addStockModalTitle">Add Stock Entry</h3>
+      <button class="btn btn-secondary" onclick="closeStockModal()" style="padding:4px 10px;">✕</button>
+    </div>
+
+    <form id="stockEntryForm" onsubmit="event.preventDefault(); submitStockEntry();">
+      
+      <input type="hidden" id="stockMaterialId">
+
+      <div class="form-group">
+        <label style="font-weight:700;font-size:13.5px;">Material Title</label>
+        <input type="text" id="stockMaterialTitle" class="form-control" readonly style="background:#f8fafc;cursor:not-allowed;">
+      </div>
+
+      <div class="form-group">
+        <label style="font-weight:700;font-size:13.5px;">Quantity Received <span style="color:red;">*</span></label>
+        <input type="number" id="stockQuantity" class="form-control" required min="1" placeholder="Enter quantity received (e.g., 1000)">
+      </div>
+
+      <div class="form-group">
+        <label style="font-weight:700;font-size:13.5px;">Received Date <span style="color:red;">*</span></label>
+        <input type="date" id="stockDate" class="form-control" required>
+      </div>
+
+      <div class="form-group">
+        <label style="font-weight:700;font-size:13.5px;">Note / Remarks</label>
+        <textarea id="stockNote" class="form-control" rows="3" placeholder="Optional: source, batch number, publisher info, etc."></textarea>
+      </div>
+
+      <div style="display:flex;gap:12px;margin-top:24px;">
+        <button type="submit" class="btn btn-primary" style="flex:1;font-weight:800;">
+          <i class="fas fa-check-circle"></i> Save Stock Entry
+        </button>
+        <button type="button" class="btn btn-secondary" onclick="closeStockModal()" style="flex:0.4;">
+          Cancel
+        </button>
+      </div>
+
+    </form>
+
+  </div>
+</div>
+
+
+<!-- ==========================================================================
+     MODAL: STOCK HISTORY
+     ========================================================================== -->
+<div id="stockHistoryModal" class="modal-backdrop-custom" style="display:none;">
+  <div class="modal-dialog-custom" style="max-width:760px;">
+    
+    <!-- Header -->
+    <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:2px solid var(--border-color);padding-bottom:12px;margin-bottom:20px;">
+      <div>
+        <h3 style="margin:0;font-size:18px;font-weight:800;" id="historyModalTitle">Stock History</h3>
+        <p style="margin:4px 0 0 0;font-size:13px;color:var(--text-muted);" id="historyMaterialName">—</p>
+      </div>
+      <button class="btn btn-secondary" onclick="closeHistoryModal()" style="padding:4px 10px;">✕</button>
+    </div>
+
+    <!-- Summary Stats -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:20px;">
+      <div style="background:linear-gradient(135deg,#e0e7ff 0%,#c7d2fe 100%);padding:16px;border-radius:var(--radius-md);border-left:4px solid #4f46e5;">
+        <div style="font-size:24px;font-weight:800;color:#4f46e5;" id="historyTotalReceived">0</div>
+        <div style="font-size:12px;color:#4338ca;font-weight:700;margin-top:4px;">Total Received</div>
+      </div>
+      <div style="background:linear-gradient(135deg,#dcfce7 0%,#bbf7d0 100%);padding:16px;border-radius:var(--radius-md);border-left:4px solid #15803d;">
+        <div style="font-size:24px;font-weight:800;color:#15803d;" id="historyCurrent">0</div>
+        <div style="font-size:12px;color:#166534;font-weight:700;margin-top:4px;">Current Stock</div>
+      </div>
+      <div style="background:linear-gradient(135deg,#fef3c7 0%,#fde68a 100%);padding:16px;border-radius:var(--radius-md);border-left:4px solid #d97706;">
+        <div style="font-size:24px;font-weight:800;color:#d97706;" id="historyEntries">0</div>
+        <div style="font-size:12px;color:#b45309;font-weight:700;margin-top:4px;">Stock Entries</div>
+      </div>
+    </div>
+
+    <!-- History Timeline -->
+    <div style="max-height:400px;overflow-y:auto;border:1px solid var(--border-color);border-radius:var(--radius-md);padding:16px;background:#f8fafc;">
+      <div id="historyTimeline">
+        <!-- JS Injected -->
+      </div>
+    </div>
+
+    <div style="margin-top:20px;text-align:right;">
+      <button class="btn btn-secondary" onclick="closeHistoryModal()">
+        ✕ Close
+      </button>
+    </div>
+
+  </div>
+</div>
+
+
 <!-- JS Scripts -->
 <script src="assets/js/sidebar.js?v=2"></script>
 <script>
-// Initial Master Database of Configured Materials (Persisted in LocalStorage)
-const DEFAULT_MATERIALS = [
-  { id: 'M-101', title: 'Biology Lecture Sheet 01-05', category: 'Lecture Sheet', batch: 'Medical-2026-A', threshold: 3000 },
-  { id: 'M-102', title: 'Chemistry Lecture Sheet 01-05', category: 'Lecture Sheet', batch: 'Medical-2026-A', threshold: 5000 },
-  { id: 'M-103', title: 'Physics Lecture Sheet 01-05', category: 'Lecture Sheet', batch: 'Medical-2026-A', threshold: 5000 },
-  { id: 'M-104', title: 'Medical Admission Question Bank Book', category: 'Question Bank Book', batch: 'Medical-2026-A', threshold: 8000 },
-  { id: 'M-105', title: 'Biology Practice Formula Guide Book', category: 'Formula Guide Book', batch: 'Medical-2026-A', threshold: 10000 },
-  { id: 'M-201', title: 'Higher Math Lecture Sheet 01-05', category: 'Lecture Sheet', batch: 'Engineering-2026', threshold: 4000 },
-  { id: 'M-202', title: 'Engineering Question Bank Book', category: 'Question Bank Book', batch: 'Engineering-2026', threshold: 10000 }
-];
+// ==========================================================================
+// UCC Distribution — Connected to MongoDB Backend via /api/ucc
+// ==========================================================================
+const DIST_API_BASE = 'http://localhost:5002/api/ucc';
 
-// Mock Student Database
-const MOCK_STUDENTS = {
-  '105': { roll: '105', name: 'Tanvir Ahmed', phone: '01712345678', batch: 'Medical-2026-A', totalFee: 15000, paid: 10000, due: 5000, issued: ['M-101'], overridden: [], avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150' },
-  '101': { roll: '101', name: 'Rahim Ahmed',  phone: '01712000001', batch: 'Medical-2026-A', totalFee: 15000, paid: 10000, due: 3000, issued: ['M-101', 'M-102'], overridden: [], avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150' },
-  '203': { roll: '203', name: 'Sadia Islam',  phone: '01812345678', batch: 'Engineering-2026', totalFee: 18000, paid: 6000, due: 11000, issued: [], overridden: [], avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=150' }
-};
-
-let materialsDB = JSON.parse(localStorage.getItem('ucc_materials_db')) || DEFAULT_MATERIALS;
+let materialsDB = [];
 let currentStudent = null;
+let allDistributions = [];
 
-document.addEventListener('DOMContentLoaded', () => {
-  saveMaterialsDB();
+document.addEventListener('DOMContentLoaded', async () => {
+  await Promise.all([loadMaterialsFromApi(), loadBatchesForDropdown()]);
   renderManageMaterialsTable();
+
+  /* Auto-load student from URL param ?roll=XXX or ?id=XXX */
+  const urlParams = new URLSearchParams(window.location.search);
+  const rollParam = urlParams.get('roll') || urlParams.get('id');
+  if (rollParam) {
+    document.getElementById('searchRoll').value = rollParam;
+    executeSearch();
+  }
 });
 
-function saveMaterialsDB() {
-  localStorage.setItem('ucc_materials_db', JSON.stringify(materialsDB));
+/* ── Load Materials from Backend ── */
+async function loadMaterialsFromApi() {
+  try {
+    const res = await fetch(`${DIST_API_BASE}/materials`);
+    const data = await res.json();
+    if (data.success && data.materials) {
+      materialsDB = data.materials.map(m => ({
+        id: m._id,
+        title: m.title,
+        category: m.program || 'Lecture Sheet',
+        scope: m.scope || 'all',
+        applicableProgram: m.applicableProgram || '',
+        batch: m.applicableBatches && m.applicableBatches.length ? m.applicableBatches[0] : 'All',
+        applicableBatches: m.applicableBatches || [],
+        threshold: m.paymentThreshold != null ? m.paymentThreshold : 0,
+        stockQuantity: m.stockQuantity || 0,
+        distributedCount: m.distributedCount || 0
+      }));
+    }
+  } catch (e) {
+    console.warn('Failed to load materials from API:', e);
+    materialsDB = [];
+  }
 }
 
 function switchTab(tab) {
+  // Toggle button active states
   document.getElementById('tabIssueBtn').classList.toggle('active', tab === 'issue');
   document.getElementById('tabManageBtn').classList.toggle('active', tab === 'manage');
+  document.getElementById('tabStockBtn').classList.toggle('active', tab === 'stock');
 
+  // Toggle view visibility
   document.getElementById('tabIssueView').style.display  = tab === 'issue' ? 'block' : 'none';
   document.getElementById('tabManageView').style.display = tab === 'manage' ? 'block' : 'none';
+  document.getElementById('tabStockView').style.display  = tab === 'stock' ? 'block' : 'none';
+
+  // Load stock table when switching to Tab 3
+  if (tab === 'stock') {
+    renderStockTable();
+  }
 }
 
 function fmt(n) { return '৳ ' + Number(n || 0).toLocaleString('en-IN'); }
 
 /* ==========================================================================
-   TAB 1: SEARCH & ISSUE MATERIALS (WITH ADMIN FORCE UNLOCK OVERRIDE)
+   TAB 1: SEARCH & ISSUE MATERIALS (BACKEND CONNECTED)
    ========================================================================== */
 function quickSearch(roll) {
   document.getElementById('searchRoll').value = roll;
   executeSearch();
 }
 
-function executeSearch() {
+async function executeSearch() {
   const roll = document.getElementById('searchRoll').value.trim();
   if (!roll) { alert('Please enter a Student Roll number!'); return; }
 
-  if (MOCK_STUDENTS[roll]) {
-    currentStudent = MOCK_STUDENTS[roll];
-    if (!currentStudent.overridden) currentStudent.overridden = [];
-  } else {
-    currentStudent = {
-      roll: roll,
-      name: 'Student Roll ' + roll,
-      phone: '01710000' + roll,
-      batch: 'Medical-2026-A',
-      totalFee: 15000,
-      paid: 5000,
-      due: 10000,
-      issued: [],
-      overridden: [],
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150'
-    };
+  // Search student in backend
+  try {
+    const res = await fetch(`${DIST_API_BASE}/students?search=${encodeURIComponent(roll)}`);
+    const data = await res.json();
+    if (data.success && data.students && data.students.length > 0) {
+      const s = data.students[0];
+      currentStudent = {
+        id: s._id,
+        roll: s.roll,
+        name: s.name,
+        phone: s.phone || 'N/A',
+        batch: s.batchName,
+        program: s.program || '',
+        totalFee: s.finalFee || s.courseFee || 0,
+        paid: s.totalPaid || 0,
+        due: s.totalDue || 0,
+        issued: [],
+        overridden: [],
+        eligibleMaterialIds: [], // backend scope check থেকে আসবে
+        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150'
+      };
+
+      // Check eligibility from backend
+      try {
+        const eligRes = await fetch(`${DIST_API_BASE}/distribution/check-eligibility/${s._id}`);
+        const eligData = await eligRes.json();
+        if (eligData.success) {
+          currentStudent.isEligible      = eligData.isEligible;
+          currentStudent.hasDue          = eligData.hasDue;
+          currentStudent.distributionOverride = eligData.distributionOverride;
+          if (eligData.issuedItemIds)      currentStudent.issued = eligData.issuedItemIds;
+          if (eligData.eligibleMaterialIds) currentStudent.eligibleMaterialIds = eligData.eligibleMaterialIds;
+        }
+      } catch (e) { /* ignore */ }
+
+      renderStudentMaterials(currentStudent);
+      return;
+    }
+  } catch (e) {
+    console.error('Student search API failed:', e);
   }
 
-  renderStudentMaterials(currentStudent);
+  alert('❌ Student not found in database! Please check the Roll number.');
+  currentStudent = null;
 }
 
 function resetIssuePortal() {
@@ -808,7 +1149,7 @@ function resetIssuePortal() {
   currentStudent = null;
 }
 
-function renderStudentMaterials(s) {
+async function renderStudentMaterials(s) {
   document.getElementById('sRoll').textContent     = s.roll;
   document.getElementById('sName').textContent     = s.name;
   document.getElementById('sPhone').textContent    = s.phone;
@@ -818,7 +1159,21 @@ function renderStudentMaterials(s) {
   document.getElementById('sDue').textContent      = fmt(s.due);
   document.getElementById('sAvatar').src           = s.avatar;
 
-  const batchMaterials = materialsDB.filter(m => m.batch === s.batch);
+  // Scope-based material filtering — student এর program ও batch দিয়ে match করো
+  const batchMaterials = materialsDB.filter(m => {
+    const sc = m.scope || 'all';
+    if (sc === 'all') return true;
+    if (sc === 'program') {
+      // student.program === material.applicableProgram (case-insensitive)
+      return (m.applicableProgram || '').toLowerCase().trim() ===
+             (s.program || '').toLowerCase().trim();
+    }
+    if (sc === 'batch') {
+      return (m.applicableBatches || []).includes(s.batch);
+    }
+    return false;
+  });
+
   const tbody = document.getElementById('materialsTableBody');
   tbody.innerHTML = '';
 
@@ -860,7 +1215,14 @@ function renderStudentMaterials(s) {
       const tr = document.createElement('tr');
       tr.innerHTML = `
         <td><input type="checkbox" class="item-chk" value="${m.id}" ${checkDisabled} onchange="updateSelectedCount()"></td>
-        <td style="font-weight:700;">${m.title}</td>
+        <td style="font-weight:700;">
+          ${m.title}
+          <span style="display:block;font-size:10px;margin-top:2px;">
+            ${m.scope === 'program' ? `<span style="color:#059669;font-weight:700;"><i class="fas fa-graduation-cap"></i> ${m.applicableProgram}</span>` :
+              m.scope === 'batch'   ? `<span style="color:#f59e0b;font-weight:700;"><i class="fas fa-layer-group"></i> ${m.batch}</span>` :
+              `<span style="color:#6366f1;font-weight:700;"><i class="fas fa-globe"></i> All Batches</span>`}
+          </span>
+        </td>
         <td>${m.category}</td>
         <td style="font-weight:800;color:var(--primary);">${fmt(m.threshold)}</td>
         <td>${eligBadge}</td>
@@ -884,10 +1246,7 @@ function forceUnlockItem(id) {
     if (!currentStudent.overridden.includes(id)) {
       currentStudent.overridden.push(id);
     }
-    if (!currentStudent.issued.includes(id)) {
-      currentStudent.issued.push(id);
-    }
-    generateVoucherModal([id]);
+    generateVoucherModal([id], true);
     renderStudentMaterials(currentStudent);
   }
 }
@@ -903,16 +1262,12 @@ function updateSelectedCount() {
   document.getElementById('eligibleCountSummary').innerHTML = `Selected: <strong>${selected}</strong> items ready to issue`;
 }
 
-function issueSingleMaterial(id) {
+async function issueSingleMaterial(id) {
   if (!currentStudent) return;
-  if (!currentStudent.issued.includes(id)) {
-    currentStudent.issued.push(id);
-  }
-  generateVoucherModal([id]);
-  renderStudentMaterials(currentStudent);
+  await issueToBackend([id], false);
 }
 
-function issueSelectedMaterials() {
+async function issueSelectedMaterials() {
   const chks = document.querySelectorAll('.item-chk:checked');
   if (chks.length === 0) {
     alert('Please select at least one eligible material to issue!');
@@ -920,14 +1275,51 @@ function issueSelectedMaterials() {
   }
 
   const selectedIds = Array.from(chks).map(c => c.value);
-  selectedIds.forEach(id => {
-    if (!currentStudent.issued.includes(id)) {
-      currentStudent.issued.push(id);
-    }
+  await issueToBackend(selectedIds, false);
+}
+
+/* ── Issue to Backend (POST /distribution/issue) ── */
+async function issueToBackend(itemIds, hasOverride) {
+  if (!currentStudent || !currentStudent.id) return;
+
+  const items = itemIds.map(id => {
+    const mat = materialsDB.find(m => m.id === id);
+    return {
+      materialId: id,
+      materialName: mat ? mat.title : id,
+      quantity: 1
+    };
   });
 
-  generateVoucherModal(selectedIds);
-  renderStudentMaterials(currentStudent);
+  try {
+    const res = await fetch(`${DIST_API_BASE}/distribution/issue`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        studentId: currentStudent.id,
+        items,
+        hasOverride: hasOverride || false,
+        overrideReason: hasOverride ? 'Admin Force Unlock' : '',
+        issuedBy: JSON.parse(sessionStorage.getItem('uccAdminUser') || '{}').username || 'Admin'
+      })
+    });
+    const data = await res.json();
+    if (data.success) {
+      // Mark as issued locally
+      itemIds.forEach(id => {
+        if (!currentStudent.issued.includes(id)) currentStudent.issued.push(id);
+      });
+      // Real voucher number backend থেকে নাও
+      const realVoucherNo = data.distribution ? data.distribution.voucherNo : null;
+      generateVoucherModal(itemIds, realVoucherNo);
+      renderStudentMaterials(currentStudent);
+    } else {
+      alert('❌ ' + (data.message || 'Failed to issue materials'));
+    }
+  } catch (e) {
+    console.error('Issue API failed:', e);
+    alert('❌ Failed to connect to server. Please try again.');
+  }
 }
 
 /* ==========================================================================
@@ -936,54 +1328,109 @@ function issueSelectedMaterials() {
    via CSS Grid. Each item = checkbox + name + delivered mark (✓).
    This auto-fits A5 regardless of how many items are delivered.
    ========================================================================== */
-function generateVoucherModal(itemIds) {
+function generateVoucherModal(itemIds, voucherNo) {
   const items      = materialsDB.filter(m => itemIds.includes(m.id));
   const totalCount = items.length;
 
-  /* ── Font size & spacing based on count (auto-fit A5) ── */
-  let fs = '10px', pd = '3px 5px', gap = '3px';
-  if (totalCount > 18)      { fs = '7.5px'; pd = '2px 3px'; gap = '2px'; }
-  else if (totalCount > 12) { fs = '8.5px'; pd = '2px 4px'; gap = '2px'; }
-  else if (totalCount > 8)  { fs = '9.5px'; pd = '2px 4px'; gap = '2px'; }
+  /* ── Layout decide: কতটা item আছে তার উপর ── */
+  const use2Col  = totalCount > 9;
+  const fontSize = totalCount > 18 ? '8px' : totalCount > 12 ? '9px' : '10px';
+  const rowPad   = totalCount > 18 ? '3px 6px' : totalCount > 12 ? '4px 7px' : '5px 8px';
 
-  /* ── Split items into two equal lists ── */
-  const half       = Math.ceil(items.length / 2);
-  const leftItems  = items.slice(0, half);
-  const rightItems = items.slice(half);
+  const tbody = document.getElementById('vItemsTableBody');
 
-  /* ── Build a single item row: SL + checkbox + name + delivered mark ── */
-  const itemRow = (item, idx) =>
-    `<div class="v-item-row" style="padding:${pd};font-size:${fs};">
-       <span class="v-item-sl" style="font-size:${fs};">${idx}</span>
-       <input type="checkbox" class="v-item-chk" checked>
-       <span class="v-item-name" style="font-size:${fs};">${item.title}</span>
-       <span class="v-item-mark" style="font-size:${fs};">✓</span>
-     </div>`;
+  if (use2Col) {
+    /* ── 2-column layout: বাম ও ডান পাশে ভাগ করো ── */
+    const half  = Math.ceil(items.length / 2);
+    const left  = items.slice(0, half);
+    const right = items.slice(half);
+    const maxRows = Math.max(left.length, right.length);
 
-  /* ── Build left & right columns ── */
-  const leftCol  = `<div class="v-items-col" style="gap:${gap};">
-                     ${leftItems.map((m, i) => itemRow(m, i + 1)).join('')}
-                   </div>`;
-  const rightCol = `<div class="v-items-col" style="gap:${gap};">
-                     ${rightItems.map((m, i) => itemRow(m, i + 1 + half)).join('')}
-                   </div>`;
+    let rows = '';
+    for (let i = 0; i < maxRows; i++) {
+      const l = left[i];
+      const r = right[i];
+      const rowBg = i % 2 === 0 ? '#f8fafc' : '#ffffff';
+      rows += `<tr style="background:${rowBg};border-bottom:1px solid #e5e7eb;">
+        ${l ? `
+          <td style="padding:${rowPad};text-align:center;font-weight:800;color:#6366f1;font-size:${fontSize};width:22px;">${i+1}</td>
+          <td style="padding:${rowPad};font-weight:600;color:#0f172a;font-size:${fontSize};border-right:2px solid #c7d2fe;">
+            ${l.title}
+            <span style="display:block;font-size:8px;color:#6366f1;font-weight:700;">${l.category}</span>
+          </td>
+          <td style="padding:${rowPad};text-align:center;width:28px;border-right:2px solid #c7d2fe;"><span style="color:#059669;font-size:12px;font-weight:900;">✓</span></td>
+        ` : '<td colspan="3" style="border-right:2px solid #c7d2fe;"></td>'}
+        ${r ? `
+          <td style="padding:${rowPad};text-align:center;font-weight:800;color:#6366f1;font-size:${fontSize};width:22px;">${half+i+1}</td>
+          <td style="padding:${rowPad};font-weight:600;color:#0f172a;font-size:${fontSize};">
+            ${r.title}
+            <span style="display:block;font-size:8px;color:#6366f1;font-weight:700;">${r.category}</span>
+          </td>
+          <td style="padding:${rowPad};text-align:center;width:28px;"><span style="color:#059669;font-size:12px;font-weight:900;">✓</span></td>
+        ` : '<td colspan="3"></td>'}
+      </tr>`;
+    }
+    tbody.innerHTML = rows;
 
-  /* ── Replace entire items grid ── */
-  const vGrid = document.getElementById('vItemsGrid');
-  vGrid.innerHTML = leftCol + rightCol;
+    /* 2-col table header আপডেট */
+    document.querySelector('#vItemsTable thead tr').innerHTML = `
+      <th style="padding:5px 7px;text-align:center;font-weight:800;width:22px;">#</th>
+      <th style="padding:5px 7px;text-align:left;font-weight:800;border-right:2px solid rgba(255,255,255,0.3);">Material Title</th>
+      <th style="padding:5px 7px;text-align:center;width:28px;border-right:2px solid rgba(255,255,255,0.3);">✓</th>
+      <th style="padding:5px 7px;text-align:center;font-weight:800;width:22px;">#</th>
+      <th style="padding:5px 7px;text-align:left;font-weight:800;">Material Title</th>
+      <th style="padding:5px 7px;text-align:center;width:28px;">✓</th>
+    `;
+  } else {
+    /* ── 1-column layout: ৯ বা কম item ── */
+    tbody.innerHTML = items.map((item, idx) => {
+      const rowBg = idx % 2 === 0 ? '#f8fafc' : '#ffffff';
+      return `<tr style="background:${rowBg};border-bottom:1px solid #e5e7eb;">
+        <td style="padding:${rowPad};text-align:center;font-weight:800;color:#6366f1;font-size:${fontSize};width:32px;">${idx + 1}</td>
+        <td style="padding:${rowPad};font-weight:600;color:#0f172a;font-size:${fontSize};">${item.title}</td>
+        <td style="padding:${rowPad};text-align:center;">
+          <span style="background:#e0e7ff;color:#3730a3;padding:2px 6px;border-radius:99px;font-size:8.5px;font-weight:700;">${item.category}</span>
+        </td>
+        <td style="padding:${rowPad};text-align:center;width:50px;">
+          <span style="color:#059669;font-size:14px;font-weight:900;">✓</span>
+        </td>
+      </tr>`;
+    }).join('');
+
+    /* 1-col table header reset */
+    document.querySelector('#vItemsTable thead tr').innerHTML = `
+      <th style="padding:5px 8px;text-align:center;font-weight:800;width:32px;border-radius:6px 0 0 0;">#</th>
+      <th style="padding:5px 8px;text-align:left;font-weight:800;">Material Title</th>
+      <th style="padding:5px 8px;text-align:center;font-weight:800;width:60px;">Category</th>
+      <th style="padding:5px 8px;text-align:center;font-weight:800;width:50px;border-radius:0 6px 0 0;">Received</th>
+    `;
+  }
+
+  /* ── Item count tag ── */
+  document.getElementById('vItemCountTag').textContent = `${totalCount} Item${totalCount > 1 ? 's' : ''}`;
 
   /* ── Student info ── */
-  document.getElementById('vVoucherNo').textContent   = '#DST-2026-0' + (Math.floor(Math.random()*800)+100);
-  document.getElementById('vRoll').textContent        = currentStudent.roll;
-  document.getElementById('vName').textContent        = currentStudent.name;
-  document.getElementById('vBatch').textContent       = currentStudent.batch;
-  document.getElementById('vDate').textContent        = new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) + ' ' + new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
-  document.getElementById('vItemCountTag').textContent = `Total: ${totalCount} Items Delivered`;
+  document.getElementById('vVoucherNo').textContent = voucherNo || ('UCC-VOU-' + new Date().getFullYear() + '-' + String(Math.floor(Math.random()*900)+100).padStart(4,'0'));
+  document.getElementById('vRoll').textContent      = currentStudent.roll;
+  document.getElementById('vName').textContent      = currentStudent.name;
+  document.getElementById('vBatch').textContent     = currentStudent.batch;
+  document.getElementById('vDate').textContent      = new Date().toLocaleDateString('en-GB', {day:'numeric', month:'short', year:'numeric'}) + ' ' + new Date().toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'});
 
-  /* ── Direct print (no modal page) ── */
-  setTimeout(() => window.print(), 80);
+  /* ── voucherArea কে body তে move করো — modal parent এর display:none থেকে বের করতে ── */
+  const vArea = document.getElementById('voucherArea');
+  document.body.appendChild(vArea);
+
+  /* ── Show modal (needed so DOM renders before print) ── */
+  document.getElementById('voucherModal').classList.add('active');
+
+  /* ── Direct print ── */
+  setTimeout(() => window.print(), 150);
 
   window.addEventListener('afterprint', function onAfterPrint() {
+    /* voucherArea modal এ ফিরিয়ে দাও */
+    const modal = document.querySelector('#voucherModal .receipt-print-page');
+    const vArea = document.getElementById('voucherArea');
+    if (modal && vArea && !modal.contains(vArea)) modal.appendChild(vArea);
     document.getElementById('voucherModal').classList.remove('active');
     window.removeEventListener('afterprint', onAfterPrint);
   });
@@ -996,25 +1443,89 @@ function closeVoucherModal() {
 /* ==========================================================================
    TAB 2: ADMIN CRUD MANAGEMENT FOR BOOKS & SHEETS
    ========================================================================== */
+async function loadBatchesForDropdown() {
+  try {
+    const res = await fetch(`${DIST_API_BASE}/batches`);
+    const data = await res.json();
+    if (data.success && data.batches) {
+      const filterSelect = document.getElementById('manageBatchFilter');
+      const modalBatch   = document.getElementById('mBatch');
+
+      /* Filter dropdown */
+      if (filterSelect) {
+        let html = '<option value="ALL">All Course Batches</option>';
+        data.batches.forEach(b => {
+          html += `<option value="${b.batchName}">${b.batchName}</option>`;
+        });
+        filterSelect.innerHTML = html;
+      }
+
+      /* Modal batch dropdown */
+      if (modalBatch) {
+        let html = '<option value="">-- Select Batch --</option>';
+        data.batches.forEach(b => {
+          html += `<option value="${b.batchName}">${b.batchName}</option>`;
+        });
+        modalBatch.innerHTML = html;
+      }
+
+      /* Modal program dropdown — unique programs from batches */
+      const modalProgram = document.getElementById('mProgram');
+      if (modalProgram) {
+        const programs = [...new Set(data.batches.map(b => b.program).filter(Boolean))];
+        let html = '<option value="">-- Select Program --</option>';
+        programs.forEach(p => {
+          html += `<option value="${p}">${p}</option>`;
+        });
+        modalProgram.innerHTML = html;
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to load batches:', e);
+  }
+}
+
 function renderManageMaterialsTable() {
   const filter = document.getElementById('manageBatchFilter').value;
   const tbody  = document.getElementById('manageMaterialsBody');
   tbody.innerHTML = '';
 
-  const list = filter === 'ALL' ? materialsDB : materialsDB.filter(m => m.batch === filter);
+  /* Scope-aware filter */
+  const list = filter === 'ALL' ? materialsDB : materialsDB.filter(m => {
+    if (m.scope === 'all') return true;
+    if (m.scope === 'batch') return (m.applicableBatches || []).includes(filter);
+    if (m.scope === 'program') return true; // program scope সব batch filter এ দেখাবে
+    return false;
+  });
 
   if (list.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-muted);">No materials configured for this batch filter.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-muted);">No materials configured yet.</td></tr>`;
     return;
   }
 
   list.forEach(m => {
+    /* Scope badge */
+    let scopeBadge = '';
+    if (m.scope === 'program') {
+      scopeBadge = `<span style="background:#dcfce7;color:#15803d;padding:3px 8px;border-radius:99px;font-size:11px;font-weight:700;">
+        <i class="fas fa-graduation-cap"></i> ${m.applicableProgram || 'Program'}
+      </span>`;
+    } else if (m.scope === 'batch') {
+      scopeBadge = `<span style="background:#fef3c7;color:#b45309;padding:3px 8px;border-radius:99px;font-size:11px;font-weight:700;">
+        <i class="fas fa-layer-group"></i> ${m.batch || 'Batch'}
+      </span>`;
+    } else {
+      scopeBadge = `<span style="background:#e0e7ff;color:#3730a3;padding:3px 8px;border-radius:99px;font-size:11px;font-weight:700;">
+        <i class="fas fa-globe"></i> All Batches
+      </span>`;
+    }
+
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td style="font-weight:700;color:var(--text-muted);">${m.id}</td>
+      <td style="font-size:11px;color:var(--text-muted);font-weight:600;">${m.id.slice(-6)}</td>
       <td style="font-weight:700;">${m.title}</td>
       <td><span class="badge badge-primary">${m.category}</span></td>
-      <td>${m.batch}</td>
+      <td>${scopeBadge}</td>
       <td style="font-weight:800;color:var(--success-color);">${fmt(m.threshold)}</td>
       <td>
         <button class="btn btn-secondary" style="font-size:12px;padding:4px 10px;margin-right:6px;" onclick="openEditMaterialModal('${m.id}')">
@@ -1031,12 +1542,13 @@ function renderManageMaterialsTable() {
 
 function openAddMaterialModal() {
   document.getElementById('mModalTitle').textContent = 'Add New Book / Sheet';
-  document.getElementById('mEditId').value           = '';
-  document.getElementById('mTitle').value            = '';
-  document.getElementById('mCategory').value         = '';
-  document.getElementById('mBatch').value            = 'Medical-2026-A';
-  document.getElementById('mThreshold').value        = '5000';
-
+  document.getElementById('mEditId').value    = '';
+  document.getElementById('mTitle').value     = '';
+  document.getElementById('mCategory').value  = '';
+  document.getElementById('mThreshold').value = '0';
+  /* scope reset — All Batches */
+  document.getElementById('mScope_all').checked = true;
+  onScopeChange();
   document.getElementById('materialFormModal').classList.add('active');
 }
 
@@ -1045,68 +1557,425 @@ function openEditMaterialModal(id) {
   if (!item) return;
 
   document.getElementById('mModalTitle').textContent = 'Edit Material Details & Payment Limit';
-  document.getElementById('mEditId').value           = item.id;
-  document.getElementById('mTitle').value            = item.title;
-  document.getElementById('mCategory').value         = item.category;
-  document.getElementById('mBatch').value            = item.batch;
-  document.getElementById('mThreshold').value        = item.threshold;
+  document.getElementById('mEditId').value    = item.id;
+  document.getElementById('mTitle').value     = item.title;
+  document.getElementById('mCategory').value  = item.category;
+  document.getElementById('mThreshold').value = item.threshold;
+
+  /* scope restore */
+  const sc = item.scope || 'all';
+  const radio = document.getElementById(`mScope_${sc}`);
+  if (radio) radio.checked = true;
+  onScopeChange();
+
+  if (sc === 'program' && document.getElementById('mProgram')) {
+    document.getElementById('mProgram').value = item.applicableProgram || '';
+  }
+  if (sc === 'batch' && document.getElementById('mBatch')) {
+    document.getElementById('mBatch').value = item.batch || '';
+  }
 
   document.getElementById('materialFormModal').classList.add('active');
+}
+
+function onScopeChange() {
+  const scope = document.querySelector('input[name="mScope"]:checked')?.value || 'all';
+  const programGroup = document.getElementById('programGroup');
+  const batchGroup   = document.getElementById('batchGroup');
+  const scopeHint    = document.getElementById('scopeHint');
+
+  programGroup.style.display = scope === 'program' ? '' : 'none';
+  batchGroup.style.display   = scope === 'batch'   ? '' : 'none';
+
+  const hints = {
+    all:     'সব batch এর সব student পাবে।',
+    program: 'এই program এর সব batch এর student পাবে — নতুন batch যোগ হলেও স্বয়ংক্রিয়ভাবে পাবে।',
+    batch:   'শুধুমাত্র এই নির্দিষ্ট batch এর student পাবে।'
+  };
+  if (scopeHint) scopeHint.textContent = hints[scope] || '';
+
+  /* active border highlight */
+  ['all','program','batch'].forEach(s => {
+    const lbl = document.getElementById(`scopeLabel_${s}`);
+    if (lbl) lbl.style.borderColor = s === scope ? 'var(--primary)' : 'var(--border-color)';
+  });
 }
 
 function closeMaterialModal() {
   document.getElementById('materialFormModal').classList.remove('active');
 }
 
-function saveMaterialItem() {
-  const editId    = document.getElementById('mEditId').value;
+async function saveMaterialItem() {
+  const editId    = document.getElementById('mEditId').value.trim();
   const title     = document.getElementById('mTitle').value.trim();
   const category  = document.getElementById('mCategory').value.trim();
-  const batch     = document.getElementById('mBatch').value;
   const threshold = parseFloat(document.getElementById('mThreshold').value) || 0;
+  const scope     = document.querySelector('input[name="mScope"]:checked')?.value || 'all';
+  const program   = scope === 'program' ? (document.getElementById('mProgram')?.value || '') : '';
+  const batch     = scope === 'batch'   ? (document.getElementById('mBatch')?.value   || '') : '';
 
-  if (!title) { alert('Please enter material title!'); return; }
+  if (!title)    { alert('Please enter material title!'); return; }
   if (!category) { alert('Please enter material category!'); return; }
+  if (scope === 'program' && !program) { alert('Please select a program!'); return; }
+  if (scope === 'batch'   && !batch)   { alert('Please select a batch!'); return; }
 
-  if (editId) {
-    const item = materialsDB.find(m => m.id === editId);
-    if (item) {
-      item.title     = title;
-      item.category  = category;
-      item.batch     = batch;
-      item.threshold = threshold;
+  const payload = {
+    title,
+    program: category,         /* category field — program column তে store হয় */
+    scope,
+    applicableProgram: program,
+    applicableBatches: batch ? [batch] : [],
+    stockQuantity: 100,
+    paymentThreshold: threshold
+  };
+
+  try {
+    let res;
+    if (editId) {
+      res = await fetch(`${DIST_API_BASE}/materials/${editId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    } else {
+      payload.materialCode = 'M-' + Date.now().toString().slice(-6);
+      res = await fetch(`${DIST_API_BASE}/materials`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
     }
-  } else {
-    const newId = 'M-' + (Math.floor(Math.random() * 800) + 300);
-    materialsDB.push({
-      id: newId,
-      title: title,
-      category: category,
-      batch: batch,
-      threshold: threshold
-    });
-  }
-
-  saveMaterialsDB();
-  renderManageMaterialsTable();
-  closeMaterialModal();
-
-  if (currentStudent) {
-    renderStudentMaterials(currentStudent);
+    const data = await res.json();
+    if (data.success) {
+      await loadMaterialsFromApi();
+      renderManageMaterialsTable();
+      closeMaterialModal();
+      alert(editId ? '✅ Material updated!' : '✅ Material saved to database!');
+      if (currentStudent) renderStudentMaterials(currentStudent);
+    } else {
+      alert('❌ ' + (data.message || 'Failed to save material'));
+    }
+  } catch (e) {
+    console.error('Material save API failed:', e);
+    alert('❌ Failed to connect to server. Please try again.');
   }
 }
 
-function deleteMaterial(id) {
+async function deleteMaterial(id) {
   if (confirm('Are you sure you want to delete this material item?')) {
-    materialsDB = materialsDB.filter(m => m.id !== id);
-    saveMaterialsDB();
-    renderManageMaterialsTable();
+    try {
+      // Note: Backend supports material creation but delete is not exposed yet.
+      // For now, remove locally after a soft-delete approach.
+      const res = await fetch(`${DIST_API_BASE}/materials/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.success || data.message) {
+        materialsDB = materialsDB.filter(m => m.id !== id);
+        renderManageMaterialsTable();
 
-    if (currentStudent) {
-      renderStudentMaterials(currentStudent);
+        if (currentStudent) {
+          renderStudentMaterials(currentStudent);
+        }
+        alert('✅ Material deleted from database!');
+      } else {
+        alert('❌ ' + (data.message || 'Failed to delete material'));
+      }
+    } catch (e) {
+      console.error('Material delete API failed:', e);
+      // Fallback: remove locally
+      materialsDB = materialsDB.filter(m => m.id !== id);
+      renderManageMaterialsTable();
+      if (currentStudent) renderStudentMaterials(currentStudent);
+      alert('✅ Material removed locally (server unreachable)');
     }
   }
 }
+
+// ==========================================================================
+//   TAB 3: STOCK & INVENTORY MANAGEMENT
+// ==========================================================================
+
+/**
+ * Render Stock Inventory Table
+ */
+async function renderStockTable() {
+  const tbody = document.getElementById('stockTableBody');
+  if (!tbody) return;
+
+  tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;">Loading stock data...</td></tr>';
+
+  try {
+    const res = await fetch(`${DIST_API_BASE}/materials`);
+    if (!res.ok) throw new Error('Failed to load materials');
+    
+    const data = await res.json();
+    const materials = data.materials || data; // Handle both response formats
+
+    if (!materials || materials.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--text-muted);">No materials found. Add materials in Tab 2 first.</td></tr>';
+      updateStockSummaryCards(0, 0, 0, 0);
+      return;
+    }
+
+    // Calculate summary stats
+    let availableCount = 0;
+    let lowCount = 0;
+    let outCount = 0;
+
+    materials.forEach(m => {
+      const status = m.status || 'Available';
+      if (status === 'Available') availableCount++;
+      else if (status === 'Low Stock') lowCount++;
+      else if (status === 'Out of Stock') outCount++;
+    });
+
+    updateStockSummaryCards(availableCount, lowCount, outCount, materials.length);
+
+    // Render table rows
+    let rows = '';
+    materials.forEach(m => {
+      const stockQty = m.stockQuantity || 0;
+      const totalRec = m.totalReceived || 0;
+      const distributed = m.distributedCount || 0;
+      const status = m.status || 'Available';
+      const category = m.program || m.category || '—'; // Use 'program' field from API
+
+      let statusBadge = '';
+      if (status === 'Available') {
+        statusBadge = `<span class="badge-eligible"><i class="fas fa-check-circle"></i> Available</span>`;
+      } else if (status === 'Low Stock') {
+        statusBadge = `<span class="badge-override"><i class="fas fa-exclamation-triangle"></i> Low Stock</span>`;
+      } else if (status === 'Out of Stock') {
+        statusBadge = `<span class="badge-locked"><i class="fas fa-times-circle"></i> Out of Stock</span>`;
+      }
+
+      // Calculate percentage for visual indicator
+      const percentage = totalRec > 0 ? Math.round((stockQty / totalRec) * 100) : 0;
+      let stockColor = '#15803d'; // green
+      if (stockQty === 0) stockColor = '#dc2626'; // red
+      else if (percentage <= 20) stockColor = '#d97706'; // orange
+
+      rows += `
+        <tr>
+          <td><strong>${m.title || 'Untitled'}</strong></td>
+          <td>${category}</td>
+          <td style="font-weight:700;color:#6366f1;">${totalRec}</td>
+          <td style="font-weight:700;color:#9333ea;">${distributed}</td>
+          <td>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <strong style="color:${stockColor};font-size:18px;">${stockQty}</strong>
+              ${totalRec > 0 ? `<span style="font-size:11px;color:var(--text-muted);">(${percentage}%)</span>` : ''}
+            </div>
+          </td>
+          <td>${statusBadge}</td>
+          <td style="white-space:nowrap;">
+            <button class="btn btn-primary" 
+                    style="padding:6px 12px;font-size:13px;margin-right:6px;"
+                    onclick="openStockModal('${m._id}', \`${(m.title || '').replace(/`/g, '')}\`)">
+              <i class="fas fa-plus-circle"></i> Add Stock
+            </button>
+            <button class="btn btn-secondary" 
+                    style="padding:6px 12px;font-size:13px;"
+                    onclick="loadStockHistory('${m._id}', \`${(m.title || '').replace(/`/g, '')}\`)">
+              <i class="fas fa-history"></i> History
+            </button>
+          </td>
+        </tr>
+      `;
+    });
+
+    tbody.innerHTML = rows;
+
+  } catch (err) {
+    console.error('Error loading stock table:', err);
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:red;">Error loading stock data. Check console.</td></tr>';
+    updateStockSummaryCards(0, 0, 0, 0);
+  }
+}
+
+/**
+ * Update Stock Summary Cards
+ */
+function updateStockSummaryCards(available, low, out, total) {
+  const availCard = document.getElementById('stockCardAvailable');
+  const lowCard = document.getElementById('stockCardLow');
+  const outCard = document.getElementById('stockCardOut');
+  const totalCard = document.getElementById('stockCardTotal');
+
+  if (availCard) availCard.textContent = available;
+  if (lowCard) lowCard.textContent = low;
+  if (outCard) outCard.textContent = out;
+  if (totalCard) totalCard.textContent = total;
+}
+
+/**
+ * Open Add Stock Modal
+ */
+function openStockModal(materialId, materialTitle) {
+  console.log('openStockModal called:', materialId, materialTitle);
+  
+  const modal = document.getElementById('addStockModal');
+  if (!modal) {
+    console.error('Modal element not found!');
+    return;
+  }
+  
+  document.getElementById('stockMaterialId').value = materialId;
+  document.getElementById('stockMaterialTitle').value = materialTitle;
+  document.getElementById('stockQuantity').value = '';
+  document.getElementById('stockDate').value = new Date().toISOString().split('T')[0];
+  document.getElementById('stockNote').value = '';
+  document.getElementById('addStockModalTitle').textContent = 'Add Stock Entry';
+  
+  // Show modal with proper animation
+  modal.style.display = 'flex';
+  setTimeout(() => modal.classList.add('active'), 10);
+  
+  console.log('Modal opened successfully');
+}
+
+/**
+ * Close Add Stock Modal
+ */
+function closeStockModal() {
+  const modal = document.getElementById('addStockModal');
+  modal.classList.remove('active');
+  setTimeout(() => modal.style.display = 'none', 250);
+}
+
+/**
+ * Submit Stock Entry
+ */
+async function submitStockEntry() {
+  const materialId = document.getElementById('stockMaterialId').value.trim();
+  const quantity = parseInt(document.getElementById('stockQuantity').value);
+  const date = document.getElementById('stockDate').value.trim();
+  const note = document.getElementById('stockNote').value.trim();
+
+  if (!materialId) {
+    alert('Material ID missing!');
+    return;
+  }
+  if (!quantity || quantity < 1) {
+    alert('Please enter a valid quantity (minimum 1)!');
+    return;
+  }
+  if (!date) {
+    alert('Please select a received date!');
+    return;
+  }
+
+  const payload = {
+    quantity,
+    date,
+    note: note || ''
+  };
+
+  try {
+    const res = await fetch(`${DIST_API_BASE}/materials/${materialId}/stock`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      const errData = await res.json();
+      throw new Error(errData.error || 'Failed to add stock entry');
+    }
+
+    const data = await res.json();
+    alert(`✅ Stock entry added successfully!\n\nNew Stock: ${data.stockQuantity}\nTotal Received: ${data.totalReceived}\nStatus: ${data.status}`);
+
+    closeStockModal();
+    renderStockTable(); // Refresh table
+
+  } catch (err) {
+    console.error('Error adding stock entry:', err);
+    alert(`❌ Error: ${err.message}`);
+  }
+}
+
+/**
+ * Load and Display Stock History
+ */
+async function loadStockHistory(materialId, materialTitle) {
+  console.log('loadStockHistory called:', materialId, materialTitle);
+  
+  const modal = document.getElementById('stockHistoryModal');
+  if (!modal) {
+    console.error('History modal element not found!');
+    return;
+  }
+  
+  document.getElementById('historyMaterialName').textContent = materialTitle;
+  document.getElementById('historyTimeline').innerHTML = '<p style="text-align:center;color:var(--text-muted);">Loading history...</p>';
+  
+  // Show modal with proper animation
+  modal.style.display = 'flex';
+  setTimeout(() => modal.classList.add('active'), 10);
+  
+  console.log('History modal opened successfully');
+
+  try {
+    const res = await fetch(`${DIST_API_BASE}/materials/${materialId}/stock`);
+    if (!res.ok) throw new Error('Failed to load stock history');
+
+    const data = await res.json();
+    
+    // Update summary stats
+    document.getElementById('historyTotalReceived').textContent = data.totalReceived || 0;
+    document.getElementById('historyCurrent').textContent = data.currentStock || 0;
+    document.getElementById('historyEntries').textContent = data.history?.length || 0;
+
+    // Render timeline
+    const timeline = document.getElementById('historyTimeline');
+    if (!data.history || data.history.length === 0) {
+      timeline.innerHTML = '<p style="text-align:center;color:var(--text-muted);">No stock entries yet.</p>';
+      return;
+    }
+
+    let html = '<div style="display:flex;flex-direction:column;gap:12px;">';
+    data.history.forEach((entry, idx) => {
+      const dateStr = new Date(entry.date).toLocaleDateString('en-GB');
+      const timeStr = new Date(entry.createdAt || entry.date).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+      
+      html += `
+        <div style="background:#ffffff;border-left:4px solid #4f46e5;padding:14px;border-radius:var(--radius-md);box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+          <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:8px;">
+            <div>
+              <div style="font-size:15px;font-weight:800;color:var(--text-main);">
+                <i class="fas fa-box" style="color:#4f46e5;margin-right:6px;"></i>
+                +${entry.quantity} units
+              </div>
+              <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">
+                <i class="fas fa-calendar"></i> ${dateStr} <span style="margin-left:8px;"><i class="fas fa-clock"></i> ${timeStr}</span>
+              </div>
+            </div>
+            <div style="background:#e0e7ff;color:#4338ca;padding:4px 10px;border-radius:99px;font-size:11px;font-weight:800;">
+              Entry #${data.history.length - idx}
+            </div>
+          </div>
+          ${entry.note ? `<div style="font-size:13px;color:var(--text-muted);margin-top:8px;padding:8px;background:#f8fafc;border-radius:var(--radius-sm);"><i class="fas fa-sticky-note" style="margin-right:6px;color:#6366f1;"></i>${entry.note}</div>` : ''}
+        </div>
+      `;
+    });
+    html += '</div>';
+    timeline.innerHTML = html;
+
+  } catch (err) {
+    console.error('Error loading stock history:', err);
+    document.getElementById('historyTimeline').innerHTML = '<p style="text-align:center;color:red;">Error loading history. Check console.</p>';
+  }
+}
+
+/**
+ * Close Stock History Modal
+ */
+function closeHistoryModal() {
+  const modal = document.getElementById('stockHistoryModal');
+  modal.classList.remove('active');
+  setTimeout(() => modal.style.display = 'none', 250);
+}
+
 </script>
 
 </body>

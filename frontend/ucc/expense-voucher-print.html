@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Expense Voucher — UCC Pabna Admin</title>
+
+  <!-- FontAwesome Icons & Google Fonts -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+  <!-- Professional Expense Voucher Print Stylesheet -->
+  <link rel="stylesheet" href="assets/css/expense-voucher-print.css?v=1">
+
+  <!--
+  ══════════════════════════════════════════════════════════════════════
+   UCC PABNA — Professional Expense Voucher (A4 Portrait Print)
+   Pattern B: Dedicated Print Sheet (from PRINT_DESIGN_GUIDE.md)
+   • Paper  : A4 Portrait | Margin: 1.2cm
+   • Theme  : UCC indigo/purple gradient
+   • Data   : Passed via URL parameters (from expenses.html)
+   ══════════════════════════════════════════════════════════════════════
+  -->
+</head>
+<body>
+
+  <!-- Action Bar (screen only) -->
+  <div class="ev-print-actions no-print">
+    <button class="btn close-btn" onclick="closePage()">
+      <i class="fas fa-arrow-left"></i> Close
+    </button>
+    <button class="btn print-btn" onclick="printVoucher()">
+      <i class="fas fa-print"></i> Print Voucher
+    </button>
+  </div>
+
+  <!-- A4 Sheet -->
+  <div class="ev-a4-sheet">
+    <div class="ev-content">
+
+      <!-- 1. HEADER (UCC Institute Header) -->
+      <header class="ev-header">
+        <div class="ev-header-main">
+          <div class="ev-institute">
+            <h1>UCC পাবনা শাখা</h1>
+            <p class="ev-address">
+              <i class="fas fa-map-marker-alt"></i>
+              এডওয়ার্ড কলেজ, রথঘর সংলগ্ন, রাধানগর, পাবনা
+            </p>
+            <p class="ev-contact">
+              <span class="ev-contact-item"><i class="fas fa-phone"></i> 01312-427799</span>
+              <span class="ev-contact-item"><i class="fas fa-envelope"></i> uccpabna@gmail.com</span>
+            </p>
+          </div>
+          <div class="ev-header-right">
+            <div class="ev-report-label">Expense Voucher</div>
+            <div class="ev-voucher-badge">
+              <small>Voucher No.</small>
+              <strong id="voucherId">EXP-000</strong>
+            </div>
+          </div>
+        </div>
+        <div class="ev-header-line"></div>
+      </header>
+
+      <!-- 2. VOUCHER TITLE BANNER -->
+      <div class="ev-voucher-banner">
+        <h2><i class="fas fa-receipt"></i> ব্যয় ভাউচার / Expense Voucher</h2>
+        <div class="banner-sub">UCC Pabna Branch — Official Expense Payment Voucher</div>
+      </div>
+
+      <!-- 3. SUMMARY STRIP (FINANCE.HTML KPI CARDS DESIGN) -->
+      <div class="ev-summary-strip">
+        <div class="ev-summary-box total">
+          <span class="ev-summary-icon total-icon"><i class="fas fa-receipt"></i></span>
+          <div class="ev-summary-info">
+            <div class="ev-sum-label">Amount / পরিমাণ</div>
+            <div class="ev-sum-value" id="sumAmount">৳ 0</div>
+          </div>
+        </div>
+        <div class="ev-summary-box date">
+          <span class="ev-summary-icon date-icon"><i class="fas fa-calendar-alt"></i></span>
+          <div class="ev-summary-info">
+            <div class="ev-sum-label">Date / তারিখ</div>
+            <div class="ev-sum-value" id="sumDate">--</div>
+          </div>
+        </div>
+        <div class="ev-summary-box method">
+          <span class="ev-summary-icon method-icon"><i class="fas fa-wallet"></i></span>
+          <div class="ev-summary-info">
+            <div class="ev-sum-label">Method / পদ্ধতি</div>
+            <div class="ev-sum-value" id="sumMethod">--</div>
+          </div>
+        </div>
+        <div class="ev-summary-box category">
+          <span class="ev-summary-icon category-icon"><i class="fas fa-tags"></i></span>
+          <div class="ev-summary-info">
+            <div class="ev-sum-label">Category / বিভাগ</div>
+            <div class="ev-sum-value" id="sumCategory">--</div>
+          </div>
+        </div>
+        <div class="ev-summary-box status">
+          <span class="ev-summary-icon status-icon"><i class="fas fa-check-circle"></i></span>
+          <div class="ev-summary-info">
+            <div class="ev-sum-label">Status / স্ট্যাটাস</div>
+            <div class="ev-sum-value" id="sumStatus">--</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. OPERATING EXPENSES BREAKDOWN TABLE (EXACT MATCH TO FINANCE.HTML DAILY STATEMENT) -->
+      <div style="margin-top:12px; margin-bottom:14px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;padding-bottom:4px;border-bottom:1.5px solid #e2e8f0;">
+          <h2 style="margin:0;font-size:11.5px;font-weight:800;color:var(--text-main,#0f172a);display:flex;align-items:center;gap:6px;">
+            <i class="fas fa-receipt" style="color:#dc2626;font-size:10px;width:18px;height:18px;display:flex;align-items:center;justify-content:center;background:#fef2f2;border-radius:5px;"></i>
+            2. Operating Expenses Breakdown (আজকের মোট ব্যয় বিবরণী)
+          </h2>
+          <span style="font-size:8px;color:#64748b;" id="expenseMeta">Expense Statement Breakdown</span>
+        </div>
+        <div class="table-responsive">
+          <table class="details-table" style="width:100%;border-collapse:separate;border-spacing:0;font-size:8px;table-layout:fixed;border:1px solid #cbd5e1;border-radius:8px;overflow:hidden;">
+            <colgroup>
+              <col style="width:13%">
+              <col style="width:16%">
+              <col style="width:27%">
+              <col style="width:14%">
+              <col style="width:12%">
+              <col style="width:9%">
+              <col style="width:9%">
+            </colgroup>
+            <thead>
+              <tr style="background-color:#dc2626 !important; background:#dc2626 !important; color:#ffffff !important;">
+                <th class="exp-th" style="background-color:#dc2626 !important; background:#dc2626 !important; color:#ffffff !important; border:none; border-bottom:1px solid #b91c1c !important; border-right:1px solid #b91c1c !important; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; word-break:break-word;">Date / Time</th>
+                <th class="exp-th" style="background-color:#dc2626 !important; background:#dc2626 !important; color:#ffffff !important; border:none; border-bottom:1px solid #b91c1c !important; border-right:1px solid #b91c1c !important; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; word-break:break-word;">Voucher No</th>
+                <th class="exp-th" style="background-color:#dc2626 !important; background:#dc2626 !important; color:#ffffff !important; border:none; border-bottom:1px solid #b91c1c !important; border-right:1px solid #b91c1c !important; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; word-break:break-word;">Expense Title / Purpose</th>
+                <th class="exp-th" style="background-color:#dc2626 !important; background:#dc2626 !important; color:#ffffff !important; border:none; border-bottom:1px solid #b91c1c !important; border-right:1px solid #b91c1c !important; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; word-break:break-word;">Category</th>
+                <th class="exp-th" style="background-color:#dc2626 !important; background:#dc2626 !important; color:#ffffff !important; border:none; border-bottom:1px solid #b91c1c !important; border-right:1px solid #b91c1c !important; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; word-break:break-word;">Paid To / Vendor</th>
+                <th class="exp-th" style="background-color:#dc2626 !important; background:#dc2626 !important; color:#ffffff !important; border:none; border-bottom:1px solid #b91c1c !important; border-right:1px solid #b91c1c !important; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; word-break:break-word;">Method</th>
+                <th class="exp-th num" style="background-color:#dc2626 !important; background:#dc2626 !important; color:#ffffff !important; border:none; border-bottom:1px solid #b91c1c !important; text-align:right; -webkit-print-color-adjust:exact !important; print-color-adjust:exact !important; word-break:break-word;">Amount (৳)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td id="breakdownDate">--</td>
+                <td id="breakdownVoucherId" style="font-family:monospace;font-weight:700;color:#dc2626;word-break:break-all;overflow:hidden;">--</td>
+                <td id="breakdownPurpose" style="font-weight:600;word-break:break-word;">--</td>
+                <td id="breakdownCategory">--</td>
+                <td id="breakdownVendor" style="word-break:break-word;">--</td>
+                <td id="breakdownMethod">--</td>
+                <td id="breakdownAmount" class="num" style="font-weight:800;color:#dc2626;">৳ 0</td>
+              </tr>
+            </tbody>
+            <tfoot>
+              <tr style="background:#fef2f2;font-weight:800;color:#dc2626;">
+                <td colspan="6" style="padding:5px 8px;border-top:1.5px solid #dc2626;text-transform:uppercase;letter-spacing:0.05em;font-size:7.5px;">Total Operating Expense (মোট ব্যয়)</td>
+                <td id="breakdownTotalAmount" class="num" style="padding:5px 8px;border-top:1.5px solid #dc2626;text-align:right;font-size:9px;">৳ 0</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+      <!-- 5. EXPENSE PURPOSE & REMARKS (COMPACT) -->
+      <div class="ev-info-section" style="margin-bottom:12px;">
+        <div class="ev-info-section-title">
+          <i class="fas fa-clipboard-edit"></i> বিস্তারিত উদ্দেশ্য ও মন্তব্য / Purpose & Remarks
+        </div>
+        <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:8px 12px; font-size:8.5px; color:#1e293b; display:flex; flex-direction:column; gap:4px;">
+          <div><strong style="color:#475569;">উদ্দেশ্য / Purpose:</strong> <span id="detailPurpose">--</span></div>
+          <div><strong style="color:#475569;">রেফারেন্স / Reference:</strong> <span id="detailReference" style="font-family:monospace;">--</span> · <strong style="color:#475569;">ভেন্ডর / Vendor:</strong> <span id="detailVendor">--</span></div>
+          <div><strong style="color:#475569;">মন্তব্য / Notes:</strong> <span id="remarksText">কোনো মন্তব্য নেই।</span></div>
+        </div>
+      </div>
+
+      <!-- 7. AUDIT TRAIL -->
+      <div class="ev-audit-trail">
+        <div class="ev-audit-title">
+          <i class="fas fa-history"></i> অডিট ট্রেইল / Audit Trail
+        </div>
+        <ul class="ev-audit-list" id="auditList">
+          <li class="ev-audit-item">
+            <span class="ev-audit-icon"><i class="fas fa-user-shield"></i></span>
+            <span class="ev-audit-label">তৈরি করা / Created By</span>
+            <span class="ev-audit-value" id="auditCreatedBy">Admin</span>
+          </li>
+          <li class="ev-audit-item">
+            <span class="ev-audit-icon"><i class="fas fa-calendar-check"></i></span>
+            <span class="ev-audit-label">তৈরির তারিখ / Created</span>
+            <span class="ev-audit-value" id="auditCreatedDate">--</span>
+          </li>
+          <li class="ev-audit-item">
+            <span class="ev-audit-icon"><i class="fas fa-check-circle"></i></span>
+            <span class="ev-audit-label">অনুমোদিত করা / Approved By</span>
+            <span class="ev-audit-value" id="auditApprovedBy">--</span>
+          </li>
+          <li class="ev-audit-item">
+            <span class="ev-audit-icon"><i class="fas fa-calendar-times"></i></span>
+            <span class="ev-audit-label">আপডেটেড / Last Updated</span>
+            <span class="ev-audit-value" id="auditUpdated">--</span>
+          </li>
+        </ul>
+      </div>
+
+      <!-- 8. SIGNATURES -->
+      <div class="ev-signatures">
+        <div class="ev-sig">
+          <div class="ev-sig-line"></div>
+          <div class="ev-sig-role">Prepared By</div>
+          <div class="ev-sig-sub">Accountant / Admin Officer</div>
+        </div>
+        <div class="ev-sig">
+          <div class="ev-sig-line"></div>
+          <div class="ev-sig-role">Checked By</div>
+          <div class="ev-sig-sub">Accounts Supervisor</div>
+        </div>
+        <div class="ev-sig">
+          <div class="ev-sig-line"></div>
+          <div class="ev-sig-role">Branch Head</div>
+          <div class="ev-sig-sub">UCC Pabna</div>
+        </div>
+      </div>
+
+      <!-- 9. FOOTER -->
+      <div class="ev-final-note">
+        <b>UCC পাবনা শাখা</b> · Computer Generated Expense Voucher · <span id="footerTimestamp"></span>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- JS Logic -->
+  <script>
+    /* ═══════════════════════════════════════════════════════════
+       UCC PABNA — Professional Expense Voucher Print Page
+       Reads data from URL parameters, renders professional voucher
+       ═══════════════════════════════════════════════════════════ */
+
+    const $ = id => document.getElementById(id);
+
+    /* ── Helpers ── */
+    const fmtMoney = n => '৳ ' + Number(n || 0).toLocaleString('en-US');
+    const esc = s => String(s || '').replace(/&/g, '&').replace(/</g, '<').replace(/>/g, '>').replace(/"/g, '"');
+
+    function fmtDate(d) {
+      if (!d) return '--';
+      const dt = new Date(d);
+      if (isNaN(dt.getTime())) return d;
+      return dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    }
+
+    function getParam(name) {
+      const params = new URLSearchParams(location.search);
+      return params.get(name) || '';
+    }
+
+    /* ── Method icon & class map ── */
+    const METHOD_CONFIG = {
+      'Cash':   { icon: 'fa-solid fa-money-bill-wave', cls: 'ev-method-cash',    label: 'Cash' },
+      'bKash':  { icon: 'fa-brands fa-bkash',            cls: 'ev-method-bkash',  label: 'bKash' },
+      'Nagad':  { icon: 'fa-solid fa-mobile-screen-button', cls: 'ev-method-nagad', label: 'Nagad' },
+      'Bank':   { icon: 'fa-solid fa-building-columns',  cls: 'ev-method-bank',  label: 'Bank Transfer' },
+      'Rocket': { icon: 'fa-solid fa-rocket',            cls: 'ev-method-rocket', label: 'Rocket' },
+      'Card':   { icon: 'fa-solid fa-credit-card',       cls: 'ev-method-card',  label: 'Card' },
+      'Cheque': { icon: 'fa-solid fa-file-invoice',      cls: 'ev-method-cheque', label: 'Cheque' }
+    };
+
+    function getMethodHtml(method) {
+      const cfg = METHOD_CONFIG[method] || { icon: 'fa-solid fa-money-bill', cls: 'ev-method-cash', label: method || 'Cash' };
+      return `<span class="ev-method-cell ${cfg.cls}"><i class="${cfg.icon}"></i> ${esc(cfg.label)}</span>`;
+    }
+
+    /* ── Status pill ── */
+    function getStatusHtml(status) {
+      const s = (status || 'Approved').toLowerCase();
+      const cls = s.includes('approved') ? 'ev-status-approved' :
+                  s.includes('reject') ? 'ev-status-rejected' :
+                  s.includes('pending') ? 'ev-status-pending' :
+                  s.includes('void') ? 'ev-status-voided' :
+                  s.includes('draft') ? 'ev-status-draft' : 'ev-status-approved';
+      const icon = s.includes('approved') ? 'fa-check-circle' :
+                   s.includes('reject') ? 'fa-times-circle' :
+                   s.includes('pending') ? 'fa-clock' :
+                   s.includes('void') ? 'fa-skull' :
+                   s.includes('draft') ? 'fa-edit' : 'fa-check-circle';
+      const label = status || 'Approved';
+      return `<span class="ev-status-pill ${cls}"><i class="fa-solid ${icon}"></i> ${esc(label)}</span>`;
+    }
+
+    /* ── Render voucher from data ── */
+    function renderVoucher(data) {
+      const id      = esc(data.id || data.expenseId || 'EXP-000');
+      const date    = data.date || data.expenseDate || '';
+      const title   = esc(data.title || data.description || 'Untitled Expense');
+      const purpose = esc(data.purpose || data.description || data.title || 'N/A');
+      const vendor  = esc(data.vendor || 'N/A');
+      const method  = data.method || data.paymentMethod || 'Cash';
+      const amount  = Number(data.amount || 0);
+      const status  = data.status || 'Approved';
+      const branch  = esc(data.branch || data.branchUnit || 'UCC Pabna Main');
+      const category = esc(data.category || data.expenseCategory || 'General');
+      const notes   = esc(data.notes || data.description || 'No remarks.');
+      const createdBy = esc(data.createdBy || 'Admin');
+      const approvedBy = esc(data.approvedBy || '—');
+      const createdAt = fmtDate(data.createdAt || data.date || '');
+      const updatedAt = fmtDate(data.updatedAt || data.createdAt || data.date || '');
+
+      // Populate all elements
+      $('voucherId').textContent = id;
+      $('sumAmount').textContent = fmtMoney(amount);
+      $('sumDate').textContent = fmtDate(date);
+      $('sumMethod').innerHTML = getMethodHtml(method);
+      $('sumCategory').textContent = category;
+      $('sumStatus').innerHTML = getStatusHtml(status);
+
+      // Populate Daily Statement Breakdown Table
+      if ($('breakdownDate')) $('breakdownDate').textContent = fmtDate(date);
+      if ($('breakdownVoucherId')) $('breakdownVoucherId').textContent = id;
+      if ($('breakdownPurpose')) $('breakdownPurpose').textContent = purpose;
+      if ($('breakdownCategory')) $('breakdownCategory').innerHTML = `<span style="background:#fef2f2;color:#dc2626;padding:2px 6px;border-radius:4px;font-weight:700;font-size:8px;border:1px solid #fecaca;">${category}</span>`;
+      if ($('breakdownVendor')) $('breakdownVendor').textContent = vendor;
+      if ($('breakdownMethod')) $('breakdownMethod').innerHTML = getMethodHtml(method);
+      if ($('breakdownAmount')) $('breakdownAmount').textContent = fmtMoney(amount);
+      if ($('breakdownTotalAmount')) $('breakdownTotalAmount').textContent = fmtMoney(amount);
+
+      $('rowVoucherId').textContent = id;
+      $('rowDate').textContent = fmtDate(date);
+      $('rowPurpose').textContent = purpose;
+      $('rowCategory').textContent = category;
+      $('rowBranch').textContent = branch;
+      $('rowVendor').textContent = vendor;
+      $('rowMethod').innerHTML = getMethodHtml(method);
+      $('rowAmount').textContent = fmtMoney(amount);
+      $('rowStatus').innerHTML = getStatusHtml(status);
+      $('rowTotalAmount').textContent = fmtMoney(amount);
+
+      $('detailPurpose').textContent = purpose;
+      $('detailVendor').textContent = vendor;
+      $('detailReference').textContent = id;
+      $('remarksText').textContent = notes;
+
+      $('auditCreatedBy').textContent = createdBy;
+      $('auditCreatedDate').textContent = createdAt;
+      $('auditApprovedBy').textContent = approvedBy || '—';
+      $('auditUpdated').textContent = updatedAt;
+
+      $('footerTimestamp').textContent = new Date().toLocaleString('en-GB');
+    }
+
+    /* ── Load data from URL params or localStorage fallback ── */
+    function loadData() {
+      // Try URL parameters first
+      const id = getParam('id');
+      const title = getParam('title');
+      const amount = getParam('amount');
+      const category = getParam('category');
+      const branch = getParam('branch');
+      const method = getParam('method');
+      const status = getParam('status');
+      const vendor = getParam('vendor');
+      const date = getParam('date');
+      const notes = getParam('notes');
+      const createdBy = getParam('createdBy');
+      const approvedBy = getParam('approvedBy');
+      const expenseId = getParam('expenseId');
+
+      if (id || title || amount) {
+        // Data from URL params
+        const data = {
+          id: id || expenseId || ('EXP-' + Math.floor(100 + Math.random() * 900)),
+          title: title || 'Untitled Expense',
+          amount: amount || 0,
+          category: category || 'General',
+          branch: branch || 'UCC Pabna Main',
+          method: method || 'Cash',
+          status: status || 'Approved',
+          vendor: vendor || 'N/A',
+          date: date || new Date().toISOString().split('T')[0],
+          notes: notes || '',
+          createdBy: createdBy || 'Admin',
+          approvedBy: approvedBy || '—',
+          createdAt: date || new Date().toISOString().split('T')[0],
+          updatedAt: date || new Date().toISOString().split('T')[0]
+        };
+        renderVoucher(data);
+      } else {
+        // Try localStorage fallback
+        const stored = localStorage.getItem('ev_pending_voucher');
+        if (stored) {
+          try {
+            const data = JSON.parse(stored);
+            renderVoucher(data);
+            localStorage.removeItem('ev_pending_voucher');
+          } catch (e) {
+            renderVoucher(getDefaultVoucher());
+          }
+        } else {
+          renderVoucher(getDefaultVoucher());
+        }
+      }
+    }
+
+    /* ── Default sample voucher (for preview) ── */
+    function getDefaultVoucher() {
+      const today = new Date().toISOString().split('T')[0];
+      return {
+        id: 'EXP-103',
+        title: 'Office & Classroom Electricity Bill — August 2026',
+        amount: 8200,
+        category: 'Electricity & Utilities',
+        branch: 'UCC Pabna Main',
+        method: 'Bank',
+        status: 'Approved',
+        vendor: 'PDB Pabna',
+        date: today,
+        notes: 'Monthly electricity & wifi bill for all classrooms and office areas at UCC Pabna Main branch.',
+        createdBy: 'Admin',
+        approvedBy: 'Md. Tuhin',
+        createdAt: today,
+        updatedAt: today
+      };
+    }
+
+    /* ── Print ── */
+    function printVoucher() {
+      window.print();
+    }
+
+    /* ── Close page ── */
+    function closePage() {
+      window.history.length > 1 ? window.history.back() : window.close();
+    }
+
+    /* ── Auto-print if autoprint=1 param ── */
+    function init() {
+      loadData();
+      const params = new URLSearchParams(location.search);
+      if (params.get('autoprint') === '1') {
+        setTimeout(() => { try { window.print(); } catch(e) { console.error(e); } }, 500);
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', init);
+  </script>
+</body>
+</html>

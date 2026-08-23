@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Batch Transfer — UCC Pabna Admin</title>
+  
+  <!-- FontAwesome Icons & Google Fonts -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- CSS Stylesheets -->
+  <link rel="stylesheet" href="assets/css/design-system.css?v=2">
+  <link rel="stylesheet" href="assets/css/dashboard.css">
+  
+  <style>
+    /* Page Header */
+    .page-header-action {
+      background: linear-gradient(135deg, var(--primary) 0%, #4338ca 100%);
+      color: white;
+      padding: 24px 30px;
+      border-radius: var(--radius-lg);
+      margin-bottom: 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: var(--shadow-md);
+    }
+    .page-header-action h2 { 
+      margin: 0 0 6px 0; 
+      font-size: 20px; 
+      font-weight: 800; 
+      color: #ffffff; 
+      text-shadow: 0 2px 6px rgba(0, 0, 0, 0.2); 
+    }
+    .page-header-action p { 
+      margin: 0; 
+      opacity: 0.9; 
+      font-size: 13.5px; 
+      color: #e0e7ff; 
+    }
+
+    /* Search Section */
+    .search-section {
+      background: var(--bg-card);
+      padding: 28px;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-color);
+      box-shadow: var(--shadow-sm);
+      margin-bottom: 24px;
+    }
+    .search-section h3 {
+      margin: 0 0 18px 0;
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .search-section h3 i {
+      color: var(--primary);
+    }
+    .search-box-wrapper {
+      display: flex;
+      gap: 12px;
+      max-width: 600px;
+    }
+    .search-input {
+      flex: 1;
+      padding: 12px 16px;
+      border: 1.5px solid var(--border-color);
+      border-radius: var(--radius-md);
+      font-size: 14px;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+    .search-input:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+    }
+    .btn-search {
+      padding: 12px 24px;
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: var(--radius-md);
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn-search:hover {
+      background: var(--primary-dark);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-lg);
+    }
+
+    /* Loading & Messages */
+    .loading-state, .not-found-state, .success-state {
+      background: var(--bg-card);
+      padding: 48px;
+      border-radius: var(--radius-lg);
+      text-align: center;
+      margin-bottom: 24px;
+      display: none;
+    }
+    .loading-state.active, .not-found-state.active, .success-state.active {
+      display: block;
+    }
+    .loading-state .spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid var(--border-color);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 16px;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .not-found-state i {
+      font-size: 64px;
+      color: #cbd5e1;
+      margin-bottom: 16px;
+    }
+    .success-state i {
+      font-size: 64px;
+      color: #10b981;
+      margin-bottom: 16px;
+    }
+
+    /* Student Details Card */
+    .student-card {
+      background: var(--bg-card);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-color);
+      box-shadow: var(--shadow-sm);
+      margin-bottom: 24px;
+      display: none;
+    }
+    .student-card.active {
+      display: block;
+    }
+    .student-header {
+      background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+      padding: 24px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+    .student-avatar {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--primary) 0%, #4338ca 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+      color: white;
+      font-weight: 700;
+    }
+    .student-info h3 {
+      margin: 0 0 8px 0;
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    .student-info p {
+      margin: 4px 0;
+      font-size: 14px;
+      color: var(--text-secondary);
+    }
+    .student-info p i {
+      width: 18px;
+      color: var(--primary);
+    }
+    .student-details {
+      padding: 24px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 20px;
+    }
+    .detail-item {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .detail-label {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: var(--text-secondary);
+      letter-spacing: 0.5px;
+    }
+    .detail-value {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .badge-success { background: #dcfce7; color: #15803d; }
+    .badge-warning { background: #fef3c7; color: #b45309; }
+    .badge-danger { background: #fee2e2; color: #b91c1c; }
+
+    /* Transfer Form */
+    .transfer-form {
+      background: var(--bg-card);
+      padding: 28px;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--border-color);
+      box-shadow: var(--shadow-sm);
+      margin-bottom: 24px;
+      display: none;
+    }
+    .transfer-form.active {
+      display: block;
+    }
+    .transfer-form h3 {
+      margin: 0 0 20px 0;
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .transfer-form h3 i {
+      color: var(--primary);
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    .form-label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+    .form-label .required {
+      color: #ef4444;
+    }
+    .form-control {
+      width: 100%;
+      padding: 12px 16px;
+      border: 1.5px solid var(--border-color);
+      border-radius: var(--radius-md);
+      font-size: 14px;
+      outline: none;
+      transition: all 0.2s ease;
+      background: #fff;
+    }
+    .form-control:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+    }
+    .form-control:disabled {
+      background: #f1f5f9;
+      cursor: not-allowed;
+    }
+    .form-hint {
+      margin-top: 6px;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .preview-box {
+      background: #f0f9ff;
+      border: 1.5px solid #bae6fd;
+      border-radius: var(--radius-md);
+      padding: 16px;
+      margin-top: 8px;
+    }
+    .preview-box .preview-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #0369a1;
+      margin-bottom: 6px;
+    }
+    .preview-box .preview-value {
+      font-size: 16px;
+      font-weight: 700;
+      color: #0c4a6e;
+    }
+    .form-actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 24px;
+    }
+    .btn {
+      padding: 12px 24px;
+      border: none;
+      border-radius: var(--radius-md);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+    }
+    .btn-primary:hover:not(:disabled) {
+      background: var(--primary-dark);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-lg);
+    }
+    .btn-primary:disabled {
+      background: #cbd5e1;
+      cursor: not-allowed;
+    }
+    .btn-secondary {
+      background: #f1f5f9;
+      color: var(--text-primary);
+    }
+    .btn-secondary:hover {
+      background: #e2e8f0;
+    }
+    .btn-success {
+      background: #10b981;
+      color: white;
+    }
+    .btn-success:hover:not(:disabled) {
+      background: #059669;
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-lg);
+    }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 9999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.25s ease;
+    }
+    .modal-overlay.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .modal-box {
+      background: #fff;
+      width: 90%;
+      max-width: 550px;
+      border-radius: var(--radius-lg);
+      padding: 0;
+      box-shadow: var(--shadow-xl);
+      max-height: 90vh;
+      overflow: hidden;
+      transform: scale(0.9);
+      transition: transform 0.25s ease;
+    }
+    .modal-overlay.active .modal-box {
+      transform: scale(1);
+    }
+    .modal-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .modal-header h3 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .modal-close {
+      background: none;
+      border: none;
+      font-size: 24px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      padding: 0;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      transition: all 0.2s ease;
+    }
+    .modal-close:hover {
+      background: #f1f5f9;
+      color: var(--text-primary);
+    }
+    .modal-body {
+      padding: 24px;
+      max-height: 60vh;
+      overflow-y: auto;
+    }
+    .modal-footer {
+      padding: 16px 24px;
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+    }
+    .confirm-details {
+      background: #f8fafc;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 16px;
+    }
+    .confirm-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .confirm-row:last-child {
+      border-bottom: none;
+    }
+    .confirm-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+    .confirm-value {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    .transfer-arrow {
+      color: var(--primary);
+      font-size: 18px;
+      margin: 0 8px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- Loading Screen -->
+<div class="ucc-loading" id="uccLoading">
+  <div class="ucc-spinner"></div>
+  <div class="ucc-loading-text">Loading Batch Transfer...</div>
+  <div class="ucc-loading-sub">Connecting to UCC Database...</div>
+</div>
+
+<!-- Sidebar -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <a href="index.html" class="sidebar-logo">
+      <div class="logo-icon"><i class="fas fa-graduation-cap"></i></div>
+      <span>UCC <span class="gradient-text">Pabna</span> <small class="admin-badge">Admin</small></span>
+    </a>
+    <button class="sidebar-toggle" id="sidebarToggle" aria-label="Toggle sidebar">
+      <i class="fas fa-chevron-left"></i>
+    </button>
+  </div>
+  
+  <div class="sidebar-search">
+    <div class="search-box sidebar-search-box">
+      <i class="fas fa-search"></i>
+      <input type="text" id="sidebarSearchInput" placeholder="Search student by ID, name or phone" autocomplete="off">
+    </div>
+    <div class="sidebar-search-results" id="sidebarSearchResults"></div>
+  </div>
+
+  <nav class="sidebar-nav">
+    <a href="dashboard.html" class="nav-item">
+      <i class="fas fa-tachometer-alt"></i><span>Dashboard</span>
+    </a>
+    <a href="students.html" class="nav-item">
+      <i class="fas fa-users"></i><span>Students</span>
+    </a>
+    <a href="admission.html" class="nav-item">
+      <i class="fas fa-user-plus"></i><span>Admission</span>
+    </a>
+    <a href="batches.html" class="nav-item">
+      <i class="fas fa-layer-group"></i><span>Batches</span>
+    </a>
+    <a href="batch-transfer.html" class="nav-item active">
+      <i class="fas fa-exchange-alt"></i><span>Batch Transfer</span>
+    </a>
+    <a href="payment.html" class="nav-item">
+      <i class="fas fa-money-bill-wave"></i><span>Payment</span>
+    </a>
+    <a href="distribution.html" class="nav-item">
+      <i class="fas fa-boxes"></i><span>Distribution</span>
+    </a>
+    <a href="exams.html" class="nav-item">
+      <i class="fas fa-clipboard-list"></i><span>Exams</span>
+    </a>
+    <a href="merit-list.html" class="nav-item">
+      <i class="fas fa-trophy"></i><span>Merit List</span>
+    </a>
+    <a href="expenses.html" class="nav-item">
+      <i class="fas fa-receipt"></i><span>Expenses</span>
+    </a>
+    <a href="reports.html" class="nav-item">
+      <i class="fas fa-chart-bar"></i><span>Reports</span>
+    </a>
+    <a href="settings.html" class="nav-item">
+      <i class="fas fa-cog"></i><span>Settings</span>
+    </a>
+  </nav>
+
+  <div class="sidebar-footer">
+    <a href="index.html" class="nav-item">
+      <i class="fas fa-globe"></i><span>Public Portal</span>
+    </a>
+    <a href="admin-login.html" class="nav-item logout">
+      <i class="fas fa-sign-out-alt"></i><span>Logout</span>
+    </a>
+  </div>
+</aside>
+
+<!-- Main Content -->
+<main class="main-content">
+  <div class="container">
+    
+    <!-- Page Header -->
+    <div class="page-header-action">
+      <div>
+        <h2><i class="fas fa-exchange-alt"></i> Batch Transfer</h2>
+        <p>Transfer students between batches with automatic roll assignment</p>
+      </div>
+    </div>
+
+    <!-- Search Section -->
+    <div class="search-section">
+      <h3><i class="fas fa-search"></i> Search Student</h3>
+      <div class="search-box-wrapper">
+        <input 
+          type="text" 
+          class="search-input" 
+          id="searchInput" 
+          placeholder="Enter Student ID, Roll Number or Phone Number"
+          autocomplete="off"
+        >
+        <button class="btn-search" id="searchBtn">
+          <i class="fas fa-search"></i>
+          Search
+        </button>
+      </div>
+    </div>
+
+    <!-- Loading State -->
+    <div class="loading-state" id="loadingState">
+      <div class="spinner"></div>
+      <p style="margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary);">Searching student...</p>
+    </div>
+
+    <!-- Not Found State -->
+    <div class="not-found-state" id="notFoundState">
+      <i class="fas fa-user-slash"></i>
+      <h3 style="margin: 0 0 8px 0; font-size: 18px; font-weight: 700; color: var(--text-primary);">Student Not Found</h3>
+      <p style="margin: 0; font-size: 14px; color: var(--text-secondary);">No student found with the provided information. Please check and try again.</p>
+    </div>
+
+    <!-- Student Details Card -->
+    <div class="student-card" id="studentCard">
+      <div class="student-header">
+        <div class="student-avatar" id="studentAvatar">
+          <i class="fas fa-user-graduate"></i>
+        </div>
+        <div class="student-info">
+          <h3 id="studentName">-</h3>
+          <p><i class="fas fa-id-card"></i> Student ID: <strong id="studentId">-</strong></p>
+          <p><i class="fas fa-hashtag"></i> Roll: <strong id="studentRoll">-</strong></p>
+          <p><i class="fas fa-layer-group"></i> Current Batch: <strong id="currentBatch">-</strong></p>
+        </div>
+      </div>
+      <div class="student-details">
+        <div class="detail-item">
+          <span class="detail-label">Phone</span>
+          <span class="detail-value" id="studentPhone">-</span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">Program</span>
+          <span class="detail-value" id="studentProgram">-</span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">Course Fee</span>
+          <span class="detail-value" id="studentFee">-</span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">Total Paid</span>
+          <span class="detail-value" id="studentPaid">-</span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">Total Due</span>
+          <span class="detail-value" id="studentDue">-</span>
+        </div>
+        <div class="detail-item">
+          <span class="detail-label">Payment Status</span>
+          <span class="detail-value" id="studentPaymentStatus">-</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Transfer Form -->
+    <div class="transfer-form" id="transferForm">
+      <h3><i class="fas fa-exchange-alt"></i> Batch Transfer Details</h3>
+      
+      <div class="form-group">
+        <label class="form-label">
+          Target Batch <span class="required">*</span>
+        </label>
+        <select class="form-control" id="targetBatch">
+          <option value="">Select Target Batch</option>
+        </select>
+        <p class="form-hint">Select the batch to transfer this student to</p>
+      </div>
+
+      <div class="form-group" id="newRollPreviewGroup" style="display: none;">
+        <label class="form-label">New Roll Assignment</label>
+        <div class="preview-box">
+          <div class="preview-label">New Roll Number (Auto-generated)</div>
+          <div class="preview-value" id="newRollPreview">-</div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Transfer Notes (Optional)</label>
+        <textarea 
+          class="form-control" 
+          id="transferNotes" 
+          rows="3" 
+          placeholder="Enter reason for transfer or any additional notes..."
+        ></textarea>
+      </div>
+
+      <div class="form-actions">
+        <button class="btn btn-secondary" id="resetBtn">
+          <i class="fas fa-undo"></i>
+          Reset
+        </button>
+        <button class="btn btn-success" id="transferBtn" disabled>
+          <i class="fas fa-exchange-alt"></i>
+          Transfer Student
+        </button>
+      </div>
+    </div>
+
+    <!-- Success State -->
+    <div class="success-state" id="successState">
+      <i class="fas fa-check-circle"></i>
+      <h3 style="margin: 0 0 8px 0; font-size: 18px; font-weight: 700; color: #15803d;">Transfer Successful!</h3>
+      <p style="margin: 0 0 16px 0; font-size: 14px; color: var(--text-secondary);">The student has been successfully transferred to the new batch.</p>
+      <div id="successDetails" style="background: #f8fafc; border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 16px; margin-bottom: 20px;">
+        <!-- Success details will be injected here -->
+      </div>
+      <button class="btn btn-primary" id="transferAnotherBtn">
+        <i class="fas fa-redo"></i>
+        Transfer Another Student
+      </button>
+    </div>
+
+  </div>
+</main>
+
+<!-- Confirmation Modal -->
+<div class="modal-overlay" id="confirmModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3><i class="fas fa-exclamation-triangle" style="color: #f59e0b;"></i> Confirm Batch Transfer</h3>
+      <button class="modal-close" id="modalClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p style="margin: 0 0 16px 0; color: var(--text-secondary); font-size: 14px;">
+        Please review the transfer details carefully before confirming:
+      </p>
+      <div class="confirm-details" id="confirmDetails">
+        <!-- Details will be injected here -->
+      </div>
+      <p style="margin: 16px 0 0 0; color: #ef4444; font-size: 13px;">
+        <i class="fas fa-info-circle"></i> This action will update the student's batch and roll number. Payment and distribution records will be preserved.
+      </p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="modalCancelBtn">
+        <i class="fas fa-times"></i>
+        Cancel
+      </button>
+      <button class="btn btn-success" id="modalConfirmBtn">
+        <i class="fas fa-check"></i>
+        Confirm Transfer
+      </button>
+    </div>
+  </div>
+</div>
+
+<script src="assets/js/sidebar.js"></script>
+<script src="assets/js/batch-transfer.js"></script>
+</body>
+</html>

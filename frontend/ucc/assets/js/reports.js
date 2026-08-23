@@ -12,6 +12,46 @@ const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&', '<': '<',
 function student(roll) { return REPORT_DATA.students.find(s => s.roll === roll) }
 function due(s) { return Math.max(0, (s.fee || 0) - (s.paid || 0)) }
 function dates() { return { from: $('fromDate').value, to: $('toDate').value, batch: $('batchFilter').value, method: $('methodFilter').value } }
+function updateFilterSummary() {
+  const f = dates();
+  const range = f.from && f.to ? `${f.from} to ${f.to}` : (f.from ? `From ${f.from}` : (f.to ? `Until ${f.to}` : 'All time'));
+  const batch = f.batch === 'all' ? 'All batches' : f.batch;
+  const method = f.method === 'all' ? 'All payment methods' : f.method;
+  $('activeFilterSummary').textContent = `${range} · ${batch} · ${method}`;
+}
+function setReportLoadStatus(message, isError = false) {
+  const status = $('reportLoadStatus');
+  if (!status) return;
+  status.textContent = message;
+  status.style.color = isError ? '#dc2626' : '#64748b';
+}
+function setTabFilterVisibility(tab) {
+  const zone = $('tabFilterZone');
+  const filter = $('reportFilter');
+  const feedback = $('reportFilterFeedback');
+  const note = $('tabContextNote');
+  if (!zone || !filter || !feedback || !note) return;
+  const noteText = note.querySelector('span');
+  const hasFullFilters = tab === 'overview' || tab === 'collection';
+  const hasBatchOnly = tab === 'dues';
+  zone.classList.toggle('batch-only', hasBatchOnly);
+  filter.hidden = !hasFullFilters && !hasBatchOnly;
+  feedback.hidden = !hasFullFilters && !hasBatchOnly;
+  note.hidden = hasFullFilters || hasBatchOnly;
+  if (hasBatchOnly) {
+    $('filterHelp').textContent = 'Choose a batch to view its current fee, paid and due position.';
+  } else if (hasFullFilters) {
+    $('filterHelp').textContent = 'Choose a date range, batch or payment method, then apply filters.';
+  }
+  if (!noteText) return;
+  const notes = {
+    batch: 'Batch Performance shows current overall fee, collection and due data. Date and payment filters do not apply here.',
+    materials: 'Material Audit shows current catalogue and distribution status. Date and payment filters do not apply here.',
+    ledger: 'Search for a student to view their complete fee, payment and material ledger.',
+    batchwise: 'Use the Batch-wise Report filters below to refine this report.'
+  };
+  noteText.textContent = notes[tab] || 'This report shows current overall data.';
+}
 function selectedStudents() { let f = dates(); return REPORT_DATA.students.filter(s => f.batch === 'all' || s.batch === f.batch) }
 function selectedTransactions() {
   let f = dates();
@@ -196,9 +236,8 @@ function renderMaterials() {
   }).join('') || emptyRow(8, 'No material data available from database.');
 }
 function renderLedger() {
-  if (!ledgerStudentRoll && REPORT_DATA.students.length) ledgerStudentRoll = REPORT_DATA.students[0].roll;
   const s = ledgerStudentRoll ? student(ledgerStudentRoll) : null;
-  if (!s) { $('ledgerContent').innerHTML = '<p class="attention-meta">No students in database yet.</p>'; return; }
+  if (!s) { $('ledgerContent').innerHTML = REPORT_DATA.students.length ? '<p class="attention-meta">Search for a student by roll, name or phone to view their ledger.</p>' : '<p class="attention-meta">No students are available in the database yet.</p>'; return; }
   let history = REPORT_DATA.transactions.filter(t => t.roll === s.roll).sort((a, b) => b.date.localeCompare(a.date));
   const d = due(s);
   const pct = s.fee ? Math.min(100, Math.round((s.paid || 0) / s.fee * 100)) : 0;
@@ -255,8 +294,8 @@ function printLedger() {
   const pct = s.fee ? Math.min(100, Math.round((s.paid || 0) / s.fee * 100)) : 0;
   const now = new Date().toLocaleString('en-GB');
   const materials = s.materials || [];
-  const rows = history.map((t, i) => `<tr><td class="num">${i + 1}</td><td>${esc(t.date)}</td><td>${esc(t.receipt)}</td><td>${esc(t.type)}</td><td>${esc(t.method)}</td><td class="num amount">${money(t.amount)}</td></tr>`).join('')
-    || `<tr><td colspan="6" class="ledger-print-empty">No payment receipts recorded.</td></tr>`;
+  const rows = history.map((t, i) => `<tr><td><span class="ledger-print-serial">${i + 1}</span>${esc(t.date || '—')}</td><td>${esc(t.receipt || '—')}</td><td>${esc(t.type || 'Payment')}</td><td class="ledger-print-method">${esc(t.method || 'Not recorded')}</td><td class="num amount">${money(Number(t.amount || 0))}</td></tr>`).join('')
+    || `<tr><td colspan="5" class="ledger-print-empty">No payment receipts recorded.</td></tr>`;
 
   const sheet = document.createElement('section');
   sheet.className = 'ledger-print-sheet';
@@ -292,8 +331,9 @@ function printLedger() {
     </div>
     <div class="ledger-print-section">
       <div class="ledger-print-section-title"><span><i class="fas fa-receipt"></i> Payment History</span><span>${history.length} receipts</span></div>
-      <table class="ledger-print-table">
-        <thead><tr><th>#</th><th>Date</th><th>Receipt No</th><th>Type</th><th>Method</th><th class="num">Amount (৳)</th></tr></thead>
+      <table class="ledger-print-table" style="width:100%!important;min-width:100%!important;max-width:100%!important;table-layout:fixed!important;display:table!important">
+        <colgroup><col style="width:18%"><col style="width:26%"><col style="width:17%"><col style="width:21%"><col style="width:18%"></colgroup>
+        <thead><tr><th>Date</th><th>Receipt No</th><th>Type</th><th>Method</th><th class="num">Amount (৳)</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
     </div>
@@ -365,14 +405,42 @@ function renderAll() {
   renderBatch();
   renderMaterials();
   renderLedger();
+  updateFilterSummary();
   $('printDateRange').textContent = `${$('fromDate').value || 'All time'} to ${$('toDate').value || 'Today'}`;
 }
-function applyFilters() { renderAll(); toast('Report filters applied.'); }
-function resetFilters() { $('batchFilter').value = 'all'; $('methodFilter').value = 'all'; setDefaultDates(); renderAll(); toast('Filters reset.'); }
+function applyFilters() {
+  const f = dates();
+  if (f.from && f.to && f.from > f.to) {
+    toast('The From date cannot be later than the To date.');
+    return;
+  }
+  $('collectionDate').value = '';
+  renderAll();
+  toast('Filters applied to the report.');
+}
+function resetFilters() {
+  $('batchFilter').value = 'all';
+  $('methodFilter').value = 'all';
+  $('collectionDate').value = '';
+  setDefaultDates();
+  renderAll();
+  toast('Default report filters restored.');
+}
 function openTab(tab) {
   activeTab = tab;
-  document.querySelectorAll('.report-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
-  document.querySelectorAll('.tab-pane').forEach(p => p.classList.toggle('active', p.id === tab + 'Pane'));
+  document.querySelectorAll('.report-tab').forEach(b => {
+    const selected = b.dataset.tab === tab;
+    b.classList.toggle('active', selected);
+    b.setAttribute('aria-selected', String(selected));
+    b.tabIndex = selected ? 0 : -1;
+  });
+  document.querySelectorAll('.tab-pane').forEach(p => {
+    const selected = p.id === tab + 'Pane';
+    p.classList.toggle('active', selected);
+    p.setAttribute('role', 'tabpanel');
+    p.setAttribute('aria-hidden', String(!selected));
+  });
+  setTabFilterVisibility(tab);
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 function exportReport() {
@@ -438,7 +506,39 @@ function printDailyStatement() {
 
   document.body.appendChild(frame);
 }
-function printActiveReport() { window.print(); }
+function printCollectionStatement() {
+  const tx = selectedTransactions().slice().sort((a, b) => b.date.localeCompare(a.date) || String(b.receipt || '').localeCompare(String(a.receipt || '')));
+  const f = dates();
+  const range = f.from && f.to ? `${formatStatementDate(f.from)} – ${formatStatementDate(f.to)}` : (f.from ? `From ${formatStatementDate(f.from)}` : (f.to ? `Until ${formatStatementDate(f.to)}` : 'All time'));
+  const byDay = {};
+  tx.forEach(t => { byDay[t.date] = byDay[t.date] || { tx: 0, total: 0 }; byDay[t.date].tx++; byDay[t.date].total += Number(t.amount || 0); });
+  const payload = {
+    title: 'Collection Statement', range, batch: f.batch === 'all' ? 'All batches' : f.batch,
+    method: f.method === 'all' ? 'All payment methods' : f.method,
+    transactions: tx.map(t => ({ date: t.date, receipt: t.receipt, student: (student(t.roll) || {}).name || t.studentName, batch: (student(t.roll) || {}).batch || t.batch, type: t.type, fee: t.amount, discount: 0, paid: t.amount, method: t.method, status: 'Collected' })),
+    summary: Object.keys(byDay).sort().map(date => ({ date, ...byDay[date] }))
+  };
+  sessionStorage.setItem('uccCollectionPrintData', JSON.stringify(payload));
+  const old = document.getElementById('collectionPrintFrame');
+  if (old) old.remove();
+  const frame = document.createElement('iframe');
+  frame.id = 'collectionPrintFrame'; frame.setAttribute('aria-hidden', 'true');
+  frame.style.cssText = 'position:fixed;left:-9999px;top:0;width:10px;height:10px;border:0;';
+  frame.src = 'daily-statement.html?collectionPrint=1';
+  frame.addEventListener('load', () => setTimeout(() => {
+    const win = frame.contentWindow;
+    if (!win) { frame.remove(); return; }
+    const cleanup = () => frame.remove();
+    win.addEventListener('afterprint', cleanup, { once: true });
+    win.print();
+    setTimeout(cleanup, 3000);
+  }, 400));
+  document.body.appendChild(frame);
+}
+function printActiveReport() {
+  if (activeTab === 'collection') { printCollectionStatement(); return; }
+  window.print();
+}
 
 /* ── Chart.js print fix ──
    Chart.js resizes hidden/detached canvases to 0x0 during print layout,
@@ -812,7 +912,7 @@ function renderBwModal(batchId) {
 
   const panel = document.getElementById('bwDetailPanel');
   panel.classList.add('open');
-  setTimeout(() => panel.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  setTimeout(() => panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
 }
 
 function bwStudentRow(s, showDue) {
@@ -831,11 +931,12 @@ function bwStudentRow(s, showDue) {
       <a href="distribution.html?roll=${s.roll}" class="bw-action-link" title="Distribution"><i class="fas fa-book-open"></i></a>
     </div>`;
 
+  const studentCell = `<td><div class="bw-st-name">${esc(s.name)}</div><small class="bw-st-sub">${esc(s.guardian || s.guardianPhone || '—')}</small></td>`;
+
   if (showDue) {
     return `<tr>
-      <td><b>${s.roll}</b></td>
-      <td>${s.name}</td>
-      <td>${s.guardian || s.guardianPhone || '—'}</td>
+      <td><b>${esc(s.roll)}</b></td>
+      ${studentCell}
       <td class="money">${bwMoney(s.paid)}</td>
       <td class="money" style="color:#e11d48;font-weight:700">${bwMoney(bwDue(s))}</td>
       <td>${bwMatChip(s.materials)}</td>
@@ -844,9 +945,8 @@ function bwStudentRow(s, showDue) {
     </tr>`;
   }
   return `<tr>
-    <td><b>${s.roll}</b></td>
-    <td>${s.name}</td>
-    <td>${s.guardian || s.guardianPhone || '—'}</td>
+    <td><b>${esc(s.roll)}</b></td>
+    ${studentCell}
     <td class="money" style="color:#059669;font-weight:700">${bwMoney(s.paid)}</td>
     <td>${bwMatChip(s.materials)}</td>
     <td>${statusCell}</td>
@@ -899,9 +999,15 @@ function bwOpenPrintPreview(batchId) {
   sheet.id = previewId;
   sheet.innerHTML = `
     <div class="bw-preview-actions no-print">
-      <button class="btn btn-primary btn-sm" onclick="bwPrintPreview()">Print A4</button>
-      <button class="btn btn-secondary btn-sm" onclick="bwExportCSV('${bid}')">Export CSV</button>
-      <button class="btn btn-secondary btn-sm" onclick="bwCloseReportPreview()">Close</button>
+      <div class="bw-preview-tag">
+        <i class="fas fa-print"></i>
+        <span>A4 Report Preview &amp; Export</span>
+      </div>
+      <div class="bw-preview-btns">
+        <button class="btn btn-primary btn-sm" onclick="bwPrintPreview()"><i class="fas fa-print"></i> Print A4</button>
+        <button class="btn btn-success btn-sm" onclick="bwExportCSV('${bid}')"><i class="fas fa-file-csv"></i> Export CSV</button>
+        <button class="btn btn-secondary btn-sm" onclick="bwCloseReportPreview()"><i class="fas fa-times"></i> Close</button>
+      </div>
     </div>
     <div class="bw-report-preview">
       <div class="bw-report-brand">
@@ -913,32 +1019,46 @@ function bwOpenPrintPreview(batchId) {
       </div>
       <div class="bw-report-divider"></div>
       <div class="bw-report-cards">
-        <div class="bw-report-card">
-          <div class="card-icon" style="background:#dbeafe;color:#1d4ed8;">🔵</div>
+        <div class="bw-report-card bw-card-blue">
+          <div class="card-icon"><i class="fas fa-users"></i></div>
           <div>
             <div class="card-value">${students.length}</div>
-            <div class="card-label">TOTAL STUDENTS</div>
+            <div class="card-label">Total Students</div>
           </div>
         </div>
-        <div class="bw-report-card">
-          <div class="card-icon" style="background:#dcfce7;color:#065f46;">🟢</div>
+        <div class="bw-report-card bw-card-green">
+          <div class="card-icon"><i class="fas fa-circle-check"></i></div>
           <div>
             <div class="card-value">${paid.length}</div>
-            <div class="card-label">PAID</div>
+            <div class="card-label">Paid Students</div>
           </div>
         </div>
-        <div class="bw-report-card">
-          <div class="card-icon" style="background:#fee2e2;color:#b91c1c;">🔴</div>
+        <div class="bw-report-card bw-card-rose">
+          <div class="card-icon"><i class="fas fa-triangle-exclamation"></i></div>
           <div>
             <div class="card-value">${due.length}</div>
-            <div class="card-label">UNPAID</div>
+            <div class="card-label">Due Students</div>
           </div>
         </div>
-        <div class="bw-report-card">
-          <div class="card-icon" style="background:#ede9fe;color:#6d28d9;">🟣</div>
+        <div class="bw-report-card bw-card-emerald">
+          <div class="card-icon"><i class="fas fa-wallet"></i></div>
+          <div>
+            <div class="card-value">${bwMoney(collected)}</div>
+            <div class="card-label">Collected</div>
+          </div>
+        </div>
+        <div class="bw-report-card bw-card-amber">
+          <div class="card-icon"><i class="fas fa-hand-holding-dollar"></i></div>
+          <div>
+            <div class="card-value">${bwMoney(dueAmount)}</div>
+            <div class="card-label">Total Due</div>
+          </div>
+        </div>
+        <div class="bw-report-card bw-card-indigo">
+          <div class="card-icon"><i class="fas fa-chart-line"></i></div>
           <div>
             <div class="card-value">${rate}%</div>
-            <div class="card-label">COLLECTION RATE</div>
+            <div class="card-label">Collection Rate</div>
           </div>
         </div>
       </div>
@@ -1111,6 +1231,7 @@ function closeBwEditModal(e) {
 
 /* ═══════════ BACKEND DATA LOADING ═══════════ */
 async function loadReportData() {
+  setReportLoadStatus('Loading live report data…');
   try {
     const res = await fetch(`${API_BASE}/ucc/reports`);
     if (!res.ok) throw new Error('API request failed');
@@ -1158,15 +1279,18 @@ async function loadReportData() {
       notes: b.notes,
       status: b.status
     }));
+    setReportLoadStatus(`Live data ready · ${REPORT_DATA.students.length} students · ${REPORT_DATA.transactions.length} transactions`);
 
   } catch (e) {
     console.warn('Failed to load from backend, using empty data.', e);
     REPORT_DATA = { students: [], transactions: [], materials: [] };
     BW_DATA = { batches: [], students: [] };
+    setReportLoadStatus('Report data could not be loaded. Refresh the page and try again.', true);
   }
 
   setDefaultDates();
   populateSelects();
+  setTabFilterVisibility(activeTab);
   renderAll();
   initBatchwise();
 }
@@ -1176,6 +1300,13 @@ document.addEventListener('DOMContentLoaded', () => {
   setDefaultDates();
 
   document.querySelectorAll('.report-tab').forEach(b => b.addEventListener('click', () => openTab(b.dataset.tab)));
+  document.querySelectorAll('.report-tab').forEach((tab, index, tabs) => tab.addEventListener('keydown', e => {
+    if (!['ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(e.key)) return;
+    e.preventDefault();
+    const next = e.key === 'Home' ? 0 : e.key === 'End' ? tabs.length - 1 : (index + (e.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+    tabs[next].focus();
+    openTab(tabs[next].dataset.tab);
+  }));
 
   document.addEventListener('click', e => {
     const w = $('ledgerSearchWrap');

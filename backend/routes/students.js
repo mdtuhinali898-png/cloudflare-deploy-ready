@@ -192,15 +192,30 @@ router.post('/', async (req, res) => {
 // @access  Public
 router.put('/:id', async (req, res) => {
     try {
-        const student = await Student.findOneAndUpdate(
-            { studentId: req.params.id },
+        let query = { studentId: req.params.id };
+        if (req.params.id && req.params.id.match(/^[0-9a-fA-F]{24}$/)) {
+            query = { $or: [{ _id: req.params.id }, { studentId: req.params.id }] };
+        }
+
+        // Check if student exists
+        const existingStudent = await Student.findOne(query);
+        if (!existingStudent) {
+            return res.status(404).json({ success: false, message: 'Student not found' });
+        }
+
+        // If studentId is being updated, check that it doesn't conflict with another student
+        if (req.body.studentId && req.body.studentId !== existingStudent.studentId) {
+            const conflict = await Student.findOne({ studentId: req.body.studentId, _id: { $ne: existingStudent._id } });
+            if (conflict) {
+                return res.status(400).json({ success: false, message: `Student ID ${req.body.studentId} is already in use by another student.` });
+            }
+        }
+
+        const student = await Student.findByIdAndUpdate(
+            existingStudent._id,
             req.body,
             { new: true, runValidators: true }
         );
-        
-        if (!student) {
-            return res.status(404).json({ success: false, message: 'Student not found' });
-        }
         
         res.json({ 
             success: true, 

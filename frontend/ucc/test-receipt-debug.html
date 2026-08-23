@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Receipt Debug Tool</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            padding: 20px;
+            background: #1e1e1e;
+            color: #d4d4d4;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: #252526;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+        h1 {
+            color: #569cd6;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            color: #858585;
+            margin-bottom: 30px;
+        }
+        .section {
+            background: #1e1e1e;
+            padding: 20px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            border: 1px solid #3e3e42;
+        }
+        .section-title {
+            color: #4ec9b0;
+            font-weight: bold;
+            margin-bottom: 15px;
+            font-size: 18px;
+        }
+        input, select {
+            width: 100%;
+            padding: 10px;
+            background: #3c3c3c;
+            border: 1px solid #555;
+            color: #d4d4d4;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            font-family: 'Courier New', monospace;
+        }
+        button {
+            background: #0e639c;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 14px;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        button:hover {
+            background: #1177bb;
+        }
+        button.success {
+            background: #16825d;
+        }
+        button.success:hover {
+            background: #1e9e6e;
+        }
+        .output {
+            background: #1e1e1e;
+            padding: 15px;
+            border-radius: 4px;
+            border: 1px solid #3e3e42;
+            white-space: pre-wrap;
+            font-size: 13px;
+            max-height: 400px;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+        .error {
+            color: #f48771;
+        }
+        .success {
+            color: #4ec9b0;
+        }
+        .warning {
+            color: #dcdcaa;
+        }
+        .info {
+            color: #9cdcfe;
+        }
+        .label {
+            color: #858585;
+            margin-bottom: 5px;
+            display: block;
+        }
+        .flex {
+            display: flex;
+            gap: 15px;
+            align-items: flex-start;
+        }
+        .flex-item {
+            flex: 1;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+        .status-ok {
+            background: #16825d;
+            color: white;
+        }
+        .status-error {
+            background: #f48771;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🧾 UCC Receipt API Debug Tool</h1>
+    <p class="subtitle">Test receipt API endpoints and diagnose data loading issues</p>
+
+    <!-- Test 1: API Connection -->
+    <div class="section">
+        <div class="section-title">1️⃣ Test Backend Connection</div>
+        <button onclick="testConnection()">🔌 Test API Connection</button>
+        <div id="connectionOutput" class="output" style="display:none;"></div>
+    </div>
+
+    <!-- Test 2: List Recent Receipts -->
+    <div class="section">
+        <div class="section-title">2️⃣ List Recent Receipts</div>
+        <button onclick="listReceipts()">📋 Fetch All Receipts</button>
+        <button onclick="listStudents()" class="success">👥 Fetch All Students</button>
+        <div id="listOutput" class="output" style="display:none;"></div>
+    </div>
+
+    <!-- Test 3: Fetch Specific Receipt -->
+    <div class="section">
+        <div class="section-title">3️⃣ Test Receipt by Receipt Number</div>
+        <div class="flex">
+            <div class="flex-item">
+                <label class="label">Receipt Number</label>
+                <input type="text" id="receiptNoInput" placeholder="e.g. UCC-REC-2026-0001" value="">
+            </div>
+            <div class="flex-item">
+                <label class="label">Student Roll (optional)</label>
+                <input type="text" id="rollInput" placeholder="e.g. 105" value="">
+            </div>
+        </div>
+        <button onclick="testReceiptByNumber()">🔍 Fetch Receipt</button>
+        <button onclick="copyReceiptUrl()">📋 Copy Receipt URL</button>
+        <div id="receiptOutput" class="output" style="display:none;"></div>
+    </div>
+
+    <!-- Test 4: Payment Simulation -->
+    <div class="section">
+        <div class="section-title">4️⃣ Current URL Parameters</div>
+        <div id="urlParamsOutput" class="output"></div>
+    </div>
+
+</div>
+
+<script>
+    const API_BASE_URL = (window.location.protocol === 'http:' || window.location.protocol === 'https:')
+        ? (window.location.port === '5002' ? '/api' : `${window.location.protocol}//${window.location.hostname}:5002/api`)
+        : 'http://localhost:5002/api';
+
+    // Display current URL params on load
+    document.addEventListener('DOMContentLoaded', () => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const params = {};
+        for (let [key, value] of urlParams.entries()) {
+            params[key] = value;
+        }
+        document.getElementById('urlParamsOutput').innerHTML = 
+            Object.keys(params).length > 0 
+                ? '<span class="info">Current URL Parameters:</span>\n' + JSON.stringify(params, null, 2)
+                : '<span class="warning">No URL parameters detected</span>';
+        
+        // Auto-fill from URL
+        if (params.receipt) {
+            document.getElementById('receiptNoInput').value = params.receipt;
+        }
+        if (params.roll) {
+            document.getElementById('rollInput').value = params.roll;
+        }
+    });
+
+    function log(elementId, message, type = 'info') {
+        const el = document.getElementById(elementId);
+        el.style.display = 'block';
+        const timestamp = new Date().toLocaleTimeString();
+        const className = type === 'error' ? 'error' : type === 'success' ? 'success' : type === 'warning' ? 'warning' : 'info';
+        el.innerHTML += `<span class="${className}">[${timestamp}] ${message}</span>\n`;
+    }
+
+    function clearLog(elementId) {
+        document.getElementById(elementId).innerHTML = '';
+        document.getElementById(elementId).style.display = 'none';
+    }
+
+    async function testConnection() {
+        clearLog('connectionOutput');
+        log('connectionOutput', `Testing connection to: ${API_BASE_URL}`, 'info');
+        
+        try {
+            const res = await fetch(`${API_BASE_URL}/ucc/batches`);
+            if (res.ok) {
+                const data = await res.json();
+                log('connectionOutput', `✅ SUCCESS: Connected to backend!`, 'success');
+                log('connectionOutput', `Found ${data.count || 0} batches in database`, 'info');
+            } else {
+                log('connectionOutput', `❌ ERROR: HTTP ${res.status} ${res.statusText}`, 'error');
+            }
+        } catch (err) {
+            log('connectionOutput', `❌ NETWORK ERROR: ${err.message}`, 'error');
+            log('connectionOutput', `Backend may not be running on port 5002`, 'warning');
+        }
+    }
+
+    async function listReceipts() {
+        clearLog('listOutput');
+        log('listOutput', `Fetching all payment receipts...`, 'info');
+        
+        try {
+            const res = await fetch(`${API_BASE_URL}/ucc/reports`);
+            if (res.ok) {
+                const data = await res.json();
+                const transactions = data.data?.transactions || [];
+                log('listOutput', `✅ Found ${transactions.length} payment records`, 'success');
+                
+                if (transactions.length > 0) {
+                    log('listOutput', `\n--- Recent 10 Receipts ---`, 'info');
+                    transactions.slice(0, 10).forEach(t => {
+                        log('listOutput', `Receipt: ${t.receipt} | Roll: ${t.roll} | Student: ${t.studentName} | Amount: ৳${t.amount}`, 'info');
+                    });
+                    
+                    // Auto-fill first receipt
+                    document.getElementById('receiptNoInput').value = transactions[0].receipt;
+                    document.getElementById('rollInput').value = transactions[0].roll;
+                    log('listOutput', `\n💡 Auto-filled first receipt in Test 3`, 'success');
+                } else {
+                    log('listOutput', `⚠️ No receipts found in database`, 'warning');
+                }
+            } else {
+                log('listOutput', `❌ ERROR: HTTP ${res.status}`, 'error');
+            }
+        } catch (err) {
+            log('listOutput', `❌ ERROR: ${err.message}`, 'error');
+        }
+    }
+
+    async function listStudents() {
+        clearLog('listOutput');
+        log('listOutput', `Fetching all students...`, 'info');
+        
+        try {
+            const res = await fetch(`${API_BASE_URL}/ucc/students`);
+            if (res.ok) {
+                const data = await res.json();
+                const students = data.students || [];
+                log('listOutput', `✅ Found ${students.length} students`, 'success');
+                
+                if (students.length > 0) {
+                    log('listOutput', `\n--- Recent 10 Students ---`, 'info');
+                    students.slice(0, 10).forEach(s => {
+                        log('listOutput', `Roll: ${s.roll} | Name: ${s.name} | Batch: ${s.batchName} | Due: ৳${s.totalDue || 0}`, 'info');
+                    });
+                    
+                    // Auto-fill first student roll
+                    document.getElementById('rollInput').value = students[0].roll;
+                    log('listOutput', `\n💡 Auto-filled first student roll in Test 3`, 'success');
+                } else {
+                    log('listOutput', `⚠️ No students found in database`, 'warning');
+                }
+            } else {
+                log('listOutput', `❌ ERROR: HTTP ${res.status}`, 'error');
+            }
+        } catch (err) {
+            log('listOutput', `❌ ERROR: ${err.message}`, 'error');
+        }
+    }
+
+    async function testReceiptByNumber() {
+        clearLog('receiptOutput');
+        const receiptNo = document.getElementById('receiptNoInput').value.trim();
+        const roll = document.getElementById('rollInput').value.trim();
+        
+        if (!receiptNo) {
+            log('receiptOutput', `❌ Please enter a receipt number`, 'error');
+            return;
+        }
+        
+        const url = `${API_BASE_URL}/ucc/payments/receipt/${encodeURIComponent(receiptNo)}${roll ? '?roll=' + encodeURIComponent(roll) : ''}`;
+        log('receiptOutput', `Fetching: ${url}`, 'info');
+        
+        try {
+            const res = await fetch(url);
+            log('receiptOutput', `Response: HTTP ${res.status} ${res.statusText}`, res.ok ? 'success' : 'error');
+            
+            if (res.ok) {
+                const data = await res.json();
+                log('receiptOutput', `\n✅ SUCCESS: Receipt data loaded!`, 'success');
+                log('receiptOutput', `\n--- Payment Details ---`, 'info');
+                log('receiptOutput', `Receipt No: ${data.payment?.receiptNo || 'N/A'}`, 'info');
+                log('receiptOutput', `Amount: ৳${data.payment?.amount || 0}`, 'info');
+                log('receiptOutput', `Method: ${data.payment?.paymentMethod || 'N/A'}`, 'info');
+                log('receiptOutput', `Date: ${data.payment?.date || 'N/A'}`, 'info');
+                
+                log('receiptOutput', `\n--- Student Details ---`, 'info');
+                log('receiptOutput', `Roll: ${data.student?.roll || 'N/A'}`, 'info');
+                log('receiptOutput', `Name: ${data.student?.name || 'N/A'}`, 'info');
+                log('receiptOutput', `Batch: ${data.student?.batch || 'N/A'}`, 'info');
+                log('receiptOutput', `Total Fee: ৳${data.student?.courseFee || 0}`, 'info');
+                log('receiptOutput', `Total Paid: ৳${data.student?.totalPaid || 0}`, 'info');
+                log('receiptOutput', `Due: ৳${data.student?.totalDue || 0}`, 'info');
+                
+                log('receiptOutput', `\n--- Full Response ---`, 'info');
+                log('receiptOutput', JSON.stringify(data, null, 2), 'info');
+            } else {
+                const errorText = await res.text();
+                log('receiptOutput', `❌ ERROR: ${errorText}`, 'error');
+                
+                if (res.status === 404) {
+                    log('receiptOutput', `\n💡 Receipt not found. Possible reasons:`, 'warning');
+                    log('receiptOutput', `   1. Payment was not saved in database`, 'warning');
+                    log('receiptOutput', `   2. Receipt number is incorrect`, 'warning');
+                    log('receiptOutput', `   3. Try using roll number search`, 'warning');
+                }
+            }
+        } catch (err) {
+            log('receiptOutput', `❌ NETWORK ERROR: ${err.message}`, 'error');
+        }
+    }
+
+    function copyReceiptUrl() {
+        const receiptNo = document.getElementById('receiptNoInput').value.trim();
+        const roll = document.getElementById('rollInput').value.trim();
+        
+        if (!receiptNo) {
+            alert('Please enter a receipt number first');
+            return;
+        }
+        
+        const baseUrl = window.location.origin + window.location.pathname.replace('test-receipt-debug.html', 'receipt.html');
+        const url = `${baseUrl}?receipt=${encodeURIComponent(receiptNo)}${roll ? '&roll=' + encodeURIComponent(roll) : ''}&autoPrint=false`;
+        
+        navigator.clipboard.writeText(url).then(() => {
+            alert('✅ Receipt URL copied to clipboard!\n\n' + url);
+        });
+    }
+</script>
+
+</body>
+</html>

@@ -1,71 +1,22 @@
 /* ==========================================================================
-   UCC পাবনা — Exam Management JS
-   Demo data — API-ready structure (replace fetch calls later)
+   UCC Pabna — Exam Management JS (Backend Connected)
+   Loads from MongoDB via /api/ucc/exams
    ========================================================================== */
 
-/* ── Demo Data (persisted in localStorage so it survives page navigation) ── */
-const STORAGE_KEY = 'ucc_exam_data_v1';
-
-function loadExamData() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed && Array.isArray(parsed.exams) && Array.isArray(parsed.results)) {
-        return parsed;
-      }
-    }
-  } catch (e) { /* ignore corrupted storage */ }
-  return {
-    exams: [
-      { id:'EX001', name:'Model Test 01', batch:'Medical-2026-A',   type:'MCQ',       subject:'Physics + Chemistry', date:'2026-07-15', total:100, pass:40, duration:90,  status:'Published', notes:'' },
-      { id:'EX002', name:'Model Test 02', batch:'Medical-2026-A',   type:'MCQ',       subject:'Biology + Chemistry', date:'2026-07-29', total:100, pass:40, duration:90,  status:'Published', notes:'' },
-      { id:'EX003', name:'Model Test 01', batch:'Engineering-2026', type:'Written',    subject:'Higher Math + Physics', date:'2026-07-20', total:100, pass:40, duration:120, status:'Published', notes:'' },
-      { id:'EX004', name:'Model Test 01', batch:'Varsity-A-2026',   type:'Mixed',     subject:'All Subjects', date:'2026-07-25', total:100, pass:40, duration:90,  status:'Published', notes:'' },
-      { id:'EX005', name:'Weekly Test 01',batch:'Medical-2026-B',   type:'MCQ',       subject:'Biology', date:'2026-08-01', total:50,  pass:20, duration:45,  status:'Draft',     notes:'পরের সপ্তাহে নেওয়া হবে' },
-      { id:'EX006', name:'Model Test 03', batch:'Medical-2026-A',   type:'Model Test',subject:'Full Syllabus', date:'2026-08-10', total:200, pass:80, duration:180, status:'Draft',     notes:'' }
-    ],
-    results: [
-      /* EX001 Medical-2026-A */
-      { examId:'EX001', roll:'101', name:'Rahim Ahmed',     obtained:85, isAbsent:false },
-      { examId:'EX001', roll:'102', name:'Karim Hossain',   obtained:72, isAbsent:false },
-      { examId:'EX001', roll:'103', name:'Sumon Mia',       obtained:91, isAbsent:false },
-      { examId:'EX001', roll:'104', name:'Mim Akter',       obtained:0,  isAbsent:true  },
-      { examId:'EX001', roll:'105', name:'Tanvir Ahmed',    obtained:78, isAbsent:false },
-      /* EX002 Medical-2026-A */
-      { examId:'EX002', roll:'101', name:'Rahim Ahmed',     obtained:80, isAbsent:false },
-      { examId:'EX002', roll:'102', name:'Karim Hossain',   obtained:68, isAbsent:false },
-      { examId:'EX002', roll:'103', name:'Sumon Mia',       obtained:88, isAbsent:false },
-      { examId:'EX002', roll:'104', name:'Mim Akter',       obtained:55, isAbsent:false },
-      { examId:'EX002', roll:'105', name:'Tanvir Ahmed',    obtained:0,  isAbsent:true  },
-      /* EX003 Engineering-2026 */
-      { examId:'EX003', roll:'201', name:'Sadia Islam',     obtained:62, isAbsent:false },
-      { examId:'EX003', roll:'202', name:'Nafis Rahman',    obtained:77, isAbsent:false },
-      /* EX004 Varsity-A-2026 */
-      { examId:'EX004', roll:'301', name:'Arif Hossain',    obtained:58, isAbsent:false },
-      { examId:'EX004', roll:'302', name:'Jannatul Ferdous',obtained:83, isAbsent:false },
-      { examId:'EX004', roll:'303', name:'Nusrat Jahan',    obtained:0,  isAbsent:true  }
-    ]
-  };
-}
-
-const EXAM_DEMO = loadExamData();
-
-function saveExamData() {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ exams: EXAM_DEMO.exams, results: EXAM_DEMO.results }));
-  } catch (e) { /* storage full / unavailable */ }
-}
+const API_BASE = 'http://localhost:5002/api';
 
 /* ── State ── */
+let EXAM_DEMO = { exams: [], results: [] };
 let deleteTargetId = null;
-let filteredExams  = [...EXAM_DEMO.exams];
+let filteredExams = [];
+let cachedBatches = [];
 
 /* ── Helpers ── */
 const $ = id => document.getElementById(id);
 const exMoney = n => '৳' + Number(n||0).toLocaleString('en-IN');
 function exToast(msg, type = 'success') {
   const t = $('exToast');
+  if (!t) return;
   t.textContent = msg;
   t.className   = 'ex-toast' + (type === 'error' ? ' error' : '');
   clearTimeout(window._exToastTimer);
@@ -93,6 +44,100 @@ function calcPositions(results, totalMarks) {
 }
 function entryCount(examId) {
   return EXAM_DEMO.results.filter(r => r.examId === examId && !r.isAbsent).length;
+}
+
+/* ── API: Load exams & results from backend ── */
+async function loadExamsFromApi() {
+  try {
+    const examsRes = await fetch(`${API_BASE}/ucc/exams`).then(r => r.json()).catch(() => ({ success: false }));
+
+    if (examsRes.success && examsRes.exams) {
+      EXAM_DEMO.exams = examsRes.exams.map(e => ({
+        id: e._id,
+        name: e.title || e.examCode || '',
+        batch: e.batchName || '',
+        type: e.program || 'Medical',
+        subject: (e.subjects && e.subjects.length) ? e.subjects.map(s => s.subjectName).join(' + ') : '',
+        date: e.examDate ? new Date(e.examDate).toISOString().split('T')[0] : '',
+        total: e.totalMarks || 100,
+        pass: (e.subjects && e.subjects.length && e.subjects[0].passMarks) ? e.subjects[0].passMarks : 40,
+        subjects: e.subjects || [],
+        duration: 0,
+        status: e.status === 'Completed' ? 'Published' : 'Draft',
+        notes: ''
+      }));
+    }
+
+    // Load results for each exam
+    EXAM_DEMO.results = [];
+    for (const exam of EXAM_DEMO.exams) {
+      try {
+        const res = await fetch(`${API_BASE}/ucc/results/merit-list/${exam.id}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && data.meritList) {
+            data.meritList.forEach(r => {
+              EXAM_DEMO.results.push({
+                examId: exam.id,
+                roll: r.studentRoll,
+                name: r.studentName,
+                obtained: r.totalObtained || 0,
+                isAbsent: r.status === 'Absent',
+                remarks: '',
+                percentage: r.percentage,
+                position: r.meritPosition,
+                grade: getGrade(r.percentage || 0)
+              });
+            });
+          }
+        }
+      } catch (e) { /* skip */ }
+    }
+  } catch (e) {
+    console.warn('Failed to load exams from API:', e);
+    EXAM_DEMO = { exams: [], results: [] };
+  }
+
+  filteredExams = [...EXAM_DEMO.exams];
+}
+
+function saveExamData() {
+  // No-op: data is in backend
+}
+
+/* ── Populate batch dropdowns from DB ── */
+async function loadBatches() {
+  try {
+    const res = await fetch(`${API_BASE}/ucc/batches`);
+    const data = await res.json();
+    if (data.success && data.batches) {
+      cachedBatches = data.batches;
+      populateBatchFilter(data.batches);
+      populateBatchSelect(data.batches);
+    }
+  } catch (e) { /* ignore */ }
+}
+
+function populateBatchFilter(batches) {
+  const filterSel = $('filterBatch');
+  if (filterSel) {
+    const current = filterSel.value;
+    filterSel.innerHTML = '<option value="all">All Batches</option>';
+    batches.forEach(b => {
+      filterSel.insertAdjacentHTML('beforeend', `<option value="${b.batchName}">${b.batchName}</option>`);
+    });
+    filterSel.value = current || 'all';
+  }
+}
+
+function populateBatchSelect(batches) {
+  const sel = $('newExamBatch');
+  if (sel) {
+    sel.innerHTML = '<option value="">-- Select Batch --</option>';
+    batches.forEach(b => {
+      sel.insertAdjacentHTML('beforeend', `<option value="${b.batchName}">${b.batchName}</option>`);
+    });
+  }
 }
 
 /* ── Stat Cards ── */
@@ -137,7 +182,7 @@ function renderTable() {
   if (!filteredExams.length) {
     tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:40px;color:#64748b;">
       <div style="font-size:36px;margin-bottom:10px;opacity:.4;">📋</div>
-      কোনো exam পাওয়া যায়নি।</td></tr>`;
+      No exams found.</td></tr>`;
     return;
   }
   tbody.innerHTML = filteredExams.map((e, i) => {
@@ -172,11 +217,27 @@ function renderTable() {
 }
 
 /* ── Toggle status ── */
-function toggleStatus(id) {
+async function toggleStatus(id) {
   const exam = EXAM_DEMO.exams.find(e => e.id === id);
   if (!exam) return;
   exam.status = exam.status === 'Published' ? 'Draft' : 'Published';
-  saveExamData();
+  
+  // Update in backend
+  try {
+    await fetch(`${API_BASE}/ucc/exams/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: exam.name,
+        batchName: exam.batch,
+        program: exam.type,
+        totalMarks: exam.total,
+        subjects: (exam.subjects && exam.subjects.length) ? exam.subjects : undefined,
+        status: exam.status === 'Published' ? 'Completed' : 'Scheduled'
+      })
+    });
+  } catch (e) { /* ignore */ }
+  
   applyFilter();
   renderStats();
   exToast(`"${exam.name}" → ${exam.status}`);
@@ -186,52 +247,62 @@ function toggleStatus(id) {
 function openCreateModal() {
   $('createModal').style.display = 'flex';
   $('newExamDate').value = new Date().toISOString().split('T')[0];
+  
+  // Populate batch dropdown from DB
+  loadBatches().then(() => {});
+  
   setTimeout(() => $('newExamName').focus(), 80);
 }
 function closeCreateModal(e) {
   if (e && e.target !== $('createModal')) return;
   $('createModal').style.display = 'none';
 }
-function saveExam() {
+async function saveExam() {
   const name  = $('newExamName').value.trim();
   const batch = $('newExamBatch').value;
   const type  = $('newExamType').value;
   const date  = $('newExamDate').value;
   const total = parseInt($('newExamTotal').value) || 0;
 
-  if (!name)  { exToast('Exam name দিন।', 'error'); $('newExamName').focus(); return; }
-  if (!batch) { exToast('Batch বেছে নিন।', 'error'); return; }
-  if (!type)  { exToast('Exam type বেছে নিন।', 'error'); return; }
-  if (!date)  { exToast('Date দিন।', 'error'); return; }
-  if (!total) { exToast('Total marks দিন।', 'error'); return; }
+  if (!name)  { exToast('Please enter exam name.', 'error'); $('newExamName').focus(); return; }
+  if (!batch) { exToast('Please select a batch.', 'error'); return; }
+  if (!type)  { exToast('Please select exam type.', 'error'); return; }
+  if (!date)  { exToast('Please select a date.', 'error'); return; }
+  if (!total) { exToast('Please enter total marks.', 'error'); return; }
 
-  const newExam = {
-    id:       'EX' + String(Date.now()).slice(-5),
-    name, batch, type,
-    subject:  $('newExamSubject').value.trim(),
-    date, total,
-    pass:     parseInt($('newExamPass').value) || 0,
-    duration: parseInt($('newExamDuration').value) || 0,
-    status:   'Draft',
-    notes:    $('newExamNotes').value.trim()
+  const payload = {
+    title: name,
+    program: type,
+    batchName: batch,
+    examDate: new Date(date).toISOString(),
+    totalMarks: total,
+    subjects: [{ subjectName: $('newExamSubject').value.trim() || type, fullMarks: total, passMarks: parseInt($('newExamPass').value) || 0 }],
+    status: 'Scheduled'
   };
 
-  EXAM_DEMO.exams.unshift(newExam);
-  saveExamData();
-
-  /* API hook: fetch('/api/ucc/exams', { method:'POST', ... }) */
-
-  $('createModal').style.display = 'none';
-  /* reset form */
-  ['newExamName','newExamSubject','newExamTotal','newExamPass','newExamDuration','newExamNotes']
-    .forEach(id => $(id).value = '');
-  $('newExamBatch').value = '';
-  $('newExamType').value  = '';
-
-  filteredExams = [...EXAM_DEMO.exams];
-  applyFilter();
-  renderStats();
-  exToast(`✅ "${newExam.name}" তৈরি হয়েছে (Draft)`);
+  try {
+    const res = await fetch(`${API_BASE}/ucc/exams`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (data.success) {
+      $('createModal').style.display = 'none';
+      ['newExamName','newExamSubject','newExamTotal','newExamPass','newExamDuration','newExamNotes']
+        .forEach(id => $(id).value = '');
+      $('newExamBatch').value = '';
+      $('newExamType').value  = '';
+      await loadExamsFromApi();
+      applyFilter();
+      renderStats();
+      exToast(`✅ "${name}" created (Draft)`);
+    } else {
+      exToast('❌ ' + (data.message || 'Save failed'), 'error');
+    }
+  } catch (e) {
+    exToast('❌ API connection error', 'error');
+  }
 }
 
 /* ── Delete ── */
@@ -246,19 +317,23 @@ function closeDeleteModal(e) {
   $('deleteModal').style.display = 'none';
   deleteTargetId = null;
 }
-function confirmDelete() {
+async function confirmDelete() {
   if (!deleteTargetId) return;
-  const idx = EXAM_DEMO.exams.findIndex(e => e.id === deleteTargetId);
-  if (idx > -1) {
-    const name = EXAM_DEMO.exams[idx].name;
-    EXAM_DEMO.exams.splice(idx, 1);
-    /* also remove results */
-    const rIdx = [];
-    EXAM_DEMO.results.forEach((r,i) => { if (r.examId === deleteTargetId) rIdx.unshift(i); });
-    rIdx.forEach(i => EXAM_DEMO.results.splice(i, 1));
-    saveExamData();
-    exToast(`🗑️ "${name}" deleted (demo)`);
+  
+  try {
+    const res = await fetch(`${API_BASE}/ucc/exams/${deleteTargetId}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (data.success) {
+      EXAM_DEMO.exams = EXAM_DEMO.exams.filter(e => e.id !== deleteTargetId);
+      EXAM_DEMO.results = EXAM_DEMO.results.filter(r => r.examId !== deleteTargetId);
+      exToast(`🗑️ Exam deleted`);
+    } else {
+      exToast('❌ ' + (data.message || 'Delete failed'), 'error');
+    }
+  } catch (e) {
+    exToast('❌ API connection error', 'error');
   }
+  
   closeDeleteModal();
   filteredExams = [...EXAM_DEMO.exams];
   applyFilter();
@@ -288,10 +363,10 @@ document.addEventListener('keydown', e => {
 });
 
 /* ── Init ── */
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   initPage();
-  /* Only render exam table/stats when this page is exams.html
-     (mark-entry.html & merit-list.html also load this file) */
+  await Promise.all([loadExamsFromApi(), loadBatches()]);
+  
   if (document.getElementById('examTableBody')) {
     renderStats();
     renderTable();

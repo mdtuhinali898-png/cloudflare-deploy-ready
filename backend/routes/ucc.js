@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const mongoose = require('mongoose');
 const UccStudent = require('../models/UccStudent');
 const UccPayment = require('../models/UccPayment');
 const UccBatch = require('../models/UccBatch');
@@ -8,19 +9,60 @@ const UccDistribution = require('../models/UccDistribution');
 const UccExam = require('../models/UccExam');
 const UccResult = require('../models/UccResult');
 const UccSettings = require('../models/UccSettings');
+const UccExpense = require('../models/UccExpense');
 
 // Helper to generate unique receipt numbers
 async function generateReceiptNo() {
-  const count = await UccPayment.countDocuments();
-  const nextNum = (count + 1).toString().padStart(4, '0');
-  return `UCC-REC-${new Date().getFullYear()}-${nextNum}`;
+  const year = new Date().getFullYear();
+  let receiptNo;
+  let attempts = 0;
+  const maxAttempts = 100;
+  
+  // Try to generate a unique receipt number
+  while (attempts < maxAttempts) {
+    const count = await UccPayment.countDocuments();
+    const nextNum = (count + 1 + attempts).toString().padStart(4, '0');
+    receiptNo = `UCC-REC-${year}-${nextNum}`;
+    
+    // Check if this receipt number already exists
+    const existing = await UccPayment.findOne({ receiptNo });
+    if (!existing) {
+      return receiptNo; // Found a unique one!
+    }
+    
+    attempts++;
+  }
+  
+  // Fallback: use timestamp if all attempts failed
+  const timestamp = Date.now().toString().slice(-6);
+  return `UCC-REC-${year}-${timestamp}`;
 }
 
 // Helper to generate unique voucher numbers
 async function generateVoucherNo() {
-  const count = await UccDistribution.countDocuments();
-  const nextNum = (count + 1).toString().padStart(4, '0');
-  return `UCC-VOU-${new Date().getFullYear()}-${nextNum}`;
+  const year = new Date().getFullYear();
+  let voucherNo;
+  let attempts = 0;
+  const maxAttempts = 100;
+  
+  // Try to generate a unique voucher number
+  while (attempts < maxAttempts) {
+    const count = await UccDistribution.countDocuments();
+    const nextNum = (count + 1 + attempts).toString().padStart(4, '0');
+    voucherNo = `UCC-VOU-${year}-${nextNum}`;
+    
+    // Check if this voucher number already exists
+    const existing = await UccDistribution.findOne({ voucherNo });
+    if (!existing) {
+      return voucherNo; // Found a unique one!
+    }
+    
+    attempts++;
+  }
+  
+  // Fallback: use timestamp if all attempts failed
+  const timestamp = Date.now().toString().slice(-6);
+  return `UCC-VOU-${year}-${timestamp}`;
 }
 
 // =================================================================
@@ -28,17 +70,40 @@ async function generateVoucherNo() {
 // =================================================================
 
 // Get Next Available Roll for Batch
-router.get('/admission/next-roll/:batchCode', async (req, res) => {
+router.get('/admission/next-roll/:batchName', async (req, res) => {
   try {
-    const { batchCode } = req.params;
-    let batch = await UccBatch.findOne({ batchCode });
+    const batchName = decodeURIComponent(req.params.batchName);
+
+    // Find batch in UccBatch collection with case-insensitive search
+    let batch = await UccBatch.findOne({ 
+      batchName: { $regex: new RegExp(`^${batchName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
+    });
     
+    // If not found by name, try by batchCode
     if (!batch) {
-      // Default initial roll if batch not seeded yet
-      return res.json({ success: true, nextRoll: 1, batchCode });
+      batch = await UccBatch.findOne({ 
+        batchCode: { $regex: new RegExp(`^${batchName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
+      });
     }
-    res.json({ success: true, nextRoll: batch.nextRollNumber, batchName: batch.batchName });
+
+    // Always query students by batchName (case-insensitive) — this is the source of truth
+    const students = await UccStudent.find({ 
+      batchName: { $regex: new RegExp(`^${batchName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
+    }, { roll: 1 }).lean();
+    
+    let maxRoll = 0;
+    for (const s of students) {
+      const num = parseInt(String(s.roll || '').replace(/[^0-9]/g, ''), 10);
+      if (!isNaN(num) && num > maxRoll) maxRoll = num;
+    }
+
+    const nextRoll = Math.max(maxRoll + 1, (batch ? batch.nextRollNumber : 1) || 1);
+
+    console.log(`[NEXT-ROLL] batchName="${batchName}" | batch found: ${!!batch} | students found: ${students.length} | maxRoll: ${maxRoll} | nextRoll: ${nextRoll}`);
+
+    res.json({ success: true, nextRoll, batchName, studentCount: students.length });
   } catch (error) {
+    console.error('[NEXT-ROLL ERROR]', error);
     res.status(500).json({ success: false, message: error.message });
   }
 });
@@ -56,12 +121,41 @@ router.post('/admission', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Name, Phone, and Batch are required' });
     }
 
-    // Find or get batch details
-    let batch = await UccBatch.findOne({ batchName });
-    let rollNum = 1;
-    if (batch) {
-      rollNum = batch.nextRollNumber;
+    // Find or get batch details (case-insensitive search)
+    let batch = await UccBatch.findOne({ 
+      batchName: { $regex: new RegExp(`^${batchName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
+    });
+    
+    // If batch not found, try to find by batchCode
+    if (!batch) {
+      batch = await UccBatch.findOne({ 
+        batchCode: { $regex: new RegExp(`^${batchName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
+      });
     }
+    
+    let rollNum = 1;
+    let userRollInput = req.body.roll || req.body.customRoll;
+
+    if (userRollInput !== undefined && userRollInput !== null && String(userRollInput).trim() !== '') {
+      const parsed = parseInt(String(userRollInput).trim(), 10);
+      if (!isNaN(parsed) && parsed > 0) {
+        rollNum = parsed;
+      }
+    } else {
+      // Calculate next roll from actual student data by batchName (case-insensitive)
+      const students = await UccStudent.find({ 
+        batchName: { $regex: new RegExp(`^${batchName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
+      }, { roll: 1 }).lean();
+      
+      let maxRoll = 0;
+      for (const s of students) {
+        const num = parseInt(String(s.roll || '').replace(/[^0-9]/g, ''), 10);
+        if (!isNaN(num) && num > maxRoll) maxRoll = num;
+      }
+      rollNum = Math.max(maxRoll + 1, (batch ? batch.nextRollNumber : 1) || 1);
+    }
+    
+    console.log(`[ADMISSION] batchName="${batchName}" | batch found: ${!!batch} | rollNum: ${rollNum}`);
 
     // Calculate Discount & Fees
     const fee = Number(courseFee) || (batch ? batch.baseFee : 15000);
@@ -85,8 +179,68 @@ router.post('/admission', async (req, res) => {
       paymentStatus = 'Partial Paid';
     }
 
-    const formattedRoll = String(rollNum).padStart(3, '0');
-    const studentId = `UCC-${(batchName || 'GEN').substring(0, 4).toUpperCase()}-${formattedRoll}`;
+    const formattedRoll = String(userRollInput || rollNum).trim().padStart(3, '0');
+    
+    // Generate unique student ID
+    // Use batch code prefix if available, otherwise use first 4 chars of batch name
+    let batchPrefix = 'GEN';
+    if (batch && batch.batchCode) {
+      // Extract meaningful prefix from batch code (e.g., "HUM-BN2-2026" -> "HUMBN2")
+      batchPrefix = batch.batchCode.replace(/[-\s]/g, '').substring(0, 6).toUpperCase();
+    } else {
+      // Use batch name (remove spaces and special chars)
+      batchPrefix = batchName.replace(/[^a-zA-Z0-9]/g, '').substring(0, 6).toUpperCase();
+    }
+    
+    // Check if student ID already exists and make it unique
+    let studentId = `UCC-${batchPrefix}-${formattedRoll}`;
+    let idCounter = 1;
+    let existingStudent = await UccStudent.findOne({ studentId });
+    
+    while (existingStudent) {
+      // If duplicate, append a counter or use timestamp
+      studentId = `UCC-${batchPrefix}-${formattedRoll}-${idCounter}`;
+      existingStudent = await UccStudent.findOne({ studentId });
+      idCounter++;
+      
+      // Safety check to prevent infinite loop
+      if (idCounter > 100) {
+        studentId = `UCC-${batchPrefix}-${formattedRoll}-${Date.now().toString().slice(-4)}`;
+        break;
+      }
+    }
+    
+    // Also check if roll number already exists in this batch
+    const existingRoll = await UccStudent.findOne({ 
+      batchName: { $regex: new RegExp(`^${batchName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') },
+      roll: formattedRoll
+    });
+    
+    if (existingRoll) {
+      // Roll already exists, auto-increment to find next available
+      console.log(`[ADMISSION WARNING] Roll ${formattedRoll} already exists for ${existingRoll.name}`);
+      
+      // Find next available roll
+      const allStudents = await UccStudent.find({ 
+        batchName: { $regex: new RegExp(`^${batchName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
+      }, { roll: 1 }).lean();
+      
+      let maxRoll = 0;
+      for (const s of allStudents) {
+        const num = parseInt(String(s.roll || '').replace(/[^0-9]/g, ''), 10);
+        if (!isNaN(num) && num > maxRoll) maxRoll = num;
+      }
+      
+      const nextAvailableRoll = (maxRoll + 1).toString().padStart(3, '0');
+      
+      return res.status(400).json({ 
+        success: false, 
+        message: `Roll number ${formattedRoll} is already assigned to ${existingRoll.name} in ${batchName}. Please use roll ${nextAvailableRoll} or higher.`,
+        suggestedRoll: nextAvailableRoll
+      });
+    }
+    
+    console.log(`[ADMISSION] Generated Student ID: ${studentId} | Roll: ${formattedRoll}`);
 
     // Create Student
     const student = new UccStudent({
@@ -114,7 +268,12 @@ router.post('/admission', async (req, res) => {
 
     // Increment batch rolls & count if batch exists
     if (batch) {
-      batch.nextRollNumber += 1;
+      const numericRoll = parseInt(formattedRoll, 10);
+      if (!isNaN(numericRoll)) {
+        batch.nextRollNumber = Math.max(batch.nextRollNumber, numericRoll + 1);
+      } else {
+        batch.nextRollNumber += 1;
+      }
       batch.enrolledCount += 1;
       await batch.save();
     }
@@ -175,7 +334,7 @@ router.get('/students', async (req, res) => {
       ];
     }
 
-    const students = await UccStudent.find(query).sort({ createdAt: -1 });
+    const students = await UccStudent.find(query).sort({ roll: 1 });
     res.json({ success: true, count: students.length, students });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -221,6 +380,103 @@ router.put('/students/:id/override', async (req, res) => {
   }
 });
 
+// Update UCC Student (Full Profile Edit)
+router.put('/students/:id', async (req, res) => {
+  try {
+    let query = { studentId: req.params.id };
+    if (req.params.id && req.params.id.match(/^[0-9a-fA-F]{24}$/)) {
+      query = { $or: [{ _id: req.params.id }, { studentId: req.params.id }] };
+    }
+
+    const currentStudent = await UccStudent.findOne(query);
+    if (!currentStudent) {
+      return res.status(404).json({ success: false, message: 'Student not found' });
+    }
+
+    const {
+      roll, name, phone, guardianName, guardianPhone, batchName, program, branch,
+      courseFee, discountType, discountValue, discountReference, status, notes, address, email, photo
+    } = req.body;
+
+    // Check roll duplicate if changed
+    if (roll && roll !== currentStudent.roll) {
+      const existingRoll = await UccStudent.findOne({ roll, _id: { $ne: currentStudent._id } });
+      if (existingRoll) {
+        return res.status(400).json({ success: false, message: `Roll ${roll} is already assigned to another student (${existingRoll.name}).` });
+      }
+      currentStudent.roll = roll;
+    }
+
+    if (name) currentStudent.name = name;
+    if (phone) currentStudent.phone = phone;
+    if (guardianName !== undefined) currentStudent.guardianName = guardianName;
+    if (guardianPhone !== undefined) currentStudent.guardianPhone = guardianPhone;
+    if (program) currentStudent.program = program;
+    if (branch) currentStudent.branch = branch;
+    if (status) currentStudent.status = status;
+    if (notes !== undefined) currentStudent.notes = notes;
+    if (address !== undefined) currentStudent.address = address;
+    if (email !== undefined) currentStudent.email = email;
+    if (photo !== undefined) currentStudent.photo = photo;
+
+    // Update batch if provided
+    if (batchName && batchName !== currentStudent.batchName) {
+      currentStudent.batchName = batchName;
+      const batchDoc = await UccBatch.findOne({ batchName });
+      if (batchDoc) {
+        currentStudent.batchId = batchDoc._id;
+      }
+    }
+
+    // Financial fee & discount calculations
+    if (courseFee !== undefined || discountType !== undefined || discountValue !== undefined) {
+      const fee = courseFee !== undefined ? Number(courseFee) : currentStudent.courseFee;
+      const dType = discountType !== undefined ? discountType : currentStudent.discountType;
+      const dVal = discountValue !== undefined ? Number(discountValue) : currentStudent.discountValue;
+
+      let discountAmt = 0;
+      if (dType === 'percentage') {
+        discountAmt = Math.round((fee * dVal) / 100);
+      } else if (dType === 'fixed') {
+        discountAmt = dVal;
+      }
+
+      const finalFee = Math.max(0, fee - discountAmt);
+      const totalPaid = currentStudent.totalPaid || 0;
+      const totalDue = Math.max(0, finalFee - totalPaid);
+
+      let paymentStatus = 'Unpaid';
+      if (totalDue === 0 && finalFee > 0) {
+        paymentStatus = 'Full Paid';
+      } else if (totalPaid > 0) {
+        paymentStatus = 'Partial Paid';
+      }
+
+      currentStudent.courseFee = fee;
+      currentStudent.discountType = dType;
+      currentStudent.discountValue = dVal;
+      currentStudent.discountAmount = discountAmt;
+      if (discountReference !== undefined) currentStudent.discountReference = discountReference;
+      currentStudent.finalFee = finalFee;
+      currentStudent.totalDue = totalDue;
+      currentStudent.paymentStatus = paymentStatus;
+    } else if (discountReference !== undefined) {
+      currentStudent.discountReference = discountReference;
+    }
+
+    await currentStudent.save();
+
+    res.json({
+      success: true,
+      message: 'Student profile updated successfully',
+      student: currentStudent
+    });
+  } catch (error) {
+    console.error('Error updating UCC student:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // =================================================================
 // 💰 3. PAYMENTS & DAILY STATEMENT
 // =================================================================
@@ -228,7 +484,7 @@ router.put('/students/:id/override', async (req, res) => {
 // Collect Installment Payment
 router.post('/payments', async (req, res) => {
   try {
-    const { studentId, amount, paymentMethod, transactionId, collector, remarks } = req.body;
+    const { studentId, amount, paymentMethod, transactionId, collector, remarks, additionalDiscount } = req.body;
     
     const student = await UccStudent.findById(studentId);
     if (!student) {
@@ -240,8 +496,14 @@ router.post('/payments', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid payment amount' });
     }
 
+    const addDisc = Number(additionalDiscount) || 0;
+    if (addDisc > 0) {
+      student.discountAmount = (student.discountAmount || 0) + addDisc;
+      student.finalFee = Math.max(0, (student.courseFee || 0) - student.discountAmount);
+    }
+
     const previousDue = student.totalDue;
-    const currentDue = Math.max(0, previousDue - payAmount);
+    const currentDue = Math.max(0, previousDue - payAmount - addDisc);
     const newTotalPaid = student.totalPaid + payAmount;
 
     let paymentStatus = 'Unpaid';
@@ -272,7 +534,7 @@ router.post('/payments', async (req, res) => {
       previousDue,
       currentDue,
       collector: collector || 'Admin',
-      remarks: remarks || ''
+      remarks: remarks || (addDisc > 0 ? `Additional discount: ৳${addDisc}` : '')
     });
 
     await payment.save();
@@ -282,6 +544,169 @@ router.post('/payments', async (req, res) => {
       message: 'Payment collected successfully',
       payment,
       student
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Get Payment Receipt by Receipt Number
+router.get('/payments/receipt/:receiptNo', async (req, res) => {
+  try {
+    let receiptParam = (req.params.receiptNo || '').trim();
+    console.log('[UCC RECEIPT API] Searching for receipt:', receiptParam, 'Roll:', req.query.roll);
+    
+    let payment = await UccPayment.findOne({ receiptNo: receiptParam });
+    if (!payment) {
+      payment = await UccPayment.findOne({ receiptNo: { $regex: new RegExp(`^${receiptParam.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } });
+    }
+    
+    // If receipt not found by receiptNo, try searching by studentId pattern (for admission receipts)
+    if (!payment && receiptParam.includes('UCC-')) {
+      const student = await UccStudent.findOne({ studentId: receiptParam });
+      if (student) {
+        payment = await UccPayment.findOne({ studentId: student._id }).sort({ paymentDate: -1 });
+      }
+    }
+    
+    // If still not found and roll is provided, fetch by roll
+    if (!payment && req.query.roll) {
+      payment = await UccPayment.findOne({ studentRoll: req.query.roll }).sort({ paymentDate: -1 });
+      console.log('[UCC RECEIPT API] Searching by roll:', req.query.roll, 'Found:', !!payment);
+    }
+    
+    if (!payment) {
+      console.log('[UCC RECEIPT API] Receipt not found:', receiptParam);
+      return res.status(404).json({ success: false, message: 'Receipt not found' });
+    }
+    
+    console.log('[UCC RECEIPT API] Payment found:', payment.receiptNo);
+
+    // Robust Student Lookup (by ObjectId, studentId, or roll)
+    let student = null;
+    if (payment.studentId && mongoose.Types.ObjectId.isValid(payment.studentId)) {
+      student = await UccStudent.findById(payment.studentId);
+    }
+    if (!student) {
+      student = await UccStudent.findOne({
+        $or: [
+          { studentId: payment.studentId },
+          { roll: payment.studentRoll }
+        ]
+      });
+    }
+
+    let history = [];
+    if (student) {
+      history = await UccPayment.find({ studentId: student._id }).sort({ paymentDate: 1 });
+    } else if (payment.studentRoll) {
+      history = await UccPayment.find({ studentRoll: payment.studentRoll }).sort({ paymentDate: 1 });
+    }
+
+    // Determine target batch name
+    const targetBatchName = (student && student.batchName) || payment.batchName || '';
+
+    // Lookup Batch Base Fee from UccBatch collection
+    let batchBaseFee = 0;
+    if (targetBatchName) {
+      const bDoc = await UccBatch.findOne({ 
+        batchName: { $regex: new RegExp(`^${targetBatchName.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } 
+      });
+      if (bDoc && bDoc.baseFee) {
+        batchBaseFee = bDoc.baseFee;
+      }
+    }
+
+    // Calculate fixed course fee (batch baseFee > student.courseFee > mathematical sum)
+    let courseFee = batchBaseFee || (student && student.courseFee > 0 ? student.courseFee : 0);
+    if (!courseFee && student) {
+      courseFee = (student.totalPaid || 0) + (student.totalDue || 0) + (student.discountAmount || 0);
+    }
+    if (!courseFee) {
+      const historyTotal = history.reduce((sum, h) => sum + (h.amount || 0), 0);
+      courseFee = (historyTotal > 0 ? historyTotal : (payment.amount || 0)) + (payment.currentDue || 0);
+    }
+
+    const discountAmount = student ? (student.discountAmount || 0) : 0;
+    const finalFee = student ? (student.finalFee || (courseFee - discountAmount)) : (courseFee - discountAmount);
+    
+    // Cumulative total paid by student up to this point
+    const installmentSum = history.filter(h => !h.paymentType || !h.paymentType.toLowerCase().includes('admission')).reduce((sum, h) => sum + (h.amount || 0), 0);
+    const totalDue = student ? student.totalDue : (payment.currentDue !== undefined ? payment.currentDue : Math.max(0, finalFee - (installmentSum + (payment.amount || 0))));
+    const totalPaid = Math.max(0, finalFee - totalDue);
+
+    // Ensure Admission payment is explicitly included in history
+    const hasAdmissionPayment = history.some(h => (h.paymentType && h.paymentType.toLowerCase().includes('admission')));
+    if (!hasAdmissionPayment) {
+      const initialPaidAmt = Math.max(0, finalFee - totalDue - installmentSum);
+      if (initialPaidAmt > 0) {
+        history.unshift({
+          receiptNo: `UCC-ADM-${student ? student.roll : payment.studentRoll}`,
+          paymentDate: (student && (student.admissionDate || student.createdAt)) ? (student.admissionDate || student.createdAt) : payment.paymentDate,
+          paymentType: 'Admission',
+          paymentMethod: 'Cash',
+          amount: initialPaidAmt,
+          transactionId: ''
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      payment: {
+        receiptNo: payment.receiptNo,
+        date: payment.paymentDate,
+        paymentMethod: payment.paymentMethod,
+        amount: payment.amount,
+        paymentType: payment.paymentType,
+        previousDue: payment.previousDue,
+        currentDue: payment.currentDue,
+        transactionId: payment.transactionId,
+        collector: payment.collector,
+        studentRoll: payment.studentRoll,
+        studentName: payment.studentName,
+        batchName: targetBatchName,
+        totalFee: courseFee,
+        discount: discountAmount,
+        finalFee: finalFee,
+        paid: payment.amount || 0,
+        totalPaid: totalPaid,
+        due: totalDue,
+        status: totalDue === 0 ? 'Paid' : 'Partial'
+      },
+      student: student ? {
+        roll: student.roll,
+        name: student.name,
+        guardian: student.guardianName || student.guardianPhone || '',
+        batch: student.batchName,
+        phone: student.phone,
+        status: student.status,
+        courseFee: courseFee,
+        discountAmount: discountAmount,
+        finalFee: finalFee,
+        totalPaid: totalPaid,
+        totalDue: totalDue
+      } : {
+        roll: payment.studentRoll,
+        name: payment.studentName,
+        guardian: '',
+        batch: targetBatchName,
+        phone: '',
+        status: 'Active',
+        courseFee: courseFee,
+        discountAmount: discountAmount,
+        finalFee: finalFee,
+        totalPaid: totalPaid,
+        totalDue: totalDue
+      },
+      history: history.map(h => ({
+        receiptNo: h.receiptNo,
+        date: h.paymentDate,
+        type: h.paymentType,
+        method: h.paymentMethod,
+        amount: h.amount,
+        trxId: h.transactionId
+      }))
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -349,16 +774,140 @@ router.get('/materials', async (req, res) => {
 // Add New Material to Catalog
 router.post('/materials', async (req, res) => {
   try {
-    const { materialCode, title, program, applicableBatches, stockQuantity } = req.body;
+    const { materialCode, title, program, scope, applicableProgram, applicableBatches, stockQuantity, paymentThreshold } = req.body;
+
     const material = new UccMaterial({
       materialCode,
       title,
       program: program || 'All',
+      scope: scope || 'all',
+      applicableProgram: applicableProgram || '',
       applicableBatches: applicableBatches || [],
-      stockQuantity: Number(stockQuantity) || 100
+      stockQuantity: Number(stockQuantity) || 100,
+      paymentThreshold: Number(paymentThreshold) || 0
     });
     await material.save();
     res.status(201).json({ success: true, material });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Delete Material from Catalog
+router.delete('/materials/:id', async (req, res) => {
+  try {
+    const material = await UccMaterial.findByIdAndDelete(req.params.id);
+    if (!material) {
+      return res.status(404).json({ success: false, message: 'Material not found' });
+    }
+    res.json({ success: true, message: 'Material deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Update Material (Edit)
+router.put('/materials/:id', async (req, res) => {
+  try {
+    const { materialCode, title, program, scope, applicableProgram, applicableBatches, stockQuantity, paymentThreshold, status } = req.body;
+    const material = await UccMaterial.findByIdAndUpdate(
+      req.params.id,
+      {
+        $set: {
+          title,
+          program: program || 'All',
+          scope: scope || 'all',
+          applicableProgram: applicableProgram || '',
+          applicableBatches: applicableBatches || [],
+          stockQuantity: Number(stockQuantity) || 100,
+          paymentThreshold: Number(paymentThreshold) || 0,
+          status: status || 'Available'
+        }
+      },
+      { new: true, runValidators: true }
+    );
+    if (!material) {
+      return res.status(404).json({ success: false, message: 'Material not found' });
+    }
+    res.json({ success: true, material });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// =================================================================
+// 📦 STOCK MANAGEMENT — Add Stock Entry & Get History
+// =================================================================
+
+// Add Stock Entry (Restock)
+router.post('/materials/:id/stock', async (req, res) => {
+  try {
+    const { quantity, date, note, addedBy } = req.body;
+    const qty = Number(quantity);
+    if (!qty || qty <= 0) {
+      return res.status(400).json({ success: false, message: 'Quantity must be a positive number' });
+    }
+
+    const material = await UccMaterial.findById(req.params.id);
+    if (!material) {
+      return res.status(404).json({ success: false, message: 'Material not found' });
+    }
+
+    // Stock history entry যোগ করো
+    material.stockHistory.push({
+      quantity: qty,
+      date:     date ? new Date(date) : new Date(),
+      note:     note || '',
+      addedBy:  addedBy || 'Admin'
+    });
+
+    // totalReceived ও stockQuantity আপডেট
+    material.totalReceived   = (material.totalReceived || 0) + qty;
+    material.stockQuantity   = (material.stockQuantity  || 0) + qty;
+
+    // Auto status update
+    const pct = material.totalReceived > 0
+      ? (material.stockQuantity / material.totalReceived) * 100 : 100;
+    if (material.stockQuantity === 0)  material.status = 'Out of Stock';
+    else if (pct <= 20)                material.status = 'Low Stock';
+    else                               material.status = 'Available';
+
+    await material.save();
+
+    res.json({
+      success: true,
+      message: `${qty} units added to stock`,
+      stockQuantity:  material.stockQuantity,
+      totalReceived:  material.totalReceived,
+      distributedCount: material.distributedCount,
+      status: material.status,
+      lastEntry: material.stockHistory[material.stockHistory.length - 1]
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Get Stock History for a Material
+router.get('/materials/:id/stock', async (req, res) => {
+  try {
+    const material = await UccMaterial.findById(req.params.id);
+    if (!material) {
+      return res.status(404).json({ success: false, message: 'Material not found' });
+    }
+
+    res.json({
+      success: true,
+      title:            material.title,
+      currentStock:     material.stockQuantity,    // renamed for frontend
+      stockQuantity:    material.stockQuantity,    // keep for compatibility
+      totalReceived:    material.totalReceived   || 0,
+      distributedCount: material.distributedCount || 0,
+      status:           material.status,
+      history: material.stockHistory
+        .slice()
+        .sort((a, b) => new Date(b.date) - new Date(a.date)) // newest first
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -372,7 +921,6 @@ router.get('/distribution/check-eligibility/:studentId', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Student not found' });
     }
 
-    const isEligible = student.totalDue === 0 || student.distributionOverride === true;
     const previousDistributions = await UccDistribution.find({ studentId: student._id });
 
     // Extract all items already issued to this student
@@ -383,13 +931,32 @@ router.get('/distribution/check-eligibility/:studentId', async (req, res) => {
       });
     });
 
+    // Scope-based eligible material IDs for this student
+    const allMaterials = await UccMaterial.find();
+    const eligibleMaterialIds = allMaterials
+      .filter(m => {
+        const sc = m.scope || 'all';
+        if (sc === 'all') return true;
+        if (sc === 'program') {
+          // student.program এবং material.applicableProgram case-insensitive match
+          return (m.applicableProgram || '').toLowerCase().trim() ===
+                 (student.program || '').toLowerCase().trim();
+        }
+        if (sc === 'batch') {
+          return (m.applicableBatches || []).includes(student.batchName);
+        }
+        return false;
+      })
+      .map(m => m._id.toString());
+
     res.json({
       success: true,
       student,
-      isEligible,
+      isEligible: student.totalDue === 0 || student.distributionOverride === true,
       hasDue: student.totalDue > 0,
       distributionOverride: student.distributionOverride,
-      issuedItemIds
+      issuedItemIds,
+      eligibleMaterialIds
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -428,9 +995,12 @@ router.post('/distribution/issue', async (req, res) => {
     // Update stock quantity for each material
     for (let item of items) {
       if (item.materialId) {
-        await UccMaterial.findByIdAndUpdate(item.materialId, {
-          $inc: { stockQuantity: -1, distributedCount: 1 }
-        });
+        const material = await UccMaterial.findById(item.materialId);
+        if (material) {
+          material.stockQuantity = (material.stockQuantity || 0) - 1;
+          material.distributedCount = (material.distributedCount || 0) + 1;
+          await material.save(); // This triggers pre-save hook for status calculation
+        }
       }
     }
 
@@ -461,13 +1031,15 @@ router.get('/batches', async (req, res) => {
 // Create Batch
 router.post('/batches', async (req, res) => {
   try {
-    const { batchCode, batchName, program, baseFee, capacity } = req.body;
+    const { batchCode, batchName, program, baseFee, capacity, nextRollNumber, startingRollNumber } = req.body;
+    const initialRoll = Number(nextRollNumber || startingRollNumber) || 1;
     const batch = new UccBatch({
       batchCode,
       batchName,
       program,
       baseFee: Number(baseFee) || 15000,
-      capacity: Number(capacity) || 60
+      capacity: Number(capacity) || 60,
+      nextRollNumber: initialRoll
     });
     await batch.save();
     res.status(201).json({ success: true, batch });
@@ -479,10 +1051,23 @@ router.post('/batches', async (req, res) => {
 // Update Batch (Edit)
 router.put('/batches/:id', async (req, res) => {
   try {
-    const { batchCode, batchName, program, baseFee, capacity, status } = req.body;
+    const { batchCode, batchName, program, baseFee, capacity, status, nextRollNumber, startingRollNumber } = req.body;
+    const updateData = {
+      batchCode,
+      batchName,
+      program,
+      baseFee: Number(baseFee) || 15000,
+      capacity: Number(capacity) || 60,
+      status
+    };
+
+    if (nextRollNumber !== undefined || startingRollNumber !== undefined) {
+      updateData.nextRollNumber = Number(nextRollNumber || startingRollNumber) || 1;
+    }
+
     const batch = await UccBatch.findByIdAndUpdate(
       req.params.id,
-      { batchCode, batchName, program, baseFee: Number(baseFee) || 15000, capacity: Number(capacity) || 60, status },
+      updateData,
       { new: true, runValidators: true }
     );
     if (!batch) {
@@ -494,14 +1079,94 @@ router.put('/batches/:id', async (req, res) => {
   }
 });
 
-// Delete Batch
+// Delete Batch (CASCADE: Deletes batch + all students + payments + results + distributions)
 router.delete('/batches/:id', async (req, res) => {
   try {
-    const batch = await UccBatch.findByIdAndDelete(req.params.id);
+    const batch = await UccBatch.findById(req.params.id);
     if (!batch) {
       return res.status(404).json({ success: false, message: 'Batch not found' });
     }
-    res.json({ success: true, message: 'Batch deleted successfully' });
+
+    const batchName = batch.batchName;
+    console.log(`[CASCADE DELETE] Starting deletion for batch: ${batchName}`);
+
+    // Create case-insensitive regex pattern for exact match
+    const batchNamePattern = new RegExp(`^${batchName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+
+    // 1. Find all students in this batch
+    const students = await UccStudent.find({ 
+      batchName: batchNamePattern
+    });
+    const studentIds = students.map(s => s._id);
+    
+    console.log(`[CASCADE DELETE] Found ${students.length} students in batch ${batchName}`);
+    if (students.length > 0) {
+      console.log('[CASCADE DELETE] Sample students:', students.slice(0, 3).map(s => `${s.roll}: ${s.name}`).join(', '));
+    }
+
+    // 2. Delete all payments for these students
+    const paymentsDeleted = await UccPayment.deleteMany({ studentId: { $in: studentIds } });
+    console.log(`[CASCADE DELETE] Deleted ${paymentsDeleted.deletedCount} payment records`);
+
+    // 3. Delete all distributions for these students
+    const distributionsDeleted = await UccDistribution.deleteMany({ studentId: { $in: studentIds } });
+    console.log(`[CASCADE DELETE] Deleted ${distributionsDeleted.deletedCount} distribution records`);
+
+    // 4. Delete all results for these students
+    const resultsDeleted = await UccResult.deleteMany({ studentId: { $in: studentIds } });
+    console.log(`[CASCADE DELETE] Deleted ${resultsDeleted.deletedCount} result records`);
+
+    // 5. Delete all students in this batch
+    const studentsDeleted = await UccStudent.deleteMany({ 
+      batchName: batchNamePattern
+    });
+    console.log(`[CASCADE DELETE] Deleted ${studentsDeleted.deletedCount} student records`);
+
+    // 6. Finally delete the batch itself
+    await UccBatch.findByIdAndDelete(req.params.id);
+    console.log(`[CASCADE DELETE] Deleted batch: ${batchName}`);
+
+    // Verify deletion
+    const remainingStudents = await UccStudent.find({ batchName: batchNamePattern });
+    if (remainingStudents.length > 0) {
+      console.warn(`[CASCADE DELETE WARNING] ${remainingStudents.length} students still remain!`);
+    }
+
+    res.json({ 
+      success: true, 
+      message: `Batch "${batchName}" and all related data deleted successfully`,
+      deleted: {
+        batch: batchName,
+        students: studentsDeleted.deletedCount,
+        payments: paymentsDeleted.deletedCount,
+        distributions: distributionsDeleted.deletedCount,
+        results: resultsDeleted.deletedCount
+      }
+    });
+  } catch (error) {
+    console.error('[CASCADE DELETE ERROR]', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Get All Exams
+router.get('/exams', async (req, res) => {
+  try {
+    const exams = await UccExam.find().sort({ createdAt: -1 });
+    res.json({ success: true, count: exams.length, exams });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Get Single Exam
+router.get('/exams/:id', async (req, res) => {
+  try {
+    const exam = await UccExam.findById(req.params.id);
+    if (!exam) {
+      return res.status(404).json({ success: false, message: 'Exam not found' });
+    }
+    res.json({ success: true, exam });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -510,18 +1175,61 @@ router.delete('/batches/:id', async (req, res) => {
 // Create Exam
 router.post('/exams', async (req, res) => {
   try {
-    const { examCode, title, program, batchId, batchName, totalMarks, subjects } = req.body;
+    const { examCode, title, program, batchId, batchName, totalMarks, subjects, examDate, status } = req.body;
     const exam = new UccExam({
-      examCode,
+      examCode: examCode || 'EX' + Date.now().toString().slice(-6),
       title,
       program,
       batchId: batchId || null,
       batchName: batchName || '',
+      examDate: examDate || Date.now(),
       totalMarks: Number(totalMarks) || 100,
-      subjects: subjects || []
+      subjects: subjects || [],
+      status: status || 'Scheduled'
     });
     await exam.save();
     res.status(201).json({ success: true, exam });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Update Exam
+router.put('/exams/:id', async (req, res) => {
+  try {
+    const { examCode, title, program, batchId, batchName, totalMarks, subjects, examDate, status } = req.body;
+    const exam = await UccExam.findByIdAndUpdate(
+      req.params.id,
+      {
+        examCode, title, program,
+        batchId: batchId || null,
+        batchName: batchName || '',
+        examDate: examDate || Date.now(),
+        totalMarks: Number(totalMarks) || 100,
+        subjects: (subjects && subjects.length) ? subjects : undefined,
+        status: status || 'Scheduled'
+      },
+      { new: true, runValidators: true }
+    );
+    if (!exam) {
+      return res.status(404).json({ success: false, message: 'Exam not found' });
+    }
+    res.json({ success: true, exam });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Delete Exam
+router.delete('/exams/:id', async (req, res) => {
+  try {
+    const exam = await UccExam.findByIdAndDelete(req.params.id);
+    if (!exam) {
+      return res.status(404).json({ success: false, message: 'Exam not found' });
+    }
+    // Also delete associated results
+    await UccResult.deleteMany({ examId: exam._id });
+    res.json({ success: true, message: 'Exam deleted successfully' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -540,28 +1248,61 @@ router.post('/results/mark-entry', async (req, res) => {
     for (let entry of markEntries) {
       const student = await UccStudent.findById(entry.studentId);
       if (student) {
-        const percentage = Math.round((entry.totalObtained / exam.totalMarks) * 100);
+        // Bug 1 fix: Absent status — trust the frontend status field directly
+        const isAbsent = entry.status === 'Absent';
+        const passMarks = (exam.subjects && exam.subjects.length && exam.subjects[0].passMarks)
+          ? exam.subjects[0].passMarks : 40;
+        let resultStatus;
+        if (isAbsent) {
+          resultStatus = 'Absent';
+        } else {
+          resultStatus = entry.totalObtained >= passMarks ? 'Pass' : 'Fail';
+        }
+
+        // Bug 2 fix: correct/wrong → correctAnswer/wrongAnswer (model field names)
+        const percentage = isAbsent ? 0 : Math.round((entry.totalObtained / exam.totalMarks) * 100);
         await UccResult.findOneAndUpdate(
           { examId: exam._id, studentId: student._id },
-          {
+          { $set: {
             studentRoll: student.roll,
             studentName: student.name,
             batchName: student.batchName,
             subjectMarks: entry.subjectMarks || [],
-            totalObtained: entry.totalObtained,
+            correctAnswer: (entry.correct !== undefined && entry.correct !== null) ? Number(entry.correct) : null,
+            wrongAnswer:   (entry.wrong   !== undefined && entry.wrong   !== null) ? Number(entry.wrong)   : null,
+            negativeMarkPerWrong: entry.negRate != null ? Number(entry.negRate) : (exam.negativeMarkPerWrong || 0.25),
+            totalObtained: isAbsent ? 0 : entry.totalObtained,
             percentage,
-            status: entry.totalObtained >= (exam.passMarks || 40) ? 'Pass' : 'Fail'
-          },
+            status: resultStatus
+          }},
           { upsert: true, new: true }
         );
       }
     }
 
-    // Recalculate Merit Positions based on totalObtained descending
-    const allResults = await UccResult.find({ examId: exam._id }).sort({ totalObtained: -1 });
+    // Bug 3 fix: Tie-breaking — same totalObtained gets same merit position
+    // Absent students go to the bottom regardless of marks
+    const allResults = await UccResult.find({ examId: exam._id })
+      .sort({ totalObtained: -1 });
+
+    // Separate absent and non-absent, sort non-absent by marks desc
+    const present = allResults.filter(r => r.status !== 'Absent')
+                               .sort((a, b) => b.totalObtained - a.totalObtained);
+    const absent  = allResults.filter(r => r.status === 'Absent');
+
     let rank = 1;
-    for (let resDoc of allResults) {
-      resDoc.meritPosition = rank++;
+    for (let idx = 0; idx < present.length; idx++) {
+      const resDoc = present[idx];
+      if (idx > 0 && resDoc.totalObtained === present[idx - 1].totalObtained) {
+        resDoc.meritPosition = present[idx - 1].meritPosition; // same marks → same position
+      } else {
+        resDoc.meritPosition = rank;
+      }
+      rank++;
+      await resDoc.save();
+    }
+    for (let resDoc of absent) {
+      resDoc.meritPosition = 0; // 0 = no position
       await resDoc.save();
     }
 
@@ -917,4 +1658,317 @@ router.post('/settings', async (req, res) => {
   }
 });
 
+// =================================================================
+// 💸 8. UCC EXPENSES (DEDICATED uccexpenses COLLECTION)
+// =================================================================
+
+// GET /api/ucc/expenses
+router.get('/expenses', async (req, res) => {
+  try {
+    const { category, method, search, date, startDate, endDate, limit = 50 } = req.query;
+    let query = {};
+
+    if (category && category !== 'all') query.category = category;
+    if (method && method !== 'all') query.paymentMethod = method;
+    if (date) query.date = date;
+    if (startDate && endDate) query.date = { $gte: startDate, $lte: endDate };
+
+    if (search) {
+      query.$or = [
+        { expenseId: new RegExp(search, 'i') },
+        { description: new RegExp(search, 'i') },
+        { vendor: new RegExp(search, 'i') },
+        { category: new RegExp(search, 'i') }
+      ];
+    }
+
+    const expenses = await UccExpense.find(query).sort({ createdAt: -1 }).limit(Number(limit));
+    const totalCount = await UccExpense.countDocuments(query);
+    const totalAmount = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+
+    res.json({ success: true, count: totalCount, totalAmount, expenses });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// GET /api/ucc/expenses/:id
+router.get('/expenses/:id', async (req, res) => {
+  try {
+    const expense = await UccExpense.findById(req.params.id);
+    if (!expense) return res.status(404).json({ success: false, message: 'Expense not found' });
+    res.json({ success: true, expense });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// POST /api/ucc/expenses
+router.post('/expenses', async (req, res) => {
+  try {
+    const { description, category, amount, paymentMethod, vendor, branch, date, notes, status, createdBy } = req.body;
+    
+    const count = await UccExpense.countDocuments();
+    const expenseId = 'UCC-EXP-' + Date.now().toString().slice(-6) + '-' + (count + 1);
+    const dateObj = new Date(date || Date.now());
+
+    const expense = new UccExpense({
+      expenseId,
+      description: description || 'UCC Expense',
+      category: category || 'Office',
+      amount: Number(amount) || 0,
+      paymentMethod: paymentMethod || 'Cash',
+      vendor: vendor || 'General Vendor',
+      branch: branch || 'UCC Pabna Main',
+      date: date || dateObj.toISOString().split('T')[0],
+      time: new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
+      month: dateObj.toLocaleString('default', { month: 'long' }),
+      year: dateObj.getFullYear(),
+      status: status || 'Approved',
+      createdBy: createdBy || 'Admin'
+    });
+
+    await expense.save();
+    res.status(201).json({ success: true, message: 'UCC Expense saved to uccexpenses collection', expense });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// DELETE /api/ucc/expenses/:id
+router.delete('/expenses/:id', async (req, res) => {
+  try {
+    let query = { _id: req.params.id };
+    if (!req.params.id.match(/^[0-9a-fA-F]{24}$/)) {
+      query = { expenseId: req.params.id };
+    }
+    const expense = await UccExpense.findOneAndDelete(query);
+    if (!expense) return res.status(404).json({ success: false, message: 'UCC Expense not found' });
+    res.json({ success: true, message: 'UCC Expense deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 module.exports = router;
+
+
+// =================================================================
+// 🔄 BATCH TRANSFER
+// =================================================================
+
+// Get next available roll for a specific batch
+router.get('/batches/:batchName/next-roll', async (req, res) => {
+  try {
+    const batchName = decodeURIComponent(req.params.batchName);
+    
+    console.log(`[NEXT-ROLL] Searching for batch: "${batchName}"`); // Debug
+
+    // Find the batch to get nextRollNumber
+    const batch = await UccBatch.findOne({ batchName: batchName });
+    
+    if (!batch) {
+      console.log(`[NEXT-ROLL] Warning: Batch "${batchName}" not found in UccBatch collection`);
+    } else {
+      console.log(`[NEXT-ROLL] Found batch: "${batch.batchName}", nextRollNumber: ${batch.nextRollNumber}`);
+    }
+    
+    // Find all students in this batch
+    const students = await UccStudent.find({ batchName: batchName }, { roll: 1 }).lean();
+    console.log(`[NEXT-ROLL] Students found: ${students.length}`);
+    
+    // Extract maximum roll number from students
+    let maxRoll = 0;
+    students.forEach(s => {
+      // Remove any non-numeric characters (like prefix letters)
+      const numericPart = String(s.roll || '').replace(/[^0-9]/g, '');
+      const num = parseInt(numericPart, 10);
+      if (!isNaN(num) && num > maxRoll) {
+        maxRoll = num;
+      }
+    });
+
+    // Determine next roll:
+    // 1. If students exist, use max + 1
+    // 2. If no students but batch has nextRollNumber, use that
+    // 3. Otherwise start from 1
+    let nextRollNumber = 1;
+    
+    if (students.length > 0) {
+      // Students exist, use max roll + 1
+      nextRollNumber = maxRoll + 1;
+      console.log(`[NEXT-ROLL] Using max roll + 1: ${nextRollNumber}`);
+    } else if (batch && batch.nextRollNumber) {
+      // No students yet, use batch's nextRollNumber
+      nextRollNumber = batch.nextRollNumber;
+      console.log(`[NEXT-ROLL] Using batch nextRollNumber: ${nextRollNumber}`);
+    } else {
+      console.log(`[NEXT-ROLL] Defaulting to 1`);
+    }
+
+    const nextRoll = nextRollNumber.toString().padStart(3, '0');
+
+    res.json({
+      success: true,
+      nextRoll: nextRoll,
+      batchName: batchName,
+      currentMaxRoll: maxRoll,
+      studentCount: students.length,
+      batchNextRoll: batch?.nextRollNumber || null
+    });
+  } catch (error) {
+    console.error('Error fetching next roll:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Batch Transfer API
+router.post('/batch-transfer', async (req, res) => {
+  try {
+    const { studentId, targetBatchName, notes } = req.body;
+
+    if (!studentId || !targetBatchName) {
+      return res.status(400).json({
+        success: false,
+        message: 'Student ID and Target Batch Name are required'
+      });
+    }
+
+    // Find the student (case-insensitive studentId search or _id)
+    let student = await UccStudent.findOne({ 
+      $or: [
+        { studentId: { $regex: new RegExp(`^${studentId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') } },
+        { roll: studentId }
+      ]
+    });
+    if (!student) {
+      return res.status(404).json({
+        success: false,
+        message: 'Student not found'
+      });
+    }
+
+    // Check if transferring to same batch (case-insensitive comparison)
+    if (student.batchName.toLowerCase().trim() === targetBatchName.toLowerCase().trim()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot transfer to the same batch'
+      });
+    }
+
+    // Find target batch (case-insensitive search)
+    const targetBatch = await UccBatch.findOne({ 
+      batchName: { $regex: new RegExp(`^${targetBatchName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
+    });
+    
+    if (!targetBatch) {
+      return res.status(404).json({
+        success: false,
+        message: `Target batch "${targetBatchName}" not found in the database. Please check the batch name or create it first.`
+      });
+    }
+
+    // Check batch capacity
+    if (targetBatch.enrolledCount >= targetBatch.capacity) {
+      return res.status(400).json({
+        success: false,
+        message: 'Target batch is full'
+      });
+    }
+
+    // Store old data for history
+    const oldBatchName = student.batchName;
+    const oldBatchId = student.batchId;
+    const oldRoll = student.roll;
+    const oldStudentId = student.studentId;
+    const oldProgram = student.program;
+
+    // Calculate next available roll in target batch (case-insensitive search)
+    const targetStudents = await UccStudent.find({ 
+      batchName: { $regex: new RegExp(`^${targetBatchName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') }
+    }, { roll: 1 }).lean();
+    
+    let maxRoll = 0;
+    targetStudents.forEach(s => {
+      const numericPart = String(s.roll || '').replace(/[^0-9]/g, '');
+      const num = parseInt(numericPart, 10);
+      if (!isNaN(num) && num > maxRoll) {
+        maxRoll = num;
+      }
+    });
+
+    const newRoll = (maxRoll + 1).toString().padStart(3, '0');
+
+    // Generate new student ID
+    const batchPrefix = targetBatch.batchCode 
+      ? targetBatch.batchCode.replace(/[-\s]/g, '').substring(0, 6).toUpperCase()
+      : targetBatch.batchName.replace(/[^a-zA-Z0-9]/g, '').substring(0, 6).toUpperCase();
+    const newStudentId = `UCC-${batchPrefix}-${newRoll}`;
+
+    // Update student record
+    student.batchId = targetBatch._id;
+    student.batchName = targetBatch.batchName;
+    student.program = targetBatch.program;
+    student.roll = newRoll;
+    student.studentId = newStudentId;
+
+    // Add transfer history to notes
+    const transferNote = `\n[BATCH TRANSFER] ${new Date().toLocaleDateString('en-GB')} - From "${oldBatchName}" (Roll: ${oldRoll}, ID: ${oldStudentId}) → To "${targetBatch.batchName}" (Roll: ${newRoll}, ID: ${newStudentId})${notes ? ` | Notes: ${notes}` : ''}`;
+    student.notes = (student.notes || '') + transferNote;
+
+    // Save student
+    await student.save();
+
+    // Update batch enrollment counts
+    if (oldBatchId) {
+      await UccBatch.findByIdAndUpdate(oldBatchId, {
+        $inc: { enrolledCount: -1 }
+      });
+    }
+
+    await UccBatch.findByIdAndUpdate(targetBatch._id, {
+      $inc: { enrolledCount: 1, nextRollNumber: 1 }
+    });
+
+    // Update payment records (linked by ObjectId student._id)
+    await UccPayment.updateMany(
+      { studentId: student._id },
+      { $set: { batchName: targetBatch.batchName, studentRoll: newRoll } }
+    );
+
+    // Update distribution records (linked by ObjectId student._id)
+    await UccDistribution.updateMany(
+      { studentId: student._id },
+      { $set: { batchName: targetBatch.batchName, studentRoll: newRoll } }
+    );
+
+    // Update exam results (linked by ObjectId student._id)
+    await UccResult.updateMany(
+      { studentId: student._id },
+      { $set: { batchName: targetBatch.batchName, studentRoll: newRoll } }
+    );
+
+    console.log(`[BATCH TRANSFER] Student ${oldStudentId} transferred from ${oldBatchName} to ${targetBatchName}`);
+
+    res.json({
+      success: true,
+      message: `Student successfully transferred from "${oldBatchName}" to "${targetBatchName}"`,
+      data: {
+        student: student,
+        oldBatch: oldBatchName,
+        newBatch: targetBatchName,
+        oldRoll: oldRoll,
+        newRoll: newRoll,
+        oldStudentId: oldStudentId,
+        newStudentId: newStudentId
+      }
+    });
+
+  } catch (error) {
+    console.error('Error transferring student:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to transfer student: ' + error.message
+    });
+  }
+});

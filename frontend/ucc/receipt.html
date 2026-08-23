@@ -143,11 +143,11 @@
                           <div class="receipt-meta">
                               <div class="meta-item">
                                   <span class="meta-label">Receipt No:</span>
-                                  <strong class="meta-value" id="receiptNo">UCC-R-10001</strong>
+                                  <strong class="meta-value" id="receiptNo">Loading...</strong>
                               </div>
                               <div class="meta-item">
                                   <span class="meta-label">Date:</span>
-                                  <strong class="meta-value" id="receiptDate">15 July 2026</strong>
+                                  <strong class="meta-value" id="receiptDate">--</strong>
                               </div>
                           </div>
                       </div>
@@ -165,12 +165,12 @@
                         <i class="fas fa-user-graduate"></i> Student Information
                       </h3>
                       <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:9.5px;">
-                          <div><span style="color:#64748b;">Roll / ID:</span> <strong id="studentId" style="color:#0f172a;">STD1001</strong></div>
-                          <div><span style="color:#64748b;">Name:</span> <strong id="studentName" style="color:#0f172a;">Rahim Uddin</strong></div>
-                          <div><span style="color:#64748b;">Guardian:</span> <span id="fatherName" style="color:#334155;">Abdul Karim</span></div>
-                          <div><span style="color:#64748b;">Batch:</span> <strong id="batch" style="color:#4f46e5;">Medical-01</strong></div>
-                          <div><span style="color:#64748b;">Target Unit:</span> <span id="className" style="color:#334155;">Medical Special</span></div>
-                          <div><span style="color:#64748b;">Phone:</span> <span id="phone" style="color:#334155;">01711111111</span></div>
+                          <div><span style="color:#64748b;">Roll / ID:</span> <strong id="studentId" style="color:#0f172a;">--</strong></div>
+                          <div><span style="color:#64748b;">Name:</span> <strong id="studentName" style="color:#0f172a;">Loading...</strong></div>
+                          <div><span style="color:#64748b;">Guardian:</span> <span id="fatherName" style="color:#334155;">--</span></div>
+                          <div><span style="color:#64748b;">Batch:</span> <strong id="batch" style="color:#4f46e5;">--</strong></div>
+                          <div><span style="color:#64748b;">Target Unit:</span> <span id="className" style="color:#334155;">--</span></div>
+                          <div><span style="color:#64748b;">Phone:</span> <span id="phone" style="color:#334155;">--</span></div>
                       </div>
                   </div>
 
@@ -180,10 +180,10 @@
                         <i class="fas fa-credit-card"></i> Payment Information
                       </h3>
                       <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:9.5px;">
-                          <div><span style="color:#64748b;">Txn ID:</span> <strong id="transactionId" style="color:#4f46e5;">TXN100125</strong></div>
-                          <div><span style="color:#64748b;">Method:</span> <strong id="paymentMethod" style="color:#0f172a;">bKash</strong></div>
-                          <div><span style="color:#64748b;">Date:</span> <span id="paymentMonth" style="color:#334155;">15 Jul 2026</span></div>
-                          <div><span style="color:#64748b;">Time:</span> <span id="paymentTime" style="color:#334155;">10:45 AM</span></div>
+                          <div><span style="color:#64748b;">Txn ID:</span> <strong id="transactionId" style="color:#4f46e5;">--</strong></div>
+                          <div><span style="color:#64748b;">Method:</span> <strong id="paymentMethod" style="color:#0f172a;">--</strong></div>
+                          <div><span style="color:#64748b;">Date:</span> <span id="paymentMonth" style="color:#334155;">--</span></div>
+                          <div><span style="color:#64748b;">Time:</span> <span id="paymentTime" style="color:#334155;">--</span></div>
                           <div><span style="color:#64748b;">Officer:</span> <span id="collectedBy" style="color:#334155;">Administrator</span></div>
                           <div><span style="color:#64748b;">Status:</span> <span id="receiptStatus" style="background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:10px;font-weight:800;">Paid</span></div>
                       </div>
@@ -202,11 +202,11 @@
                           <th style="padding:6px 8px;text-align:right;border-radius:0 4px 4px 0;">Amount (৳)</th>
                       </tr>
                   </thead>
-                  <tbody>
+                  <tbody id="feeTableBody">
                       <tr style="border-bottom:1px solid #e2e8f0;">
                           <td style="padding:6px 8px;">01</td>
                           <td style="padding:6px 8px;font-weight:600;" id="feeDescription">Course Tuition & Registration Fee</td>
-                          <td style="padding:6px 8px;text-align:right;font-weight:700;" id="totalCourseFeeItem">15,000.00</td>
+                          <td style="padding:6px 8px;text-align:right;font-weight:700;" id="totalCourseFeeItem">12,000.00</td>
                       </tr>
                       <tr style="border-bottom:1px solid #e2e8f0;">
                           <td style="padding:6px 8px;">02</td>
@@ -217,18 +217,38 @@
               </table>
           </div>
 
+          <!-- Payment History List (Admission + Subsequent Payments) -->
+          <div class="receipt-section" style="margin-top:8px;" id="paymentHistorySection">
+              <h3 style="font-size:10.5px;font-weight:800;color:#4f46e5;margin:0 0 5px 0;text-transform:uppercase;display:flex;align-items:center;gap:6px;">
+                <i class="fas fa-history"></i> Payment History Ledger (জমা ও কিস্তির বিবরণ)
+              </h3>
+              <table style="width:100%;border-collapse:collapse;font-size:9px;">
+                  <thead>
+                      <tr style="background:#eef2ff;color:#3730a3;text-align:left;">
+                          <th style="padding:4px 6px;border-radius:4px 0 0 4px;">Date</th>
+                          <th style="padding:4px 6px;">Receipt No</th>
+                          <th style="padding:4px 6px;">Type / Method</th>
+                          <th style="padding:4px 6px;text-align:right;border-radius:0 4px 4px 0;">Paid Amount</th>
+                      </tr>
+                  </thead>
+                  <tbody id="paymentHistoryBody">
+                      <!-- Dynamic Payment Rows Populated by receipt.js -->
+                  </tbody>
+              </table>
+          </div>
+
           <!-- Summary Grid -->
           <div style="margin-top:10px;background:#f8fafc;padding:10px 14px;border-radius:8px;border:1px solid #e2e8f0;display:flex;justify-content:space-between;align-items:center;">
               <div style="font-size:9.5px;color:#64748b;">
-                  <div>Total Course Fee: <strong id="totalFee" style="color:#0f172a;">৳15,000.00</strong></div>
+                  <div>Total Course Fee: <strong id="totalFee" style="color:#0f172a;">৳12,000.00</strong></div>
                   <div>Discount Applied: <strong id="totalDiscount" style="color:#7c3aed;">৳0.00</strong></div>
                   <div id="discountRefRow" style="font-size:8.5px;color:#7c3aed;font-weight:700;margin-top:2px;display:none;">
                       Discount Ref: <span id="discountRefName" style="color:#4f46e5;">Director Reference</span>
                   </div>
               </div>
               <div style="text-align:right;">
-                  <div style="font-size:12px;font-weight:800;color:#059669;">PAID AMOUNT: <span id="paidAmount">৳15,000.00</span></div>
-                  <div style="font-size:10px;font-weight:700;color:#dc2626;">DUE REMAINING: <span id="dueAmount">৳0.00</span></div>
+                  <div style="font-size:12px;font-weight:800;color:#059669;">PAID AMOUNT: <span id="paidAmount">৳0.00</span></div>
+                  <div style="font-size:10px;font-weight:700;color:#dc2626;margin-top:2px;">DUE REMAINING: <span id="dueAmount">৳0.00</span></div>
               </div>
           </div>
 

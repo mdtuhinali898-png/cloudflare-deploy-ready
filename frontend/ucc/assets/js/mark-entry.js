@@ -1,21 +1,14 @@
 /* ==========================================================================
-   UCC পাবনা — Mark Entry JS
+   UCC পাবনা — Mark Entry JS (Backend Connected)
    ========================================================================== */
 
-/* ── Demo students per batch ── */
-const BATCH_STUDENTS = {
-  'Medical-2026-A':   [{roll:'101',name:'Rahim Ahmed'},{roll:'102',name:'Karim Hossain'},{roll:'103',name:'Sumon Mia'},{roll:'104',name:'Mim Akter'},{roll:'105',name:'Tanvir Ahmed'}],
-  'Medical-2026-B':   [{roll:'201',name:'Nafis Rahman'},{roll:'202',name:'Rima Khatun'},{roll:'203',name:'Sadia Islam'}],
-  'Engineering-2026': [{roll:'301',name:'Arif Mahmud'},{roll:'302',name:'Jannatul Ferdous'},{roll:'303',name:'Nusrat Jahan'}],
-  'Varsity-A-2026':   [{roll:'401',name:'Rakib Hassan'},{roll:'402',name:'Tasnim Rahman'},{roll:'403',name:'Liton Mia'}],
-  'Varsity-B-2026':   [{roll:'501',name:'Shimul Akter'},{roll:'502',name:'Kamal Hossen'}]
-};
+/* $ is provided by exams.js (loaded before this file) */
+const API_BASE_ME = 'http://localhost:5002/api';
 
 let currentExam = null;
 let entryData   = [];   /* [{ roll, name, obtained, isAbsent, remarks }] */
 
 /* ── Helpers ── */
-/* $ is already provided by exams.js (loaded before this file) */
 function exToast(msg, type='success') {
   const t = $('exToast');
   if (!t) return;
@@ -36,8 +29,32 @@ function posClass(p) {
   return 'me-pos';
 }
 
+/* ── Load students from backend by batch name ── */
+async function loadStudentsByBatch(batchName) {
+  try {
+    const res = await fetch(`${API_BASE_ME}/ucc/students?batch=${encodeURIComponent(batchName)}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && data.students) {
+        return data.students
+          .map(s => ({
+            roll: s.roll,
+            name: s.name,
+            _id: s._id
+          }))
+          .sort((a, b) => {
+            const na = parseInt(String(a.roll).replace(/[^0-9]/g, ''), 10) || 0;
+            const nb = parseInt(String(b.roll).replace(/[^0-9]/g, ''), 10) || 0;
+            return na - nb;
+          });
+      }
+    }
+  } catch (e) { /* ignore */ }
+  return [];
+}
+
 /* ── Step 1: Render Exam Cards ── */
-function renderExamCards() {
+async function renderExamCards() {
   const grid    = $('examSelectGrid');
   const exams   = (window.EXAM_DEMO || {}).exams || [];
   const urlExam = new URLSearchParams(window.location.search).get('exam');
@@ -73,7 +90,7 @@ function renderExamCards() {
 }
 
 /* ── Select Exam → go to Step 2 ── */
-function selectExam(examId) {
+async function selectExam(examId) {
   const exams = (window.EXAM_DEMO||{}).exams||[];
   currentExam = exams.find(e => e.id===examId);
   if (!currentExam) return;
@@ -84,19 +101,24 @@ function selectExam(examId) {
   cards.forEach(c => { if (c.onclick.toString().includes(examId)) c.classList.add('selected'); });
 
   /* build entry data from existing results or fresh */
-  const students = BATCH_STUDENTS[currentExam.batch] || [];
+  const students = await loadStudentsByBatch(currentExam.batch);
   const existing = ((window.EXAM_DEMO||{}).results||[]).filter(r => r.examId===examId);
 
   entryData = students.map(s => {
     const ex = existing.find(r => r.roll===s.roll);
     return {
       roll: s.roll, name: s.name,
+      studentId: s._id,
       obtained:  ex ? ex.obtained  : '',
+      correct:   (ex && ex.correct !== undefined && ex.correct !== null) ? ex.correct : '',
+      wrong:     (ex && ex.wrong !== undefined && ex.wrong !== null) ? ex.wrong : '',
+      negRate:   (ex && ex.negRate !== undefined && ex.negRate !== null) ? ex.negRate : 0.25,
       isAbsent:  ex ? ex.isAbsent  : false,
       remarks:   ex ? (ex.remarks||'') : ''
     };
   });
 
+  restoreNegConfig();
   renderExamBanner();
   renderEntryTable();
   renderEntryStats();
@@ -141,6 +163,7 @@ function renderEntryStats() {
 
 /* ── Entry Table ── */
 function renderEntryTable() {
+  const negDisabled = negMarkingActive ? '' : 'disabled';
   const tbody = $('meTableBody');
   tbody.innerHTML = entryData.map((r, i) => {
     const over   = r.obtained!=='' && !r.isAbsent && Number(r.obtained) > currentExam.total;
@@ -159,8 +182,26 @@ function renderEntryTable() {
           ${r.isAbsent?'disabled':''}
           oninput="onMarkInput(${i},this)"
           onkeydown="handleKey(event,${i},'mark')"
-          ${r.isAbsent?'':''}
         >
+      </td>
+      <td>
+        <input type="number" id="cor-${i}" class="me-neg-input"
+          value="${r.isAbsent?'':((r.correct!==undefined&&r.correct!==null&&r.correct!=='')?r.correct:'')}"
+          min="0" max="${currentExam.total}" placeholder="—"
+          ${r.isAbsent?'disabled':negDisabled}
+          oninput="onNegInput(${i},'correct',this)"
+          onkeydown="handleKey(event,${i},'cor')">
+      </td>
+      <td>
+        <input type="number" id="wrg-${i}" class="me-neg-input"
+          value="${r.isAbsent?'':((r.wrong!==undefined&&r.wrong!==null&&r.wrong!=='')?r.wrong:'')}"
+          min="0" max="${currentExam.total}" placeholder="—"
+          ${r.isAbsent?'disabled':negDisabled}
+          oninput="onNegInput(${i},'wrong',this)"
+          onkeydown="handleKey(event,${i},'wrg')">
+      </td>
+      <td>
+        <span id="neg-calc-${i}" style="font-weight:800;font-size:13px;">—</span>
       </td>
       <td>
         <label class="me-absent-wrap">
@@ -193,36 +234,199 @@ function onMarkInput(i, el) {
   renderEntryStats();
 }
 
+/* ════ Negative Marking System ════ */
+let negMarkingActive = false;
+let negGlobalRate = 0.25;
+let negMode = 'global';
+
+function toggleNegPanel() {
+  const panel = $('meNegPanel');
+  if (!panel) return;
+  panel.style.display = (panel.style.display === 'none' || !panel.style.display) ? '' : 'none';
+}
+function onNegEnabledChange(el) {
+  negMarkingActive = el.checked;
+  const body = $('meNegBody');
+  const lbl  = $('meNegToggleLabel');
+  if (body) body.style.display = el.checked ? '' : 'none';
+  if (lbl)  lbl.textContent   = el.checked ? 'Enabled' : 'Disabled';
+  if (currentExam) currentExam._neg_used = el.checked === true;
+  if (el.checked && $('meNegPerWrong')) {
+    negGlobalRate = Number($('meNegPerWrong').value);
+    if (currentExam) currentExam._neg_rate = negGlobalRate;
+    entryData.forEach(r => { r.negRate = negGlobalRate; });
+  }
+  renderEntryTable();
+  renderEntryStats();
+}
+function onNegRateChange(el) {
+  negGlobalRate = Number(el.value);
+  if (currentExam) currentExam._neg_rate = negGlobalRate;
+  entryData.forEach(r => { r.negRate = negGlobalRate; });
+  recalcAllNeg();
+}
+function restoreNegConfig() {
+  if (!currentExam) return;
+  const bool = currentExam._neg_used === true;
+  const rate = currentExam._neg_rate ? Number(currentExam._neg_rate) : 0.25;
+  const panel = $('meNegPanel');
+  const enEl  = $('meNegEnabled');
+  const body  = $('meNegBody');
+  const rateSel = $('meNegPerWrong');
+  const lbl  = $('meNegToggleLabel');
+  if (panel && enEl) {
+    negMarkingActive = enEl.checked = bool;
+    if (bool) {
+      panel.style.display = '';
+      if (body) body.style.display = '';
+      if (lbl)  lbl.textContent   = 'Enabled';
+      if (rateSel) {
+        rateSel.value = String(rate);
+        negGlobalRate = rate;
+        entryData.forEach(r => { r.negRate = rate; });
+      }
+    } else {
+      panel.style.display = '';
+      if (body) body.style.display = 'none';
+      if (lbl)  lbl.textContent   = 'Disabled';
+    }
+  }
+}
+function onNegInput(i, field, el) {
+  const val = el.value === '' ? '' : parseFloat(el.value);
+  entryData[i][field] = val;
+  el.classList.toggle('filled', val !== '');
+  recalcOne(i);
+}
+function recalcOne(i) {
+  const r = entryData[i];
+  if (!r || r.isAbsent) return;
+  const rate = (r.negRate !== undefined && r.negRate !== null) ? Number(r.negRate) : negGlobalRate;
+  const cor  = (r.correct === '' || r.correct === null || r.correct === undefined) ? 0 : Number(r.correct);
+  const wrg  = (r.wrong   === '' || r.wrong   === null || r.wrong   === undefined) ? 0 : Number(r.wrong);
+  let obtained = cor - (wrg * rate);
+  if (obtained < 0) obtained = 0;
+  obtained = Math.round(obtained * 100) / 100;
+  r.obtained = obtained;
+  const calcEl = $('neg-calc-' + i);
+  if (calcEl) calcEl.textContent = String(obtained);
+  const markEl = $('mark-' + i);
+  if (markEl) {
+    markEl.value = String(obtained);
+    markEl.classList.add('filled');
+  }
+  renderEntryStats();
+}
+function recalcAllNeg() {
+  entryData.forEach((_, i) => { if (!entryData[i].isAbsent) recalcOne(i); });
+}
+
 /* ── Absent toggle ── */
 function onAbsentChange(i, el) {
   entryData[i].isAbsent = el.checked;
   const markEl = $(`mark-${i}`);
+  const corEl  = $(`cor-${i}`);
+  const wrgEl  = $(`wrg-${i}`);
   const row    = $(`meRow-${i}`);
   if (el.checked) {
     entryData[i].obtained = 0;
-    markEl.value    = '';
-    markEl.disabled = true;
-    markEl.className = 'me-mark-input';
+    entryData[i].correct  = '';
+    entryData[i].wrong    = '';
+    markEl.value = ''; markEl.disabled = true; markEl.className = 'me-mark-input';
+    if (corEl) { corEl.value = ''; corEl.disabled = true; }
+    if (wrgEl) { wrgEl.value = ''; wrgEl.disabled = true; }
     row.classList.add('me-row-absent');
   } else {
     markEl.disabled = false;
     markEl.value    = '';
     entryData[i].obtained = '';
+    if (corEl) corEl.disabled = !negMarkingActive;
+    if (wrgEl) wrgEl.disabled = !negMarkingActive;
     row.classList.remove('me-row-absent');
   }
   renderEntryStats();
 }
 
-/* ── Enter/Tab navigation ── */
-function handleKey(e, i, field) {
-  if (e.key === 'Enter' || e.key === 'Tab') {
-    e.preventDefault();
-    const next = i + 1;
-    if (next < entryData.length) {
-      const target = field === 'mark' ? `rem-${i}` : `mark-${next}`;
-      const el = $(target);
-      if (el && !el.disabled) el.focus();
+/* ══════════════════════════════════════════════════════════════
+   Excel-style 2D Keyboard Navigation
+   Grid columns:  0=mark  1=cor  2=wrg  3=rem
+   Keys handled:
+     ArrowRight / Tab          → next col  (wraps to next row col-0)
+     ArrowLeft  / Shift+Tab    → prev col  (wraps to prev row col-3)
+     ArrowDown  / Enter        → same col, next row
+     ArrowUp                   → same col, prev row
+   Disabled / absent cells are skipped automatically.
+══════════════════════════════════════════════════════════════ */
+
+const ME_COLS   = ['mark', 'cor', 'wrg', 'rem'];   // column order
+const ME_COL_IDX = { mark: 0, cor: 1, wrg: 2, rem: 3 };
+
+/* Return the input element for (row, col). col is 0-3 index. */
+function meCell(row, col) {
+  const prefix = ME_COLS[col];
+  if (prefix === undefined) return null;
+  return $(`${prefix}-${row}`);
+}
+
+/* Focus the cell at (row, col), skipping disabled cells.
+   dir: +1 = forward, -1 = backward (for skip direction). */
+function meFocus(row, col, dir) {
+  const totalRows = entryData.length;
+  let r = row, c = col;
+
+  for (let attempts = 0; attempts < totalRows * ME_COLS.length; attempts++) {
+    // Clamp column within bounds
+    if (c < 0) { c = ME_COLS.length - 1; r -= 1; }
+    if (c >= ME_COLS.length) { c = 0; r += 1; }
+    // Out of table bounds — stop
+    if (r < 0 || r >= totalRows) return;
+
+    const el = meCell(r, c);
+    if (el && !el.disabled) {
+      el.focus();
+      return;
     }
+    // Cell is disabled/absent — keep moving in same direction
+    if (dir >= 0) { c += 1; } else { c -= 1; }
+  }
+}
+
+function handleKey(e, row, field) {
+  const col = ME_COL_IDX[field] ?? 0;
+
+  switch (e.key) {
+    case 'ArrowRight':
+      e.preventDefault();
+      meFocus(row, col + 1, +1);
+      break;
+
+    case 'ArrowLeft':
+      e.preventDefault();
+      meFocus(row, col - 1, -1);
+      break;
+
+    case 'Tab':
+      e.preventDefault();
+      if (e.shiftKey) {
+        meFocus(row, col - 1, -1);
+      } else {
+        meFocus(row, col + 1, +1);
+      }
+      break;
+
+    case 'ArrowDown':
+    case 'Enter':
+      e.preventDefault();
+      meFocus(row + 1, col, +1);
+      break;
+
+    case 'ArrowUp':
+      e.preventDefault();
+      meFocus(row - 1, col, -1);
+      break;
+
+    default:
+      break;
   }
 }
 
@@ -275,11 +479,10 @@ function validateEntries() {
   return true;
 }
 
-/* ── Submit & Calculate ── */
-function submitMarks() {
+/* ── Submit & Calculate (Posts to backend) ── */
+async function submitMarks() {
   if (!validateEntries()) return;
 
-  /* update EXAM_DEMO.results */
   const results = window.EXAM_DEMO.results;
   /* remove old entries for this exam */
   for (let i = results.length - 1; i >= 0; i--) {
@@ -293,7 +496,10 @@ function submitMarks() {
       name:     r.name,
       obtained: r.isAbsent ? 0 : Number(r.obtained),
       isAbsent: r.isAbsent,
-      remarks:  r.remarks || ''
+      remarks:  r.remarks || '',
+      correct:  r.correct !== undefined ? Number(r.correct) : null,
+      wrong:    r.wrong !== undefined ? Number(r.wrong) : null,
+      negRate:  r.negRate !== undefined ? Number(r.negRate) : 0.25
     });
   });
 
@@ -306,16 +512,30 @@ function submitMarks() {
   const ex = (window.EXAM_DEMO.exams||[]).find(e => e.id===currentExam.id);
   if (ex) ex.status = 'Published';
 
-  /* persist to localStorage so exams.html & merit-list.html see the data */
-  if (typeof saveExamData === 'function') saveExamData();
+  /* Save to backend */
+  try {
+    const markEntries = entryData.map(r => ({
+      studentId: r.studentId,
+      subjectMarks: [],
+      totalObtained: r.isAbsent ? 0 : Number(r.obtained),
+      correct:  (r.correct  !== '' && r.correct  != null) ? Number(r.correct)  : null,
+      wrong:    (r.wrong    !== '' && r.wrong    != null) ? Number(r.wrong)    : null,
+      negRate:  r.negRate != null ? Number(r.negRate) : 0.25,
+      status:   r.isAbsent ? 'Absent' : (Number(r.obtained) >= (currentExam.pass || 0) ? 'Pass' : 'Fail')
+    }));
 
-  /* API hook:
-  fetch('/api/ucc/results/bulk', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ examId: currentExam.id, results: entryData })
-  });
-  */
+    const res = await fetch(`${API_BASE_ME}/ucc/results/mark-entry`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ examId: currentExam.id, markEntries })
+    });
+    const data = await res.json();
+    if (!data.success) {
+      exToast('❌ ' + (data.message || 'Save failed'), 'error');
+    }
+  } catch (e) {
+    exToast('❌ API connection error', 'error');
+  }
 
   renderResultPreview(examResults);
   $('stepEntryCard').style.display = 'none';
@@ -380,7 +600,7 @@ function goBackToEntry() {
 }
 
 /* ── Init ── */
-function initMarkEntry() {
+async function initMarkEntry() {
   const user = JSON.parse(sessionStorage.getItem('uccAdminUser')||'{}');
   if (user.username) $('uccAdminName').textContent = user.username;
   document.getElementById('logoutBtn')?.addEventListener('click', () => {
@@ -388,6 +608,10 @@ function initMarkEntry() {
     window.location.href = 'admin-login.html';
   });
 
+  /* Wait for exams data to load from backend before rendering */
+  if (!window.EXAM_DEMO || !window.EXAM_DEMO.exams || !window.EXAM_DEMO.exams.length) {
+    await loadExamsFromApi();
+  }
   renderExamCards();
 }
 

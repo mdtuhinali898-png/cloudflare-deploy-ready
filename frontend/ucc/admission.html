@@ -156,6 +156,199 @@
     .hidden {
       display: none !important;
     }
+
+    /* Receipt Modal Styles */
+    .receipt-modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(8px);
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      overflow-y: auto;
+    }
+
+    .receipt-modal-content {
+      background: #f8fafc;
+      border-radius: 16px;
+      padding: 20px;
+      max-width: 180mm;
+      width: 100%;
+      max-height: 95vh;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
+      animation: modalSlideIn 0.3s ease-out;
+    }
+
+    @keyframes modalSlideIn {
+      from {
+        opacity: 0;
+        transform: translateY(-20px) scale(0.95);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    .receipt-modal-actions {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+      padding: 12px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .receipt-modal-actions .btn {
+      flex: 1;
+      min-width: 160px;
+      max-width: 200px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px 20px;
+      font-size: 14px;
+      font-weight: 700;
+      border-radius: 8px;
+      transition: all 0.2s ease;
+      border: none;
+      cursor: pointer;
+    }
+
+    .receipt-modal-actions .btn i {
+      font-size: 16px;
+    }
+
+    .receipt-modal-actions .btn-primary {
+      background: linear-gradient(135deg, #4f46e5, #6366f1);
+      color: white;
+      box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+    }
+
+    .receipt-modal-actions .btn-primary:hover {
+      background: linear-gradient(135deg, #4338ca, #4f46e5);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(79, 70, 229, 0.4);
+    }
+
+    .receipt-modal-actions .btn-success {
+      background: linear-gradient(135deg, #059669, #10b981);
+      color: white;
+      box-shadow: 0 4px 12px rgba(5, 150, 105, 0.3);
+    }
+
+    .receipt-modal-actions .btn-success:hover {
+      background: linear-gradient(135deg, #047857, #059669);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(5, 150, 105, 0.4);
+    }
+
+    .receipt-modal-actions .btn-secondary {
+      background: linear-gradient(135deg, #64748b, #94a3b8);
+      color: white;
+      box-shadow: 0 4px 12px rgba(100, 116, 139, 0.3);
+    }
+
+    .receipt-modal-actions .btn-secondary:hover {
+      background: linear-gradient(135deg, #475569, #64748b);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(100, 116, 139, 0.4);
+    }
+
+    .receipt-modal-overlay .receipt-container {
+      margin: 0 auto;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    }
+
+    @media print {
+      * {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        color-adjust: exact !important;
+      }
+
+      @page {
+        size: 148mm 210mm portrait;
+        margin: 0;
+      }
+
+      /* Only the receipt stays in the printable document. */
+      .sidebar,
+      .loading-overlay {
+        display: none !important;
+      }
+
+      #mainContent > *:not(#receiptSection),
+      .receipt-modal-actions,
+      .no-print {
+        display: none !important;
+      }
+      
+      html, body {
+        margin: 0 !important;
+        padding: 0 !important;
+        background: white !important;
+        width: 148mm !important;
+        height: 210mm !important;
+      }
+
+      #mainContent {
+        display: block !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        width: 148mm !important;
+      }
+      
+      #receiptSection {
+        display: block !important;
+        visibility: visible !important;
+        position: static !important;
+        background: white !important;
+        box-sizing: border-box !important;
+        padding: 1mm !important;
+        margin: 0 !important;
+        width: 148mm !important;
+        height: 210mm !important;
+      }
+
+      .receipt-modal-content {
+        box-sizing: border-box !important;
+        width: 146mm !important;
+        height: 208mm !important;
+        min-height: 208mm !important;
+        max-width: 146mm !important;
+        max-height: 208mm !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        gap: 0 !important;
+        overflow: hidden !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+      }
+
+      #receiptArea,
+      .receipt-container {
+        box-sizing: border-box !important;
+        width: 146mm !important;
+        height: 208mm !important;
+        min-height: 208mm !important;
+        max-height: 208mm !important;
+      }
+    }
   </style>
 </head>
 <body>
@@ -188,9 +381,15 @@
       <a href="students.html" class="nav-item"><i class="fas fa-users"></i><span>Students</span><span class="nav-tooltip">Students</span></a>
       <a href="admission.html" class="nav-item active"><i class="fas fa-user-plus"></i><span>Admission</span><span class="nav-tooltip">Admission</span></a>
       <a href="payment.html" class="nav-item"><i class="fas fa-money-bill-wave"></i><span>Payment</span><span class="nav-tooltip">Payment</span></a>
+      <a href="finance.html" class="nav-item"><i class="fas fa-chart-line"></i><span>Finance</span><span class="nav-tooltip">Finance</span></a>
+      <a href="expenses.html" class="nav-item"><i class="fas fa-shopping-cart"></i><span>Expenses</span><span class="nav-tooltip">Expenses</span></a>
       <a href="exams.html" class="nav-item"><i class="fas fa-pencil-alt"></i><span>Exams</span><span class="nav-tooltip">Exams</span></a>
       <a href="distribution.html" class="nav-item"><i class="fas fa-book-open"></i><span>Distribution</span><span class="nav-tooltip">Distribution</span></a>
       <a href="batches.html" class="nav-item"><i class="fas fa-layer-group"></i><span>Batches</span><span class="nav-tooltip">Batches</span></a>
+    <a href="batch-transfer.html" class="nav-item">
+      <i class="fas fa-exchange-alt"></i><span>Batch Transfer</span>
+      <span class="nav-tooltip">Batch Transfer</span>
+    </a>
       <a href="reports.html" class="nav-item"><i class="fas fa-chart-bar"></i><span>Reports</span><span class="nav-tooltip">Reports</span></a>
       <a href="settings.html" class="nav-item"><i class="fas fa-cog"></i><span>Settings</span><span class="nav-tooltip">Settings</span></a>
     </nav>
@@ -258,8 +457,8 @@
       </div>
       <div class="form-grid">
         <div class="form-group">
-          <label for="aRoll"><i class="fas fa-id-card"></i> Student Roll (Auto-generated)</label>
-          <input type="text" id="aRoll" readonly class="highlight-roll">
+          <label for="aRoll"><i class="fas fa-id-card"></i> Student Roll <small style="color:#2563eb; font-weight:600; font-size:12px; margin-left:4px;">(Editable / Custom Start)</small></label>
+          <input type="text" id="aRoll" class="highlight-roll" placeholder="e.g. 001, 101, 501" oninput="updateRollFromInput(this.value)">
         </div>
         <div class="form-group">
           <label for="aName"><i class="fas fa-user"></i> Full Student Name <span class="required">*</span></label>
@@ -376,133 +575,199 @@
       </div>
     </div>
 
-    <!-- Step 3: Printable Receipt Section -->
-    <div id="receiptSection" class="hidden" style="margin-top: 24px;">
-      <div id="receiptArea">
-        <div class="stamp">
-          <div class="stamp-circle">
-            <div class="stamp-text" id="rStamp">ADMITTED</div>
-            <div class="stamp-subtext">Student Enrolled</div>
-            <div class="stamp-date" id="rStampDate">Aug 10, 2026</div>
+    <!-- Step 3: Printable Receipt Modal -->
+    <div id="receiptSection" class="hidden receipt-modal-overlay">
+      <div class="receipt-modal-content">
+        <!-- Action Buttons at Top -->
+        <div class="receipt-modal-actions">
+          <button class="btn btn-primary" onclick="printReceipt()">
+            <i class="fas fa-print"></i> Print A5 Receipt
+          </button>
+          <button class="btn btn-success" onclick="resetForm()">
+            <i class="fas fa-plus-circle"></i> New Admission
+          </button>
+          <button class="btn btn-secondary" onclick="closeReceipt()">
+            <i class="fas fa-times"></i> Close
+          </button>
+        </div>
+        
+        <!-- Receipt Preview -->
+        <div id="receiptArea" class="receipt-container a5-paper">
+        <div class="receipt-watermark">UCC PABNA</div>
+        <div class="receipt-inner">
+        
+        <!-- Premium Header -->
+        <div class="receipt-header">
+          <div class="header-shine"></div>
+          <div class="receipt-header-content">
+            <div class="receipt-brand">
+              <div class="logo-icon"><i class="fas fa-graduation-cap"></i></div>
+              <div class="institute-info">
+                <h1>UCC পাবনা শাখা</h1>
+                <p class="address"><i class="fas fa-map-marker-alt"></i> এডওয়ার্ড কলেজ, রথঘর সংলগ্ন, রাধানগর, পাবনা</p>
+                <p class="contact"><i class="fas fa-phone"></i> 01312-427799, 01775-932188</p>
+              </div>
+            </div>
+            <div class="header-right-wrapper">
+              <div class="qr-code-box">
+                <img src="https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=UCC-PABNA-ADMISSION" alt="QR Code">
+                <div class="qr-label">Scan Me</div>
+              </div>
+              <div class="receipt-title">
+                <h2>ADMISSION</h2>
+                <div class="receipt-meta">
+                  <div class="meta-item"><span>ID:</span> <strong id="rAdmissionId">ADM-2026-0001</strong></div>
+                  <div class="meta-item"><span>Date:</span> <strong id="rDateMeta">21 Aug, 2026</strong></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="header-bottom-line"></div>
+        </div>
+        
+        <!-- Title Banner -->
+        <div class="receipt-title-banner">Admission Receipt</div>
+        
+        <!-- Student Information Section -->
+        <div class="receipt-section">
+          <div class="section-title">
+            <i class="fas fa-user-graduate"></i>
+            <span>Student Information</span>
+          </div>
+          <div class="receipt-grid-2col">
+            <div class="receipt-info-item">
+              <span class="info-lbl">Roll:</span>
+              <strong class="info-val" id="rRoll">001</strong>
+            </div>
+            <div class="receipt-info-item">
+              <span class="info-lbl">Name:</span>
+              <strong class="info-val" id="rName">Student Name</strong>
+            </div>
+            <div class="receipt-info-item">
+              <span class="info-lbl">Batch:</span>
+              <strong class="info-val" id="rBatch">Medical Admission 2026</strong>
+            </div>
+            <div class="receipt-info-item">
+              <span class="info-lbl">Date:</span>
+              <strong class="info-val" id="rDate">21 August, 2026</strong>
+            </div>
+            <div class="receipt-info-item">
+              <span class="info-lbl">Phone:</span>
+              <strong class="info-val" id="rPhone">01712345678</strong>
+            </div>
+            <div class="receipt-info-item">
+              <span class="info-lbl">Guardian:</span>
+              <strong class="info-val" id="rGuardian">01812345678</strong>
+            </div>
           </div>
         </div>
         
-        <div class="header">
-          <div class="header-top">
-            <div class="institute-info">
-              <h1>UCC পাবনা শাখা</h1>
-              <p>স্বপ্ন যেখানে সার্থক<br>এডওয়ার্ড কলেজ, রথঘর সংলগ্ন, রাধানগর, পাবনা<br>Phone: 01312-427799, 01775-932188</p>
-            </div>
-            <div class="receipt-badge">
-              <div class="label">Admission ID</div>
-              <div class="value" id="rAdmissionId">ADM-2026-0001</div>
-            </div>
+        <!-- Financial Details Section -->
+        <div class="receipt-section">
+          <div class="section-title">
+            <i class="fas fa-file-invoice-dollar"></i>
+            <span>Financial Details</span>
           </div>
-          <div class="doc-title">Admission Receipt</div>
-        </div>
-        
-        <div class="content">
-          <div class="student-section">
-            <div class="section-label">Student Information</div>
-            <div class="info-grid">
-              <div class="info-item">
-                <label>Student Roll</label>
-                <p id="rRoll">001</p>
-              </div>
-              <div class="info-item">
-                <label>Student Name</label>
-                <p id="rName">Student Name</p>
-              </div>
-              <div class="info-item">
-                <label>Batch</label>
-                <p id="rBatch">Medical Admission 2026</p>
-              </div>
-              <div class="info-item">
-                <label>Admission Date</label>
-                <p id="rDate">August 10, 2026</p>
-              </div>
-              <div class="info-item">
-                <label>Student Phone</label>
-                <p id="rPhone">01712345678</p>
-              </div>
-              <div class="info-item">
-                <label>Guardian Phone</label>
-                <p id="rGuardian">01812345678</p>
-              </div>
+          <div class="receipt-amount-grid">
+            <div class="receipt-amount-card">
+              <span class="amt-label">Course Fee</span>
+              <span class="amt-value" id="rFee">৳ 15,000</span>
+            </div>
+            <div class="receipt-amount-card net">
+              <span class="amt-label">Net Payable</span>
+              <span class="amt-value" id="rNetFee">৳ 13,500</span>
+            </div>
+            <div class="receipt-amount-card due">
+              <span class="amt-label">Remaining Due</span>
+              <span class="amt-value" id="rDue">৳ 8,500</span>
             </div>
           </div>
           
-          <div class="amount-section">
-            <div class="section-label">Fee & Ledger Details</div>
-            <div class="amount-grid">
-              <div class="amount-card">
-                <label>Course Fee</label>
-                <div class="value" id="rFee">৳ 15,000</div>
-              </div>
-              <div class="amount-card highlight">
-                <label>Net Payable</label>
-                <div class="value" id="rNetFee">৳ 13,500</div>
-              </div>
-              <div class="amount-card due">
-                <label>Remaining Due</label>
-                <div class="value" id="rDue">৳ 8,500</div>
-              </div>
-            </div>
-            <div style="display: flex; align-items: center; margin-top: 1.5mm; flex-wrap: wrap; gap: 1.5mm;">
-              <span class="discount-badge" id="rDiscountBadge">Discount: ৳ 1,500</span>
-              <span class="status-badge" id="rStatus">Due</span>
-            </div>
-            
-            <div id="rRefContainer" class="discount-ref-display" style="display: none;">
-              <strong>📌 Reference:</strong> 
-              <span id="rRef"></span>
-            </div>
+          <!-- Discount & Status Badge -->
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 10px; gap: 8px;">
+            <span class="receipt-status-badge status-due-badge" id="rStatus">DUE</span>
+            <span style="font-size: 10px; color: #7c3aed; font-weight: 700;" id="rDiscountBadge">No Discount</span>
+          </div>
+          
+          <!-- Reference Box -->
+          <div id="rRefContainer" class="receipt-ref-box" style="display: none;">
+            <strong>📌 Discount Reference:</strong> 
+            <span id="rRef"></span>
           </div>
         </div>
         
-        <div class="footer">
-          <div class="footer-left">
-            <strong>Welcome to UCC পাবনা শাখা!</strong>
-            For queries: 01312-427799
+        <!-- Signatures -->
+        <div class="receipt-signatures">
+          <div class="receipt-sig-box">
+            <div class="receipt-sig-line"></div>
+            <div class="sig-role">Student Signature</div>
           </div>
-          <div class="signature">
-            <div class="signature-line"></div>
-            <p>Authorized Signature</p>
+          <div class="receipt-sig-box">
+            <div class="receipt-sig-line"></div>
+            <div class="sig-role">Authorized By</div>
           </div>
         </div>
-      </div>
+        
+        <!-- Footer -->
+        <div class="receipt-footer-main">
+          <p class="thank-you-msg"><i class="fas fa-heart"></i> Welcome to UCC পাবনা শাখা!</p>
+          <p class="institute-name-footer">University Coaching Centre (UCC) — পাবনা</p>
+          <p class="institute-details-footer">স্বপ্ন যেখানে সার্থক | For queries: 01312-427799</p>
+          <p class="tagline-footer">Your Success, Our Mission</p>
+        </div>
+        
+      </div><!-- End receipt-inner -->
+      </div><!-- End receipt-container -->
       
-      <div class="no-print" style="margin-top: 20px; display:flex; gap:12px;">
-        <button class="btn btn-primary" onclick="printReceipt()"><i class="fas fa-print"></i> Print A5 Receipt</button>
-        <button class="btn btn-secondary" onclick="resetForm()"><i class="fas fa-plus-circle"></i> New Admission</button>
-      </div>
-    </div>
+      </div><!-- End receipt-modal-content -->
+    </div><!-- End receiptSection modal -->
 
   </main>
 
   <script>
+    // API Configuration
+    const API_BASE_URL = (window.location.protocol === 'http:' || window.location.protocol === 'https:')
+      ? (window.location.port === '5002' ? '/api' : `${window.location.protocol}//${window.location.hostname}:5002/api`)
+      : 'http://localhost:5002/api';
+    
     let currentBatch = '';
     let nextRoll = '001';
 
     // Load batches from database on page load
     document.addEventListener('DOMContentLoaded', async () => {
       try {
-        const res = await fetch('/api/ucc/batches');
+        console.log('[BATCH LOAD] API URL:', `${API_BASE_URL}/ucc/batches`);
+        const res = await fetch(`${API_BASE_URL}/ucc/batches`);
+        console.log('[BATCH LOAD] Response status:', res.status);
+        
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        }
+        
         const data = await res.json();
-        if (data.success && data.batches) {
+        console.log('[BATCH LOAD] Data received:', data);
+        
+        if (data.success && data.batches && data.batches.length > 0) {
           const select = document.getElementById('batchSelect');
           select.innerHTML = '<option value="">-- Select Coaching Batch --</option>';
           data.batches.forEach(b => {
             const opt = document.createElement('option');
-            opt.value = b.batchCode;
+            opt.value = b.batchName;
             opt.textContent = `${b.batchName} — Base Fee: ৳${b.baseFee.toLocaleString()}`;
-            opt.dataset.batchName = b.batchName;
+            opt.dataset.batchCode = b.batchCode;
             opt.dataset.baseFee = b.baseFee;
             select.appendChild(opt);
           });
+          console.log(`[BATCH LOAD] Successfully loaded ${data.batches.length} batches`);
+        } else {
+          console.warn('[BATCH LOAD] No batches found in database');
+          alert('⚠️ No batches found in database!\n\nPlease create batches first from the Batches page.');
         }
       } catch (err) {
-        console.error('Error loading batches:', err);
+        console.error('[BATCH LOAD ERROR]', err);
+        const select = document.getElementById('batchSelect');
+        select.innerHTML = '<option value="">❌ Failed to load batches - Check console (F12)</option>';
+        alert(`❌ Failed to load batches!\n\nError: ${err.message}\n\nPlease check:\n1. Backend server is running (http://localhost:5002)\n2. MongoDB is connected\n3. Open browser console (F12) for details\n\nAPI URL: ${API_BASE_URL}/ucc/batches`);
       }
     });
 
@@ -576,31 +841,32 @@
 
     async function loadBatch() {
       const batchSelect = document.getElementById('batchSelect');
-      const batchCode = batchSelect.value;
-      if (!batchCode) return alert("Please select a coaching batch first!");
+      const batchName = batchSelect.value;
+      if (!batchName) return alert("Please select a coaching batch first!");
       
       const selectedOption = batchSelect.options[batchSelect.selectedIndex];
-      const batchName = selectedOption.dataset.batchName || selectedOption.text.split('—')[0].trim();
       const baseFee = parseFloat(selectedOption.dataset.baseFee) || 15000;
-      currentBatch = batchCode;
+      currentBatch = batchName;
       
       showLoading('Loading Batch Info...', 'Fetching next roll for ' + batchName);
       
       try {
-        const res = await fetch(`/api/ucc/admission/next-roll/${encodeURIComponent(batchCode)}`);
+        const res = await fetch(`${API_BASE_URL}/ucc/admission/next-roll/${encodeURIComponent(batchName)}`);
         const data = await res.json();
         
         hideLoading();
         
         let rollVal = 1;
+        let studentCount = 0;
         if (data.success && data.nextRoll) {
           rollVal = data.nextRoll;
+          studentCount = data.studentCount || 0;
         }
         
         nextRoll = String(rollVal).padStart(3, '0');
         
         document.getElementById('aBatch').innerText = batchName;
-        document.getElementById('aCount').innerText = Math.max(0, rollVal - 1);
+        document.getElementById('aCount').innerText = studentCount;
         document.getElementById('aRollPreview').innerText = nextRoll;
         document.getElementById('aRoll').value = nextRoll;
         
@@ -613,7 +879,8 @@
         calculateAll();
       } catch (err) {
         hideLoading();
-        // Fallback if offline
+        console.error('Error loading batch:', err);
+        alert('Failed to load batch info: ' + err.message + '\nUsing default values.');
         nextRoll = '001';
         document.getElementById('aBatch').innerText = batchName;
         document.getElementById('aRollPreview').innerText = nextRoll;
@@ -625,7 +892,15 @@
       }
     }
 
+    function updateRollFromInput(val) {
+      const trimmed = val.trim();
+      nextRoll = trimmed || '001';
+      document.getElementById('aRollPreview').innerText = nextRoll;
+    }
+
     async function submitAdmission() {
+      const customRoll = document.getElementById('aRoll').value.trim();
+      const selectedRoll = customRoll || nextRoll;
       const name = document.getElementById('aName').value.trim();
       const phone = document.getElementById('aPhone').value.trim();
       const guardian = document.getElementById('aGuardian').value.trim();
@@ -643,37 +918,85 @@
         return alert("Please fill in Student Name, Phone, and Guardian Phone!");
       }
       
-      showLoading('Processing Admission...', 'Saving student credentials for Roll: ' + nextRoll);
-      
-      const payload = {
-        name,
-        phone,
-        guardianPhone: guardian,
-        guardianName,
-        batchName: document.getElementById('aBatch').innerText,
-        courseFee: fee,
-        discountType,
-        discountValue,
-        discountReference: reference,
-        initialPayment,
-        paymentMethod,
-        transactionId: trxId,
-        collector: 'UCC Admin'
-      };
-      
       try {
-        const response = await fetch('/api/ucc/admission', {
+        showLoading('Processing Admission...', 'Saving student credentials for Roll: ' + selectedRoll);
+        
+        const payload = {
+          roll: selectedRoll,
+          name,
+          phone,
+          guardianPhone: guardian,
+          guardianName,
+          batchName: document.getElementById('aBatch').innerText,
+          courseFee: fee,
+          discountType,
+          discountValue,
+          discountReference: reference,
+          initialPayment,
+          paymentMethod,
+          transactionId: trxId,
+          collector: 'UCC Admin'
+        };
+        
+        console.log('[ADMISSION] Submitting to:', `${API_BASE_URL}/ucc/admission`);
+        console.log('[ADMISSION] Payload:', payload);
+        
+        const response = await fetch(`${API_BASE_URL}/ucc/admission`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
         
+        console.log('[ADMISSION] Response status:', response.status, response.statusText);
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('[ADMISSION] HTTP Error:', response.status, errorText);
+          hideLoading();
+          
+          // Try to parse error as JSON
+          let errorData;
+          try {
+            errorData = JSON.parse(errorText);
+          } catch (e) {
+            errorData = { message: errorText };
+          }
+          
+          // Special handling for duplicate roll number
+          if (response.status === 400 && errorData.suggestedRoll) {
+            const userChoice = confirm(
+              `⚠️ Roll Number Already Exists!\n\n${errorData.message}\n\n` +
+              `Suggested Roll: ${errorData.suggestedRoll}\n\n` +
+              `Click OK to use suggested roll ${errorData.suggestedRoll}, or Cancel to enter manually.`
+            );
+            
+            if (userChoice) {
+              // Auto-fill with suggested roll and retry
+              document.getElementById('aRoll').value = errorData.suggestedRoll;
+              nextRoll = errorData.suggestedRoll;
+              document.getElementById('aRollPreview').innerText = errorData.suggestedRoll;
+              alert('✅ Roll number updated to ' + errorData.suggestedRoll + '\n\nPlease click Submit again.');
+            }
+            return;
+          }
+          
+          // Generic error
+          alert(`❌ Admission failed!\n\nHTTP ${response.status}: ${response.statusText}\n\n${errorData.message || errorText}\n\nPlease check:\n1. Backend is running on port 5002\n2. MongoDB is connected\n3. Batch exists in database\n4. Check backend terminal for errors`);
+          return;
+        }
+        
         const result = await response.json();
+        
+        console.log('Admission Response:', result); // Debug log
+        
         hideLoading();
         
-        if (!response.ok || !result.success) {
-          throw new Error(result.message || 'Failed to complete admission');
+        if (!result.success) {
+          console.error('Admission failed:', result);
+          throw new Error(result.message || 'Admission failed');
         }
+        
+        console.log('Admission successful! Student:', result.student); // Debug log
         
         // Show receipt section
         let discountAmount = 0;
@@ -687,10 +1010,14 @@
         const due = Math.max(0, netFee - initialPayment);
         const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
         
-        document.getElementById('rAdmissionId').innerText = result.student ? result.student.studentId : ('UCC-ADM-' + nextRoll);
+        // Populate receipt with student data
+        document.getElementById('rAdmissionId').innerText = result.student ? result.student.studentId : ('UCC-ADM-' + selectedRoll);
         document.getElementById('rDate').innerText = dateStr;
-        document.getElementById('rStampDate').innerText = dateStr;
-        document.getElementById('rRoll').innerText = result.student ? result.student.roll : nextRoll;
+        const rDateMetaElem = document.getElementById('rDateMeta');
+        if (rDateMetaElem) {
+          rDateMetaElem.innerText = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+        }
+        document.getElementById('rRoll').innerText = result.student ? result.student.roll : selectedRoll;
         document.getElementById('rName').innerText = name;
         document.getElementById('rBatch').innerText = document.getElementById('aBatch').innerText;
         document.getElementById('rPhone').innerText = phone;
@@ -701,18 +1028,21 @@
         
         const rDiscountBadge = document.getElementById('rDiscountBadge');
         if (discountAmount > 0) {
-          rDiscountBadge.innerText = 'Discount: ৳ ' + discountAmount.toLocaleString();
+          rDiscountBadge.innerText = 'Discount Applied: ৳' + discountAmount.toLocaleString();
         } else {
           rDiscountBadge.innerText = 'No Discount';
         }
         
         const statusElem = document.getElementById('rStatus');
         if (due <= 0) {
-          statusElem.innerText = 'Paid';
-          document.getElementById('rStamp').innerText = 'PAID';
+          statusElem.innerText = 'PAID';
+          statusElem.className = 'receipt-status-badge status-paid-badge';
+        } else if (initialPayment > 0) {
+          statusElem.innerText = 'PARTIAL';
+          statusElem.className = 'receipt-status-badge status-pending-badge';
         } else {
-          statusElem.innerText = 'Due';
-          document.getElementById('rStamp').innerText = 'DUE';
+          statusElem.innerText = 'DUE';
+          statusElem.className = 'receipt-status-badge status-due-badge';
         }
         
         if (reference) {
@@ -722,12 +1052,42 @@
           document.getElementById('rRefContainer').style.display = 'none';
         }
         
+        // Get receipt number from response
+        const receiptNo = (result.receipt && result.receipt.receiptNo) 
+          ? result.receipt.receiptNo 
+          : (result.student && result.student.studentId) 
+          ? result.student.studentId 
+          : `UCC-ADM-${selectedRoll}`;
+        
+        console.log('[ADMISSION] Receipt number generated:', receiptNo);
+
+        // Show receipt section with action buttons
         document.getElementById('admissionSection').classList.add('hidden');
         document.getElementById('receiptSection').classList.remove('hidden');
         
+        // Scroll to receipt
+        document.getElementById('receiptSection').scrollIntoView({ behavior: 'smooth' });
+        
+        console.log('[ADMISSION] Receipt generated successfully:', receiptNo);
+        
       } catch (err) {
         hideLoading();
-        alert('Error: ' + err.message);
+        console.error('[ADMISSION] Network error:', err);
+        
+        let errorMsg = '❌ Cannot connect to backend server!\n\n';
+        errorMsg += `Error: ${err.message}\n\n`;
+        errorMsg += 'Common Causes:\n';
+        errorMsg += '1. Backend server not running on port 5002\n';
+        errorMsg += '2. Wrong API URL configuration\n';
+        errorMsg += '3. MongoDB connection lost\n';
+        errorMsg += '4. CORS blocked the request\n\n';
+        errorMsg += `API URL: ${API_BASE_URL}/ucc/admission\n\n`;
+        errorMsg += 'To fix:\n';
+        errorMsg += '• Run: cd backend && npm start\n';
+        errorMsg += '• Check MongoDB is running\n';
+        errorMsg += '• Open browser console (F12) for details';
+        
+        alert(errorMsg);
       }
     }
 
@@ -751,9 +1111,96 @@
       calculateAll();
     }
 
+    function closeReceipt() {
+      document.getElementById('receiptSection').classList.add('hidden');
+      document.getElementById('admissionSection').classList.remove('hidden');
+    }
+
     function printReceipt() {
+      // Simply trigger browser print - CSS handles everything
       window.print();
     }
+    
+    // Alternative: Open receipt in new window for printing
+    function printReceiptNewWindow() {
+      const receiptArea = document.getElementById('receiptArea');
+      if (!receiptArea) {
+        alert('Receipt not found!');
+        return;
+      }
+
+      const printWindow = window.open('', '', 'width=800,height=600');
+      
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="UTF-8">
+          <title>Print Receipt - UCC Pabna</title>
+          <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+          <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+          <link rel="stylesheet" href="assets/css/receipt-print.css">
+          <style>
+            @page {
+              size: 148mm 210mm portrait;
+              margin: 0;
+            }
+            
+            * {
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            
+            body {
+              margin: 0;
+              padding: 0;
+              background: white;
+            }
+            
+            .receipt-container {
+              width: 148mm !important;
+              min-height: 210mm !important;
+              margin: 0 !important;
+              box-shadow: none !important;
+              border-radius: 0 !important;
+            }
+          </style>
+        </head>
+        <body>
+          ${receiptArea.outerHTML}
+          <script>
+            window.onload = function() {
+              setTimeout(() => {
+                window.print();
+              }, 250);
+            };
+          <\/script>
+        </body>
+        </html>
+      `);
+      
+      printWindow.document.close();
+    }
+
+    // Close modal when clicking outside receipt
+    document.addEventListener('click', function(e) {
+      const modal = document.getElementById('receiptSection');
+      const modalContent = document.querySelector('.receipt-modal-content');
+      
+      if (modal && !modal.classList.contains('hidden') && e.target === modal) {
+        closeReceipt();
+      }
+    });
+
+    // Close modal with Escape key
+    document.addEventListener('keydown', function(e) {
+      const modal = document.getElementById('receiptSection');
+      
+      if (e.key === 'Escape' && modal && !modal.classList.contains('hidden')) {
+        closeReceipt();
+      }
+    });
   </script>
 </body>
 </html>
+>

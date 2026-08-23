@@ -543,60 +543,103 @@ async function viewVoucher(id) {
 }
 
 function generateVoucherHTML(e, instituteName) {
+    const formattedAmount = formatCurrency(e.amount || 0);
+    const statusText = e.status || 'Approved';
+    const isApproved = statusText.toLowerCase().includes('approved');
+    const statusBg = isApproved ? '#ecfdf5' : '#fffbeb';
+    const statusColor = isApproved ? '#059669' : '#b45309';
+    const statusBorder = isApproved ? '#6ee7b7' : '#fde68a';
+    const statusIcon = isApproved ? 'fa-check-circle' : 'fa-clock';
+
     return `
-    <div class="voucher-container" id="printableVoucher">
-        <div class="voucher-header">
-            <h2><i class="fas fa-graduation-cap"></i> ${escHtml(instituteName)}</h2>
-            <div style="font-size:1.1rem;font-weight:700;color:#1e40af;margin:6px 0;">EXPENSE VOUCHER</div>
-            <div style="font-size:0.8rem;color:#6b7280;">Voucher No: <strong>${escHtml(e.expenseId || 'N/A')}</strong></div>
+    <div class="voucher-container" id="printableVoucher" style="font-family:'Inter','Segoe UI',sans-serif; background:#fff; padding:20px; border-radius:12px; border:1px solid #e2e8f0; box-shadow:0 10px 25px rgba(0,0,0,0.05);">
+        <!-- Header -->
+        <div class="voucher-header" style="background:linear-gradient(135deg, #4f46e5, #7c3aed); color:#fff; padding:16px 20px; border-radius:8px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center;">
+            <div>
+                <h2 style="margin:0; font-size:1.25rem; font-weight:800; color:#fff;"><i class="fas fa-graduation-cap"></i> ${escHtml(instituteName || 'UCC Pabna Main')}</h2>
+                <div style="font-size:0.85rem; opacity:0.9; margin-top:4px;">ব্যয় ভাউচার / Expense Voucher</div>
+            </div>
+            <div style="text-align:right;">
+                <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; opacity:0.8;">Voucher No.</div>
+                <div style="font-family:monospace; font-weight:700; font-size:0.95rem; background:rgba(255,255,255,0.2); padding:3px 10px; border-radius:4px; margin-top:2px;">${escHtml(e.expenseId || e.id || 'N/A')}</div>
+            </div>
         </div>
-        <div class="voucher-body">
-            <table>
-                <tr><td class="label">Date</td><td>${e.date || '-'}</td><td class="label">Time</td><td>${e.time || '-'}</td></tr>
-                <tr><td class="label">Category</td><td>${escHtml(e.category)}</td><td class="label">Sub Category</td><td>${escHtml(e.subCategory || '-')}</td></tr>
-                <tr><td class="label">Description</td><td colspan="3">${escHtml(e.description || '-')}</td></tr>
-                <tr><td class="label">Amount</td><td><strong style="font-size:1.1rem;color:#dc2626;">${formatCurrency(e.amount)}</strong></td>
-                    <td class="label">Payment Method</td><td>${escHtml(e.paymentMethod)}</td></tr>
-                <tr><td class="label">Vendor</td><td>${escHtml(e.vendor || '-')}</td><td class="label">Status</td>
-                    <td><span class="status-badge ${(e.status||'').toLowerCase().replace(' ','-')}">${escHtml(e.status || '-')}</span></td></tr>
-                <tr><td class="label">Created By</td><td>${escHtml(e.createdBy || 'Admin')}</td>
-                    <td class="label">Approved By</td><td>${escHtml(e.approvedBy || '-')}</td></tr>
-                ${e.rejectionReason ? `<tr><td class="label">Rejection Reason</td><td colspan="3" style="color:#dc2626;">${escHtml(e.rejectionReason)}</td></tr>` : ''}
+
+        <!-- Details Table (Daily Statement Style) -->
+        <div class="voucher-body" style="margin-bottom:20px;">
+            <table class="details-table" style="width:100%; border-collapse:collapse; border:1px solid #cbd5e1; font-size:13px; font-family:'Inter','Segoe UI',sans-serif;">
+                <thead>
+                    <tr style="background:#4f46e5; color:#ffffff;">
+                        <th style="padding:10px 12px; text-align:left; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:0.05em; border:1px solid #4338ca; width:40%;">ক্ষেত্র / Field</th>
+                        <th style="padding:10px 12px; text-align:left; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:0.05em; border:1px solid #4338ca; width:60%;">তথ্য / Details</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr style="background:#ffffff;">
+                        <td style="padding:8px 12px; border-bottom:1px solid #e2e8f0; font-weight:700; color:#475569;">ভাউচার নম্বর / Voucher No.</td>
+                        <td style="padding:8px 12px; border-bottom:1px solid #e2e8f0; font-family:monospace; font-weight:700; color:#4f46e5;">${escHtml(e.expenseId || e.id || 'N/A')}</td>
+                    </tr>
+                    <tr style="background:#f8fafc;">
+                        <td style="padding:8px 12px; border-bottom:1px solid #e2e8f0; font-weight:700; color:#475569;">তারিখ / Date</td>
+                        <td style="padding:8px 12px; border-bottom:1px solid #e2e8f0; color:#1e293b;">${e.date || '-'}</td>
+                    </tr>
+                    <tr style="background:#ffffff;">
+                        <td style="padding:8px 12px; border-bottom:1px solid #e2e8f0; font-weight:700; color:#475569;">বিস্তারিত / Purpose</td>
+                        <td style="padding:8px 12px; border-bottom:1px solid #e2e8f0; color:#1e293b;">${escHtml(e.description || e.purpose || 'Untitled Expense')}</td>
+                    </tr>
+                    <tr style="background:#f8fafc;">
+                        <td style="padding:8px 12px; border-bottom:1px solid #e2e8f0; font-weight:700; color:#475569;">বিভাগ / Category</td>
+                        <td style="padding:8px 12px; border-bottom:1px solid #e2e8f0; color:#1e293b;"><span style="background:#eef2ff; color:#4f46e5; padding:3px 8px; border-radius:4px; font-weight:600; font-size:12px;">${escHtml(e.category || 'Office')}</span></td>
+                    </tr>
+                    <tr style="background:#ffffff;">
+                        <td style="padding:8px 12px; border-bottom:1px solid #e2e8f0; font-weight:700; color:#475569;">শাখা / Branch</td>
+                        <td style="padding:8px 12px; border-bottom:1px solid #e2e8f0; color:#1e293b;">${escHtml(e.branch || 'UCC Pabna Main')}</td>
+                    </tr>
+                    <tr style="background:#f8fafc;">
+                        <td style="padding:8px 12px; border-bottom:1px solid #e2e8f0; font-weight:700; color:#475569;">প্রদানকারী / Vendor</td>
+                        <td style="padding:8px 12px; border-bottom:1px solid #e2e8f0; color:#1e293b;">${escHtml(e.vendor || 'N/A')}</td>
+                    </tr>
+                    <tr style="background:#ffffff;">
+                        <td style="padding:8px 12px; border-bottom:1px solid #e2e8f0; font-weight:700; color:#475569;">পেমেন্ট পদ্ধতি / Payment Method</td>
+                        <td style="padding:8px 12px; border-bottom:1px solid #e2e8f0; color:#1e293b;"><i class="fas fa-money-bill-wave" style="color:#059669; margin-right:4px;"></i> ${escHtml(e.paymentMethod || 'Cash')}</td>
+                    </tr>
+                    <tr style="background:#f8fafc;">
+                        <td style="padding:8px 12px; border-bottom:1px solid #e2e8f0; font-weight:700; color:#475569;">খরচের পরিমাণ / Amount</td>
+                        <td style="padding:8px 12px; border-bottom:1px solid #e2e8f0; font-weight:800; color:#dc2626; font-size:1.05rem;">${formattedAmount}</td>
+                    </tr>
+                    <tr style="background:#ffffff;">
+                        <td style="padding:8px 12px; border-bottom:1px solid #e2e8f0; font-weight:700; color:#475569;">স্ট্যাটাস / Status</td>
+                        <td style="padding:8px 12px; border-bottom:1px solid #e2e8f0;"><span style="background:${statusBg}; color:${statusColor}; border:1px solid ${statusBorder}; padding:3px 10px; border-radius:20px; font-weight:700; font-size:11px; display:inline-flex; align-items:center; gap:4px;"><i class="fas ${statusIcon}"></i> ${escHtml(statusText)}</span></td>
+                    </tr>
+                    <tr style="background:#4f46e5; color:#ffffff; font-weight:800;">
+                        <td style="padding:10px 12px; font-size:13px; text-transform:uppercase; letter-spacing:0.03em;">মোট পরিমাণ (Total)</td>
+                        <td style="padding:10px 12px; font-size:1.1rem; color:#ffffff;">${formattedAmount}</td>
+                    </tr>
+                </tbody>
             </table>
         </div>
-        <div class="voucher-footer">
-            <div class="signature"><div class="line">Prepared By</div></div>
-            <div class="signature"><div class="line">Approved By</div></div>
+
+        <!-- Footer Signatures -->
+        <div class="voucher-footer" style="margin-top:30px; display:flex; justify-content:space-between; padding-top:20px; border-top:1px dashed #cbd5e1;">
+            <div style="text-align:center; width:45%;">
+                <div style="border-top:1.5px solid #475569; margin-top:35px; padding-top:6px; font-weight:700; color:#334155; font-size:12px;">প্রস্তুতকারী / Prepared By</div>
+            </div>
+            <div style="text-align:center; width:45%;">
+                <div style="border-top:1.5px solid #475569; margin-top:35px; padding-top:6px; font-weight:700; color:#334155; font-size:12px;">অনুমোদনকারী / Approved By</div>
+            </div>
         </div>
-        <div style="margin-top:16px;text-align:right;display:flex;gap:8px;justify-content:flex-end;">
-            <button class="btn btn-primary" onclick="printVoucher()"><i class="fas fa-print"></i> Print</button>
-            <button class="btn btn-secondary" onclick="closeVoucherModal()"><i class="fas fa-times"></i> Close</button>
+
+        <!-- Action buttons -->
+        <div class="no-print" style="margin-top:20px; text-align:right; display:flex; gap:8px; justify-content:flex-end;">
+            <button class="btn btn-primary" onclick="printVoucher()" style="background:#4f46e5; color:#fff; border:none; padding:8px 16px; border-radius:6px; font-weight:600; cursor:pointer;"><i class="fas fa-print"></i> Print</button>
+            <button class="btn btn-secondary" onclick="closeVoucherModal()" style="background:#e2e8f0; color:#334155; border:none; padding:8px 16px; border-radius:6px; font-weight:600; cursor:pointer;"><i class="fas fa-times"></i> Close</button>
         </div>
     </div>`;
 }
+}
 
 function printVoucher() {
-    const content = document.getElementById('printableVoucher')?.innerHTML;
-    if (!content) return;
-    const win = window.open('', '_blank', 'width=700,height=600');
-    win.document.write(`<!DOCTYPE html><html><head><title>Expense Voucher</title>
-    <style>
-        body{font-family:'Segoe UI',sans-serif;padding:20px;font-size:11pt;}
-        table{width:100%;border-collapse:collapse;margin:12px 0;}
-        td{padding:8px 10px;border:1px solid #e5e7eb;font-size:10pt;}
-        .label{font-weight:700;background:#f9fafb;width:130px;}
-        .voucher-header{text-align:center;border-bottom:2px double #1e40af;padding-bottom:12px;margin-bottom:16px;}
-        .voucher-header h2{color:#1e40af;}
-        .voucher-footer{margin-top:30px;display:flex;justify-content:space-between;}
-        .signature{text-align:center;width:45%;}
-        .line{margin-top:40px;border-top:1px solid #374151;padding-top:6px;font-weight:600;}
-        .status-badge{padding:2px 8px;border-radius:20px;font-size:9pt;font-weight:700;}
-        button{display:none!important;}
-        @media print{button{display:none!important;}}
-    </style></head><body>${content}</body></html>`);
-    win.document.close();
-    win.focus();
-    setTimeout(() => { win.print(); win.close(); }, 400);
+    window.print();
 }
 
 function closeVoucherModal() { document.getElementById('voucherModal')?.classList.remove('active'); }

@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Backend Health Check</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 600px;
+            width: 100%;
+        }
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+        .subtitle {
+            color: #888;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        .status-card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 15px;
+            border-left: 5px solid #ddd;
+            transition: all 0.3s ease;
+        }
+        .status-card.checking {
+            border-left-color: #ffc107;
+            animation: pulse 1.5s infinite;
+        }
+        .status-card.success {
+            border-left-color: #28a745;
+            background: #d4edda;
+        }
+        .status-card.error {
+            border-left-color: #dc3545;
+            background: #f8d7da;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        .status-title {
+            font-weight: bold;
+            margin-bottom: 8px;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .status-message {
+            color: #555;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        .icon {
+            width: 24px;
+            height: 24px;
+            display: inline-block;
+        }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            width: 100%;
+            transition: all 0.3s ease;
+            margin-top: 20px;
+        }
+        button:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .details {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 10px;
+            font-size: 13px;
+            color: #555;
+            font-family: 'Courier New', monospace;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .action-buttons button {
+            flex: 1;
+            margin-top: 0;
+        }
+        .btn-secondary {
+            background: #6c757d;
+        }
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+        .btn-success {
+            background: #28a745;
+        }
+        .btn-success:hover {
+            background: #218838;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🔌 Backend Health Check</h1>
+    <p class="subtitle">Checking UCC Admin System Backend Connection...</p>
+
+    <!-- Status 1: Backend Server -->
+    <div class="status-card checking" id="backendStatus">
+        <div class="status-title">
+            <span class="icon">⏳</span>
+            <span>1. Backend Server (Port 5002)</span>
+        </div>
+        <div class="status-message" id="backendMessage">Checking connection...</div>
+        <div class="details" id="backendDetails" style="display:none;"></div>
+    </div>
+
+    <!-- Status 2: Database Connection -->
+    <div class="status-card checking" id="databaseStatus">
+        <div class="status-title">
+            <span class="icon">⏳</span>
+            <span>2. MongoDB Database</span>
+        </div>
+        <div class="status-message" id="databaseMessage">Waiting for backend check...</div>
+        <div class="details" id="databaseDetails" style="display:none;"></div>
+    </div>
+
+    <!-- Status 3: API Routes -->
+    <div class="status-card checking" id="apiStatus">
+        <div class="status-title">
+            <span class="icon">⏳</span>
+            <span>3. API Routes (/api/ucc/*)</span>
+        </div>
+        <div class="status-message" id="apiMessage">Waiting for backend check...</div>
+        <div class="details" id="apiDetails" style="display:none;"></div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="action-buttons">
+        <button onclick="runHealthCheck()" id="recheckBtn">🔄 Re-check Connection</button>
+        <button onclick="openAdmission()" class="btn-success" id="admissionBtn" disabled>✅ Go to Admission</button>
+    </div>
+    
+    <button onclick="copyDebugInfo()" class="btn-secondary">📋 Copy Debug Info</button>
+</div>
+
+<script>
+    const API_BASE_URL = (window.location.protocol === 'http:' || window.location.protocol === 'https:')
+        ? (window.location.port === '5002' ? '/api' : `${window.location.protocol}//${window.location.hostname}:5002/api`)
+        : 'http://localhost:5002/api';
+
+    let debugInfo = {};
+
+    async function runHealthCheck() {
+        // Reset UI
+        document.getElementById('recheckBtn').disabled = true;
+        document.getElementById('admissionBtn').disabled = true;
+        debugInfo = {};
+
+        // Check 1: Backend Server
+        await checkBackend();
+        
+        // Check 2: Database
+        await checkDatabase();
+        
+        // Check 3: API Routes
+        await checkApiRoutes();
+
+        // Enable buttons
+        document.getElementById('recheckBtn').disabled = false;
+        if (debugInfo.backendOk && debugInfo.databaseOk && debugInfo.apiOk) {
+            document.getElementById('admissionBtn').disabled = false;
+        }
+    }
+
+    async function checkBackend() {
+        const card = document.getElementById('backendStatus');
+        const message = document.getElementById('backendMessage');
+        const details = document.getElementById('backendDetails');
+        
+        card.className = 'status-card checking';
+        message.textContent = 'Connecting to backend server...';
+        
+        try {
+            const startTime = Date.now();
+            const res = await fetch(`${API_BASE_URL}/ucc/batches`);
+            const responseTime = Date.now() - startTime;
+            
+            if (res.ok) {
+                const data = await res.json();
+                card.className = 'status-card success';
+                card.querySelector('.icon').textContent = '✅';
+                message.textContent = `Backend server is running! (Response: ${responseTime}ms)`;
+                details.textContent = `URL: ${API_BASE_URL}\nStatus: ${res.status} ${res.statusText}\nBatches found: ${data.count || 0}`;
+                details.style.display = 'block';
+                debugInfo.backendOk = true;
+                debugInfo.backendUrl = API_BASE_URL;
+                debugInfo.responseTime = responseTime;
+            } else {
+                throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+            }
+        } catch (err) {
+            card.className = 'status-card error';
+            card.querySelector('.icon').textContent = '❌';
+            message.innerHTML = `Cannot connect to backend!<br><strong>Error:</strong> ${err.message}`;
+            details.innerHTML = `<strong>Possible Causes:</strong>\n`;
+            details.innerHTML += `1. Backend server not running on port 5002\n`;
+            details.innerHTML += `2. Wrong API URL: ${API_BASE_URL}\n`;
+            details.innerHTML += `3. Firewall blocking port 5002\n\n`;
+            details.innerHTML += `<strong>To Fix:</strong>\n`;
+            details.innerHTML += `cd "d:\\Sms new\\backend"\n`;
+            details.innerHTML += `npm start`;
+            details.style.display = 'block';
+            debugInfo.backendOk = false;
+            debugInfo.backendError = err.message;
+        }
+    }
+
+    async function checkDatabase() {
+        const card = document.getElementById('databaseStatus');
+        const message = document.getElementById('databaseMessage');
+        const details = document.getElementById('databaseDetails');
+        
+        if (!debugInfo.backendOk) {
+            card.className = 'status-card error';
+            card.querySelector('.icon').textContent = '⚠️';
+            message.textContent = 'Cannot check database - backend not connected';
+            return;
+        }
+        
+        card.className = 'status-card checking';
+        message.textContent = 'Checking MongoDB connection...';
+        
+        try {
+            const res = await fetch(`${API_BASE_URL}/ucc/students`);
+            if (res.ok) {
+                const data = await res.json();
+                card.className = 'status-card success';
+                card.querySelector('.icon').textContent = '✅';
+                message.textContent = `MongoDB connected! Found ${data.count || 0} students.`;
+                details.textContent = `Database is accessible and responding\nTotal students: ${data.count || 0}`;
+                details.style.display = 'block';
+                debugInfo.databaseOk = true;
+                debugInfo.studentCount = data.count || 0;
+            } else {
+                throw new Error(`HTTP ${res.status}`);
+            }
+        } catch (err) {
+            card.className = 'status-card error';
+            card.querySelector('.icon').textContent = '❌';
+            message.innerHTML = `Database connection issue!<br><strong>Error:</strong> ${err.message}`;
+            details.innerHTML = `<strong>Possible Causes:</strong>\n`;
+            details.innerHTML += `1. MongoDB service not running\n`;
+            details.innerHTML += `2. Wrong connection string in .env\n`;
+            details.innerHTML += `3. Database authentication failed\n\n`;
+            details.innerHTML += `<strong>To Fix:</strong>\n`;
+            details.innerHTML += `1. Start MongoDB service: net start MongoDB\n`;
+            details.innerHTML += `2. Check backend/.env file\n`;
+            details.innerHTML += `3. Open MongoDB Compass to verify connection`;
+            details.style.display = 'block';
+            debugInfo.databaseOk = false;
+            debugInfo.databaseError = err.message;
+        }
+    }
+
+    async function checkApiRoutes() {
+        const card = document.getElementById('apiStatus');
+        const message = document.getElementById('apiMessage');
+        const details = document.getElementById('apiDetails');
+        
+        if (!debugInfo.backendOk) {
+            card.className = 'status-card error';
+            card.querySelector('.icon').textContent = '⚠️';
+            message.textContent = 'Cannot check API routes - backend not connected';
+            return;
+        }
+        
+        card.className = 'status-card checking';
+        message.textContent = 'Testing API endpoints...';
+        
+        const endpoints = [
+            { path: '/ucc/batches', name: 'Batches' },
+            { path: '/ucc/students', name: 'Students' },
+            { path: '/ucc/admission/next-roll/Test-Batch', name: 'Admission' }
+        ];
+        
+        const results = [];
+        for (const endpoint of endpoints) {
+            try {
+                const res = await fetch(`${API_BASE_URL}${endpoint.path}`);
+                results.push({ name: endpoint.name, ok: res.ok, status: res.status });
+            } catch (err) {
+                results.push({ name: endpoint.name, ok: false, error: err.message });
+            }
+        }
+        
+        const allOk = results.every(r => r.ok);
+        
+        if (allOk) {
+            card.className = 'status-card success';
+            card.querySelector('.icon').textContent = '✅';
+            message.textContent = `All ${results.length} API routes working!`;
+            details.textContent = results.map(r => `✅ ${r.name}: HTTP ${r.status}`).join('\n');
+            details.style.display = 'block';
+            debugInfo.apiOk = true;
+            debugInfo.apiResults = results;
+        } else {
+            card.className = 'status-card error';
+            card.querySelector('.icon').textContent = '❌';
+            message.textContent = 'Some API routes failing!';
+            details.textContent = results.map(r => 
+                r.ok ? `✅ ${r.name}: HTTP ${r.status}` : `❌ ${r.name}: ${r.error || 'Failed'}`
+            ).join('\n');
+            details.style.display = 'block';
+            debugInfo.apiOk = false;
+            debugInfo.apiResults = results;
+        }
+    }
+
+    function openAdmission() {
+        window.location.href = 'admission.html';
+    }
+
+    function copyDebugInfo() {
+        const info = `UCC Backend Health Check Report
+Generated: ${new Date().toLocaleString()}
+
+API Base URL: ${API_BASE_URL}
+
+Backend Server: ${debugInfo.backendOk ? '✅ OK' : '❌ FAILED'}
+${debugInfo.responseTime ? `Response Time: ${debugInfo.responseTime}ms` : ''}
+${debugInfo.backendError ? `Error: ${debugInfo.backendError}` : ''}
+
+MongoDB Database: ${debugInfo.databaseOk ? '✅ OK' : '❌ FAILED'}
+${debugInfo.studentCount !== undefined ? `Students: ${debugInfo.studentCount}` : ''}
+${debugInfo.databaseError ? `Error: ${debugInfo.databaseError}` : ''}
+
+API Routes: ${debugInfo.apiOk ? '✅ OK' : '❌ FAILED'}
+${debugInfo.apiResults ? debugInfo.apiResults.map(r => `${r.ok ? '✅' : '❌'} ${r.name}: ${r.status || r.error}`).join('\n') : ''}
+
+Browser: ${navigator.userAgent}
+`;
+        
+        navigator.clipboard.writeText(info).then(() => {
+            alert('✅ Debug info copied to clipboard!\n\nYou can paste this in a support ticket or share with developers.');
+        });
+    }
+
+    // Auto-run on page load
+    window.addEventListener('DOMContentLoaded', runHealthCheck);
+</script>
+
+</body>
+</html>

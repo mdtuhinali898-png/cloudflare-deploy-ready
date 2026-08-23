@@ -88,6 +88,27 @@ app.use('*', (req, res) => {
 const PORT = process.env.PORT || 5002;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/sms-database';
 
+// Connect to MongoDB with proper options
+const connectDB = async () => {
+    try {
+        await mongoose.connect(MONGODB_URI, {
+            serverSelectionTimeoutMS: 30000,
+            connectTimeoutMS: 30000,
+            socketTimeoutMS: 30000
+        });
+        console.log('✅ Connected to MongoDB successfully');
+        console.log(`📊 Database: ${mongoose.connection.name}`);
+        return true;
+    } catch (error) {
+        console.error('❌ MongoDB connection error:', error.message);
+        console.log('⚠️  Server is running but without database connection.');
+        console.log('   For local MongoDB: Start MongoDB service');
+        console.log('   For MongoDB Atlas: Add your IP to the whitelist');
+        console.log('   Connection string being used:', MONGODB_URI);
+        return false;
+    }
+};
+
 // Start the server first, then attempt MongoDB connection
 app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
@@ -95,17 +116,7 @@ app.listen(PORT, () => {
     console.log(`🔗 API: http://localhost:${PORT}/api`);
     
     // Try connecting to MongoDB (non-blocking)
-    mongoose.connect(MONGODB_URI)
-        .then(() => {
-            console.log('✅ Connected to MongoDB successfully');
-            console.log(`📊 Database: ${mongoose.connection.name}`);
-        })
-        .catch((error) => {
-            console.error('❌ MongoDB connection error:', error.message);
-            console.log('⚠️  Server is running but without database connection.');
-            console.log('   For local MongoDB: Start MongoDB service');
-            console.log('   For MongoDB Atlas: Add your IP to the whitelist');
-        });
+    connectDB();
 });
 
 // Graceful shutdown

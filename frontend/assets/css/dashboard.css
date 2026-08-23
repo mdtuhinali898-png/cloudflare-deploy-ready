@@ -328,6 +328,13 @@
     border-radius: var(--radius-lg);
     border: 1px solid var(--border-color);
     box-shadow: var(--shadow-sm);
+    position: relative;
+    overflow: hidden;
+}
+
+.chart-card canvas {
+    max-height: 300px !important;
+    width: 100% !important;
 }
 
 .chart-card h3 {
@@ -362,6 +369,7 @@
     border-radius: var(--radius-lg);
     border: 1px solid var(--border-color);
     box-shadow: var(--shadow-sm);
+    overflow-x: auto;
 }
 
 .card-header {

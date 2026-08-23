@@ -166,6 +166,7 @@ function loadStats() {
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
                 plugins: { legend: { display: false } },
                 scales: {
                     y: { beginAtZero: true, ticks: { callback: v => '৳' + v/1000 + 'k' } }
@@ -189,6 +190,7 @@ function loadStats() {
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
                 plugins: {
                     legend: { position: 'bottom', labels: { padding: 15, font: { size: 12 } } }
                 }

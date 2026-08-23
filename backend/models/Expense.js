@@ -49,7 +49,14 @@ const expenseSchema = new mongoose.Schema({
         type: String,
         trim: true
     },
-    
+
+    // Branch / Unit
+    branch: {
+        type: String,
+        trim: true,
+        default: 'UCC Pabna Main'
+    },
+
     // Amount
     amount: {
         type: Number,

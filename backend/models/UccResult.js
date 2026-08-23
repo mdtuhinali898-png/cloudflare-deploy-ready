@@ -12,6 +12,10 @@ const uccResultSchema = new mongoose.Schema({
     marksObtained: Number
   }],
   
+  correctAnswer: { type: Number, default: null },
+  wrongAnswer: { type: Number, default: null },
+  negativeMarkPerWrong: { type: Number, default: null },
+  
   totalObtained: { type: Number, required: true, default: 0 },
   percentage: { type: Number, default: 0 },
   meritPosition: { type: Number, default: 0 },

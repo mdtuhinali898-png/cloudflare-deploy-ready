@@ -8,6 +8,8 @@ const uccExamSchema = new mongoose.Schema({
   batchName: { type: String, default: '' },
   examDate: { type: Date, default: Date.now },
   totalMarks: { type: Number, required: true, default: 100 },
+  negativeMarking: { type: Boolean, default: false },
+  negativeMarkPerWrong: { type: Number, default: 0.25 },
   subjects: [{
     subjectName: { type: String, required: true },
     fullMarks: { type: Number, required: true },

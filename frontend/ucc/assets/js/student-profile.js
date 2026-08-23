@@ -3,7 +3,10 @@
 document.addEventListener('DOMContentLoaded', () => {
   'use strict';
 
-  const API_BASE_URL = 'http://localhost:5002/api';
+  const API_BASE_URL = (window.location.protocol === 'http:' || window.location.protocol === 'https:')
+    ? `${window.location.protocol}//${window.location.hostname}:${window.location.port || '5002'}/api`
+    : 'http://localhost:5002/api';
+  let currentRawStudent = null;
 
   // Format currency
   function fmt(amt) {
@@ -25,6 +28,147 @@ document.addEventListener('DOMContentLoaded', () => {
     const targetPanel = document.getElementById(`tab-${tabName}`);
     if (targetPanel) {
       targetPanel.classList.add('active');
+    }
+  };
+
+  // Close Edit Modal
+  window.closeEditModal = function() {
+    const modal = document.getElementById('editUccStudentModal');
+    if (modal) modal.style.display = 'none';
+  };
+
+  // Dynamic fee calculation preview in edit modal
+  window.calculateUccEditNetFee = function() {
+    const courseFee = parseFloat(document.getElementById('uccEditCourseFee').value) || 0;
+    const discountType = document.getElementById('uccEditDiscountType').value;
+    const discountValue = parseFloat(document.getElementById('uccEditDiscountValue').value) || 0;
+
+    let discountAmount = 0;
+    if (discountType === 'percentage') {
+      discountAmount = Math.round((courseFee * discountValue) / 100);
+    } else if (discountType === 'fixed') {
+      discountAmount = discountValue;
+    }
+
+    const netFee = Math.max(0, courseFee - discountAmount);
+    const totalPaid = currentRawStudent ? (currentRawStudent.totalPaid || 0) : 0;
+    const totalDue = Math.max(0, netFee - totalPaid);
+
+    document.getElementById('previewNetFee').textContent = fmt(netFee);
+    document.getElementById('previewTotalPaid').textContent = fmt(totalPaid);
+    document.getElementById('previewTotalDue').textContent = fmt(totalDue);
+  };
+
+  // Open Edit Modal
+  window.openEditModal = async function() {
+    if (!currentRawStudent) {
+      alert('Student data is not loaded yet');
+      return;
+    }
+
+    // Populate modal fields
+    document.getElementById('uccEditRoll').value = currentRawStudent.roll || '';
+    document.getElementById('uccEditName').value = currentRawStudent.name || '';
+    document.getElementById('uccEditPhone').value = currentRawStudent.phone || '';
+    document.getElementById('uccEditGuardianPhone').value = currentRawStudent.guardianPhone || '';
+    document.getElementById('uccEditGuardianName').value = currentRawStudent.guardianName || '';
+    document.getElementById('uccEditEmail').value = currentRawStudent.email || '';
+    document.getElementById('uccEditProgram').value = currentRawStudent.program || 'Medical';
+    document.getElementById('uccEditBranch').value = currentRawStudent.branch || 'Pabna';
+    document.getElementById('uccEditStatus').value = currentRawStudent.status || 'Active';
+    document.getElementById('uccEditCourseFee').value = currentRawStudent.courseFee || 0;
+    document.getElementById('uccEditDiscountType').value = currentRawStudent.discountType || 'none';
+    document.getElementById('uccEditDiscountValue').value = currentRawStudent.discountValue || 0;
+    document.getElementById('uccEditDiscountReference').value = currentRawStudent.discountReference || '';
+    document.getElementById('uccEditAddress').value = currentRawStudent.address || '';
+    document.getElementById('uccEditNotes').value = currentRawStudent.notes || '';
+
+    // Load available UCC batches
+    const batchSelect = document.getElementById('uccEditBatchName');
+    batchSelect.innerHTML = '<option value="">Loading batches...</option>';
+    try {
+      const res = await fetch(`${API_BASE_URL}/ucc/batches`);
+      const data = await res.json();
+      if (data.success && data.batches) {
+        batchSelect.innerHTML = '';
+        const batchNames = new Set(data.batches.map(b => b.batchName));
+        if (currentRawStudent.batchName) batchNames.add(currentRawStudent.batchName);
+
+        Array.from(batchNames).forEach(bName => {
+          const opt = document.createElement('option');
+          opt.value = bName;
+          opt.textContent = bName;
+          if (bName === currentRawStudent.batchName) opt.selected = true;
+          batchSelect.appendChild(opt);
+        });
+      } else {
+        batchSelect.innerHTML = `<option value="${currentRawStudent.batchName || 'General'}" selected>${currentRawStudent.batchName || 'General Batch'}</option>`;
+      }
+    } catch (e) {
+      console.error('Error fetching UCC batches:', e);
+      batchSelect.innerHTML = `<option value="${currentRawStudent.batchName || 'General'}" selected>${currentRawStudent.batchName || 'General Batch'}</option>`;
+    }
+
+    calculateUccEditNetFee();
+    document.getElementById('editUccStudentModal').style.display = 'flex';
+  };
+
+  // Save UCC Student Edit
+  window.saveUccEditStudent = async function(event) {
+    event.preventDefault();
+    if (!currentRawStudent) return;
+
+    const payload = {
+      roll: document.getElementById('uccEditRoll').value.trim(),
+      name: document.getElementById('uccEditName').value.trim(),
+      phone: document.getElementById('uccEditPhone').value.trim(),
+      guardianPhone: document.getElementById('uccEditGuardianPhone').value.trim(),
+      guardianName: document.getElementById('uccEditGuardianName').value.trim(),
+      email: document.getElementById('uccEditEmail').value.trim(),
+      batchName: document.getElementById('uccEditBatchName').value,
+      program: document.getElementById('uccEditProgram').value,
+      branch: document.getElementById('uccEditBranch').value.trim() || 'Pabna',
+      status: document.getElementById('uccEditStatus').value,
+      courseFee: Number(document.getElementById('uccEditCourseFee').value || 0),
+      discountType: document.getElementById('uccEditDiscountType').value,
+      discountValue: Number(document.getElementById('uccEditDiscountValue').value || 0),
+      discountReference: document.getElementById('uccEditDiscountReference').value.trim(),
+      address: document.getElementById('uccEditAddress').value.trim(),
+      notes: document.getElementById('uccEditNotes').value.trim()
+    };
+
+    const submitBtn = event.target.querySelector('button[type="submit"]');
+    if (submitBtn) submitBtn.disabled = true;
+
+    try {
+      const res = await fetch(`${API_BASE_URL}/ucc/students/${currentRawStudent._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Failed to update student profile');
+      }
+
+      closeEditModal();
+      alert('Student profile updated successfully!');
+
+      // If roll changed, update URL parameter so reloading profile works seamlessly
+      if (payload.roll && payload.roll !== currentRawStudent.roll) {
+        const newUrl = new URL(window.location.href);
+        newUrl.searchParams.set('roll', payload.roll);
+        window.history.replaceState({}, '', newUrl.toString());
+      }
+
+      // Reload profile immediately
+      await loadStudentProfile();
+    } catch (error) {
+      console.error('Error updating UCC student:', error);
+      alert(error.message || 'Error updating student profile');
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
     }
   };
 
@@ -51,6 +195,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Find exact roll match first
       const s = data.students.find(st => st.roll === roll) || data.students[0];
+      currentRawStudent = s;
 
       // Map UCC data to display format
       const student = {
@@ -149,8 +294,56 @@ document.addEventListener('DOMContentLoaded', () => {
             </tr>
           `;
         }
+
+        // Tab 4: Exam Results — from same API response
+        const examBody = document.getElementById('examHistoryBody');
+        if (examBody) {
+          if (payData.success && payData.results && payData.results.length > 0) {
+            // Only show results from Published exams
+            const published = payData.results.filter(r => {
+              const exam = r.examId;
+              return exam && exam.status === 'Completed'; // backend: Published = Completed
+            });
+
+            if (published.length > 0) {
+              examBody.innerHTML = published.map(r => {
+                const exam    = r.examId || {};
+                const name    = exam.title || '—';
+                const subject = (exam.subjects && exam.subjects.length) ? exam.subjects.map(s => s.subjectName).join(' + ') : '—';
+                const total   = exam.totalMarks || 100;
+                const obtained = r.totalObtained != null ? r.totalObtained : '—';
+                const pct     = r.percentage != null ? r.percentage + '%' : '—';
+                const rank    = r.meritPosition && r.status !== 'Absent' ? `Rank #${r.meritPosition}` : '—';
+                const rankBg  = r.meritPosition === 1 ? '#fef9c3;color:#92400e' :
+                                r.meritPosition === 2 ? '#f1f5f9;color:#475569' :
+                                r.meritPosition === 3 ? '#fdf2f8;color:#9d174d' :
+                                '#e0e7ff;color:#3730a3';
+                const statusColor = r.status === 'Pass' ? '#15803d' : r.status === 'Absent' ? '#92400e' : '#dc2626';
+
+                return `<tr>
+                  <td style="font-weight:700;">${name}</td>
+                  <td>${subject}</td>
+                  <td style="font-weight:800;color:var(--ucc-primary);">${r.status === 'Absent' ? 'Absent' : obtained}</td>
+                  <td>${r.status === 'Absent' ? '—' : total}</td>
+                  <td style="font-weight:700;color:${statusColor};">${pct}</td>
+                  <td>
+                    <span style="background:${rankBg};padding:4px 10px;border-radius:12px;font-weight:800;font-size:12px;">
+                      ${r.status === 'Absent' ? 'Absent' : rank}
+                    </span>
+                  </td>
+                </tr>`;
+              }).join('');
+            } else {
+              examBody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-muted);">No published exam results yet.</td></tr>`;
+            }
+          } else {
+            examBody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-muted);">No exam results found.</td></tr>`;
+          }
+        }
       } catch (payErr) {
-        console.warn('Failed to fetch payments:', payErr);
+        console.warn('Failed to fetch payments/results:', payErr);
+        const examBody = document.getElementById('examHistoryBody');
+        if (examBody) examBody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-muted);">Failed to load exam results.</td></tr>`;
       }
 
       // Tab 3: Materials
@@ -166,6 +359,14 @@ document.addEventListener('DOMContentLoaded', () => {
       document.getElementById('profileName').textContent = 'Error Loading Student';
       document.getElementById('profileRoll').textContent = 'ROLL: ---';
     }
+  }
+
+  // Close UCC modal on backdrop click
+  const uccEditModal = document.getElementById('editUccStudentModal');
+  if (uccEditModal) {
+    uccEditModal.addEventListener('click', (e) => {
+      if (e.target === uccEditModal) closeEditModal();
+    });
   }
 
   loadStudentProfile();

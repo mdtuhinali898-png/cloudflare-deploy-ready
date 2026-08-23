@@ -1,8 +1,10 @@
 /* ==========================================================================
-   UCC পাবনা — Merit List JS
+   UCC পাবনা — Merit List JS (Backend Connected)
    ========================================================================== */
 
-/* $ is already provided by exams.js (loaded before this file) */
+const API_BASE_ML = 'http://localhost:5002/api';
+
+/* $ is provided by exams.js (loaded before this file) */
 
 /* ── Grade CSS class ── */
 function mlGradeClass(g) {
@@ -10,17 +12,11 @@ function mlGradeClass(g) {
   return m[g] || 'ml-grade-abs';
 }
 
-/* ── Position badge ── */
-function mlPosBadge(pos) {
-  if (!pos) return `<span class="ml-pos ml-pos-abs">ABS</span>`;
-  const cls = pos===1?'ml-pos-1':pos===2?'ml-pos-2':pos===3?'ml-pos-3':'ml-pos-num';
-  return `<span class="ml-pos ${cls}">${pos}</span>`;
-}
-
 /* ── Populate exam dropdown ── */
-function populateExamDropdown() {
+async function populateExamDropdown() {
   const exams = (window.EXAM_DEMO||{}).exams||[];
   const sel   = $('mlExamSelect');
+  if (!sel) return;
   sel.innerHTML = '<option value="">-- Exam বেছে নিন --</option>';
   exams.forEach(e => {
     sel.insertAdjacentHTML('beforeend',
@@ -30,9 +26,11 @@ function populateExamDropdown() {
 
   /* quick-access chips (Published exams only) */
   const chips = $('mlSelectorChips');
-  chips.innerHTML = exams.filter(e => e.status==='Published').map(e =>
-    `<span class="ml-exam-chip" data-id="${e.id}" onclick="quickSelect('${e.id}')">${e.name} · ${e.batch}</span>`
-  ).join('');
+  if (chips) {
+    chips.innerHTML = exams.filter(e => e.status==='Published').map(e =>
+      `<span class="ml-exam-chip" data-id="${e.id}" onclick="quickSelect('${e.id}')">${e.name} · ${e.batch}</span>`
+    ).join('');
+  }
 
   /* auto-load from URL param */
   const urlExam = new URLSearchParams(window.location.search).get('exam');
@@ -47,14 +45,41 @@ function quickSelect(id) {
 }
 
 /* ── Main: Load Merit List ── */
-function loadMeritList() {
+async function loadMeritList() {
   const examId = $('mlExamSelect').value;
-  if (!examId) { $('mlContent').style.display='none'; $('mlActionBar').style.display='none'; $('mlEmpty').style.display='none'; return; }
+  if (!examId) {
+    $('mlContent').style.display    = 'none';
+    $('mlActionBar').style.display  = 'none';
+    $('mlEmpty').style.display      = 'none';
+    return;
+  }
 
-  const exam    = ((window.EXAM_DEMO||{}).exams||[]).find(e => e.id===examId);
-  const results = ((window.EXAM_DEMO||{}).results||[]).filter(r => r.examId===examId);
-
+  const exam = ((window.EXAM_DEMO||{}).exams||[]).find(e => e.id===examId);
   if (!exam) return;
+
+  /* Fix 2: সবসময় backend থেকে fresh data আনো — local cache depend করো না */
+  let results = [];
+  try {
+    const res = await fetch(`${API_BASE_ML}/ucc/results/merit-list/${examId}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && data.meritList) {
+        results = data.meritList.map(r => ({
+          examId,
+          roll:       r.studentRoll,
+          name:       r.studentName,
+          obtained:   r.totalObtained || 0,
+          correct:    r.correctAnswer != null ? r.correctAnswer : null,
+          wrong:      r.wrongAnswer   != null ? r.wrongAnswer   : null,
+          isAbsent:   r.status === 'Absent',
+          percentage: r.percentage || 0,
+          /* Fix 3: backend এর meritPosition ব্যবহার করো, frontend recalculate নয় */
+          position:   r.meritPosition || null,
+          grade:      window.getGrade ? window.getGrade(r.percentage || 0) : 'F'
+        }));
+      }
+    }
+  } catch (e) { /* ignore */ }
 
   if (!results.length) {
     $('mlContent').style.display    = 'none';
@@ -63,16 +88,12 @@ function loadMeritList() {
     return;
   }
 
-  /* calculate positions */
-  window.calcPositions(results, exam.total);
-
   /* sort: present first by position, absent last */
-  const sorted = [...results]
-    .sort((a,b) => {
-      if (a.isAbsent && !b.isAbsent) return 1;
-      if (!a.isAbsent && b.isAbsent) return -1;
-      return (a.position||999) - (b.position||999);
-    });
+  const sorted = [...results].sort((a, b) => {
+    if (a.isAbsent && !b.isAbsent) return 1;
+    if (!a.isAbsent && b.isAbsent) return -1;
+    return (a.position || 999) - (b.position || 999);
+  });
 
   renderExamInfo(exam);
   renderSummary(results, exam);
@@ -86,7 +107,7 @@ function loadMeritList() {
 
   /* sync chip active state */
   document.querySelectorAll('.ml-exam-chip').forEach(c =>
-    c.classList.toggle('active', c.dataset.id===examId)
+    c.classList.toggle('active', c.dataset.id === examId)
   );
 }
 
@@ -130,38 +151,81 @@ function renderSummary(results, exam) {
 }
 
 /* ── Merit Table ── */
+function mlPctClass(pct) {
+  if (pct >= 80) return 'excellent';
+  if (pct >= 60) return 'good';
+  if (pct >= 40) return 'average';
+  return 'poor';
+}
+
 function renderTable(sorted, exam) {
-  $('mlTableBody').innerHTML = sorted.map(r => {
+  const active = sorted.filter(r => !r.isAbsent);
+  const highest = active.length ? Math.max(...active.map(r => r.obtained)) : 0;
+
+  $('mlTableBody').innerHTML = sorted.map((r, i) => {
     const rowCls = r.isAbsent ? 'ml-row-absent' : r.position===1?'ml-row-top1':r.position===2?'ml-row-top2':r.position===3?'ml-row-top3':'';
+    const pct = r.isAbsent ? 0 : (r.percentage || 0);
+    const pctBarCls = mlPctClass(pct);
+    const marksCls = !r.isAbsent && r.obtained === highest && highest > 0 ? 'ml-marks-val top-mark' : 'ml-marks-val';
+
+    const rankCls = r.isAbsent ? 'ml-rank-abs' : r.position===1?'ml-rank-1':r.position===2?'ml-rank-2':r.position===3?'ml-rank-3':'ml-rank-n';
+    const rankLabel = r.isAbsent ? 'ABS' : r.position;
+
     const statusHtml = r.isAbsent
-      ? '<span class="ml-grade ml-grade-abs">Absent</span>'
+      ? '<span class="ml-status ml-status-abs"><i class="fas fa-minus-circle"></i> Absent</span>'
       : exam.pass
         ? (r.obtained >= exam.pass
-            ? '<span class="ml-pass">✓ Pass</span>'
-            : '<span class="ml-fail">✗ Fail</span>')
+            ? '<span class="ml-status ml-status-pass"><i class="fas fa-check-circle"></i> Pass</span>'
+            : '<span class="ml-status ml-status-fail"><i class="fas fa-times-circle"></i> Fail</span>')
         : '—';
+
+    const correctVal = r.isAbsent ? '—' : (r.correct != null && r.correct !== '' ? r.correct : '—');
+    const wrongVal   = r.isAbsent ? '—' : (r.wrong   != null && r.wrong   !== '' ? r.wrong   : '—');
+
     return `<tr class="${rowCls}">
-      <td class="tc">${mlPosBadge(r.position)}</td>
-      <td style="font-weight:800;color:#4f46e5;">${r.roll}</td>
-      <td style="font-weight:600;">${r.name}</td>
-      <td class="tc" style="font-weight:800;font-size:16px;">${r.isAbsent?'—':r.obtained}</td>
-      <td class="tc" style="color:#64748b;">${exam.total}</td>
-      <td class="tc" style="font-weight:700;">${r.isAbsent?'—':r.percentage+'%'}</td>
+      <td class="tc"><span class="ml-rank ${rankCls}">${rankLabel}</span></td>
+      <td>
+        <div class="ml-student-cell">
+          <span class="ml-student-name">${r.name}</span>
+          <span class="ml-student-roll">Roll ${r.roll}</span>
+        </div>
+      </td>
+      <td class="tc">
+        <span class="${marksCls}">${r.isAbsent ? '—' : r.obtained}</span>
+        <span class="ml-marks-total"> / ${exam.total}</span>
+      </td>
+      <td class="tc" style="font-weight:700;color:#059669;">${correctVal}</td>
+      <td class="tc" style="font-weight:700;color:#ef4444;">${wrongVal}</td>
+      <td class="tc">
+        <div class="ml-pct-cell">
+          <span class="ml-pct-text">${r.isAbsent ? '—' : pct+'%'}</span>
+          <div class="ml-pct-bar"><div class="ml-pct-fill ${pctBarCls}" style="width:${pct}%;"></div></div>
+        </div>
+      </td>
       <td class="tc"><span class="ml-grade ${mlGradeClass(r.grade)}">${r.grade}</span></td>
       <td class="tc">${statusHtml}</td>
     </tr>`;
   }).join('');
 
   /* tfoot */
-  const active  = sorted.filter(r=>!r.isAbsent);
-  const avg     = active.length ? (active.reduce((s,r)=>s+r.obtained,0)/active.length).toFixed(1) : '—';
+  const avg = active.length ? (active.reduce((s,r)=>s+r.obtained,0)/active.length).toFixed(1) : '—';
+  const avgPct = active.length && exam.total ? Math.round(Number(avg)/exam.total*100) : 0;
   $('mlTableFoot').innerHTML = `
     <tr>
-      <td colspan="3" style="text-align:right;color:#374151;">Class Average:</td>
+      <td colspan="2" style="text-align:right;color:#374151;font-size:12px;">
+        <i class="fas fa-chart-line" style="color:#4f46e5;margin-right:4px;"></i> Class Average
+      </td>
       <td class="tc" style="color:#4f46e5;font-size:15px;">${avg}</td>
       <td></td>
-      <td class="tc" style="color:#4f46e5;">${active.length?Math.round(Number(avg)/exam.total*100)+'%':'—'}</td>
-      <td colspan="2"></td>
+      <td></td>
+      <td class="tc">
+        <div class="ml-pct-cell">
+          <span class="ml-pct-text" style="color:#4f46e5;">${avgPct}%</span>
+          <div class="ml-pct-bar"><div class="ml-pct-fill good" style="width:${avgPct}%;"></div></div>
+        </div>
+      </td>
+      <td></td>
+      <td></td>
     </tr>`;
 }
 
@@ -173,45 +237,94 @@ function renderFooter(exam) {
 }
 
 /* ── Export CSV ── */
-function exportMeritCSV() {
+async function exportMeritCSV() {
   const examId = $('mlExamSelect').value;
   if (!examId) return;
-  const exam    = ((window.EXAM_DEMO||{}).exams||[]).find(e=>e.id===examId);
-  const results = ((window.EXAM_DEMO||{}).results||[]).filter(r=>r.examId===examId);
-  window.calcPositions(results, exam.total);
+  const exam = ((window.EXAM_DEMO||{}).exams||[]).find(e => e.id===examId);
+  let results = [];
 
-  const sorted  = [...results].sort((a,b) => (a.position||999)-(b.position||999));
-  const header  = ['Position','Roll','Name','Obtained','Total Marks','%','Grade','Status'];
-  const rows    = sorted.map(r => [
-    r.isAbsent?'—':r.position,
-    r.roll, r.name,
-    r.isAbsent?'ABS':r.obtained,
+  try {
+    const res = await fetch(`${API_BASE_ML}/ucc/results/merit-list/${examId}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && data.meritList) {
+        results = data.meritList.map(r => ({
+          roll:      r.studentRoll,
+          name:      r.studentName,
+          obtained:  r.totalObtained || 0,
+          correct:   r.correctAnswer != null ? r.correctAnswer : '',
+          wrong:     r.wrongAnswer   != null ? r.wrongAnswer   : '',
+          isAbsent:  r.status === 'Absent',
+          percentage: r.percentage || 0,
+          position:  r.meritPosition || null,
+          grade:     window.getGrade ? window.getGrade(r.percentage || 0) : 'F'
+        }));
+      }
+    }
+  } catch (e) { /* ignore */ }
+
+  if (!results.length) return;
+
+  const sorted = [...results].sort((a, b) => {
+    if (a.isAbsent && !b.isAbsent) return 1;
+    if (!a.isAbsent && b.isAbsent) return -1;
+    return (a.position || 999) - (b.position || 999);
+  });
+
+  const header = ['Position','Roll','Name','Obtained','Total Marks','Correct','Wrong','%','Grade','Status'];
+  const rows   = sorted.map(r => [
+    r.isAbsent ? '—' : r.position,
+    r.roll,
+    r.name,
+    r.isAbsent ? 'ABS' : r.obtained,
     exam.total,
-    r.isAbsent?'—':r.percentage+'%',
+    r.isAbsent ? '—' : (r.correct !== '' ? r.correct : '—'),
+    r.isAbsent ? '—' : (r.wrong   !== '' ? r.wrong   : '—'),
+    r.isAbsent ? '—' : r.percentage + '%',
     r.grade,
-    r.isAbsent?'Absent':(exam.pass?(r.obtained>=exam.pass?'Pass':'Fail'):'—')
+    r.isAbsent ? 'Absent' : (exam.pass ? (r.obtained >= exam.pass ? 'Pass' : 'Fail') : '—')
   ]);
 
-  const csv = [header,...rows]
-    .map(row => row.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(','))
+  const csv = [header, ...rows]
+    .map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))
     .join('\n');
 
   const a = document.createElement('a');
-  a.href  = URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'}));
+  a.href     = URL.createObjectURL(new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' }));
   a.download = `MeritList_${exam.name.replace(/\s+/g,'_')}_${exam.batch.replace(/\s+/g,'_')}.csv`;
   a.click();
   URL.revokeObjectURL(a.href);
 
   const t = $('exToast');
-  if (t) { t.textContent='CSV downloaded!'; t.className='ex-toast'; setTimeout(()=>t.className='ex-toast hidden',3000); }
+  if (t) { t.textContent = 'CSV downloaded!'; t.className = 'ex-toast'; setTimeout(() => t.className = 'ex-toast hidden', 3000); }
 }
 
 /* ── WhatsApp Share ── */
-function shareWhatsApp() {
+async function shareWhatsApp() {
   const examId = $('mlExamSelect').value;
   if (!examId) return;
   const exam    = ((window.EXAM_DEMO||{}).exams||[]).find(e=>e.id===examId);
-  const results = ((window.EXAM_DEMO||{}).results||[]).filter(r=>r.examId===examId&&!r.isAbsent);
+  let results = ((window.EXAM_DEMO||{}).results||[]).filter(r=>r.examId===examId&&!r.isAbsent);
+
+  if (!results.length) {
+    try {
+      const res = await fetch(`${API_BASE_ML}/ucc/results/merit-list/${examId}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.meritList) {
+          results = data.meritList.filter(r => r.status !== 'Absent').map(r => ({
+            roll: r.studentRoll,
+            name: r.studentName,
+            obtained: r.totalObtained || 0,
+            percentage: r.percentage || 0,
+            position: r.meritPosition || null,
+            grade: window.getGrade ? window.getGrade(r.percentage || 0) : 'F'
+          }));
+        }
+      }
+    } catch (e) { /* ignore */ }
+  }
+
   window.calcPositions(results, exam.total);
 
   const top3 = [...results].sort((a,b)=>(a.position||999)-(b.position||999)).slice(0,3);
@@ -227,7 +340,7 @@ function shareWhatsApp() {
 }
 
 /* ── Sidebar ── */
-function initMeritList() {
+async function initMeritList() {
   const user = JSON.parse(sessionStorage.getItem('uccAdminUser')||'{}');
   if (user.username) $('uccAdminName').textContent = user.username;
   document.getElementById('logoutBtn')?.addEventListener('click', ()=>{
@@ -235,6 +348,10 @@ function initMeritList() {
     window.location.href='admin-login.html';
   });
 
+  /* Wait for exams data to load from backend before rendering */
+  if (!window.EXAM_DEMO || !window.EXAM_DEMO.exams || !window.EXAM_DEMO.exams.length) {
+    await loadExamsFromApi();
+  }
   populateExamDropdown();
 }
 

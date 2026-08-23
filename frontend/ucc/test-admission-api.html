@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test Admission API</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #333;
+      border-bottom: 3px solid #6366f1;
+      padding-bottom: 10px;
+    }
+    .test-section {
+      margin: 30px 0;
+      padding: 20px;
+      background: #f8f9fa;
+      border-radius: 8px;
+      border-left: 4px solid #6366f1;
+    }
+    button {
+      background: #6366f1;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      margin: 5px;
+      transition: all 0.2s;
+    }
+    button:hover {
+      background: #4f46e5;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(99, 102, 241, 0.3);
+    }
+    button:disabled {
+      background: #cbd5e1;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .result {
+      margin-top: 15px;
+      padding: 15px;
+      border-radius: 6px;
+      white-space: pre-wrap;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .success {
+      background: #dcfce7;
+      border: 1px solid #86efac;
+      color: #166534;
+    }
+    .error {
+      background: #fee2e2;
+      border: 1px solid #fca5a5;
+      color: #991b1b;
+    }
+    .info {
+      background: #dbeafe;
+      border: 1px solid #93c5fd;
+      color: #1e40af;
+    }
+    .status {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 700;
+      margin-left: 10px;
+    }
+    .status.online {
+      background: #dcfce7;
+      color: #15803d;
+    }
+    .status.offline {
+      background: #fee2e2;
+      color: #b91c1c;
+    }
+    input {
+      width: 100%;
+      padding: 10px;
+      margin: 8px 0;
+      border: 2px solid #e2e8f0;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    input:focus {
+      outline: none;
+      border-color: #6366f1;
+    }
+    label {
+      font-weight: 600;
+      color: #475569;
+      display: block;
+      margin-top: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🧪 Admission API Tester</h1>
+    
+    <div class="test-section">
+      <h3>1. Backend Status <span id="backendStatus" class="status offline">Checking...</span></h3>
+      <button onclick="checkBackend()">🔄 Check Backend</button>
+      <div id="backendResult" class="result info" style="display:none;"></div>
+    </div>
+
+    <div class="test-section">
+      <h3>2. Load Batches</h3>
+      <button onclick="loadBatches()">📚 Load All Batches</button>
+      <div id="batchesResult" class="result info" style="display:none;"></div>
+    </div>
+
+    <div class="test-section">
+      <h3>3. Get Next Roll Number</h3>
+      <label>Batch Name:</label>
+      <input type="text" id="batchNameInput" value="Humanities BN 2" placeholder="Enter batch name">
+      <button onclick="getNextRoll()">🔢 Get Next Roll</button>
+      <div id="rollResult" class="result info" style="display:none;"></div>
+    </div>
+
+    <div class="test-section">
+      <h3>4. Submit Test Admission</h3>
+      <label>Student Name:</label>
+      <input type="text" id="studentName" value="Test Student" placeholder="Student name">
+      
+      <label>Phone:</label>
+      <input type="text" id="studentPhone" value="01712345678" placeholder="Student phone">
+      
+      <label>Guardian Phone:</label>
+      <input type="text" id="guardianPhone" value="01812345678" placeholder="Guardian phone">
+      
+      <label>Batch Name:</label>
+      <input type="text" id="admissionBatch" value="Humanities BN 2" placeholder="Batch name">
+      
+      <button onclick="submitTestAdmission()">✅ Submit Test Admission</button>
+      <div id="admissionResult" class="result info" style="display:none;"></div>
+    </div>
+
+    <div class="test-section">
+      <h3>ℹ️ Instructions</h3>
+      <p>
+        <strong>Prerequisites:</strong><br>
+        1. Backend must be running on <code>http://localhost:5002</code><br>
+        2. MongoDB must be connected<br>
+        3. Batches should exist in database<br><br>
+        
+        <strong>Testing Steps:</strong><br>
+        1. Click "Check Backend" - should show ✅ Online<br>
+        2. Click "Load All Batches" - should list available batches<br>
+        3. Click "Get Next Roll" - should return next roll number<br>
+        4. Click "Submit Test Admission" - should create student & show receipt data<br>
+      </p>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE_URL = 'http://localhost:5002/api';
+
+    function showResult(elementId, message, type) {
+      const el = document.getElementById(elementId);
+      el.textContent = message;
+      el.className = `result ${type}`;
+      el.style.display = 'block';
+    }
+
+    async function checkBackend() {
+      const statusEl = document.getElementById('backendStatus');
+      statusEl.textContent = 'Checking...';
+      statusEl.className = 'status offline';
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/ucc/batches`);
+        const data = await response.json();
+        
+        if (response.ok && data.success) {
+          statusEl.textContent = '✅ Online';
+          statusEl.className = 'status online';
+          showResult('backendResult', 
+            `✅ Backend is running!\n\nResponse:\n${JSON.stringify(data, null, 2)}`,
+            'success');
+        } else {
+          throw new Error('Backend returned error');
+        }
+      } catch (error) {
+        statusEl.textContent = '❌ Offline';
+        statusEl.className = 'status offline';
+        showResult('backendResult', 
+          `❌ Backend connection failed!\n\nError: ${error.message}\n\nPlease check:\n- Backend is running (npm start in /backend)\n- Running on port 5002\n- MongoDB is connected`,
+          'error');
+      }
+    }
+
+    async function loadBatches() {
+      try {
+        showResult('batchesResult', '⏳ Loading batches...', 'info');
+        
+        const response = await fetch(`${API_BASE_URL}/ucc/batches`);
+        const data = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${data.message || 'Unknown error'}`);
+        }
+        
+        if (data.success && data.batches) {
+          let output = `✅ Found ${data.batches.length} batch(es):\n\n`;
+          data.batches.forEach((batch, index) => {
+            output += `${index + 1}. ${batch.batchName}\n`;
+            output += `   Code: ${batch.batchCode}\n`;
+            output += `   Program: ${batch.program}\n`;
+            output += `   Fee: ৳${batch.baseFee}\n`;
+            output += `   Enrolled: ${batch.enrolledCount}/${batch.capacity}\n`;
+            output += `   Next Roll: ${batch.nextRollNumber}\n\n`;
+          });
+          showResult('batchesResult', output, 'success');
+        } else {
+          throw new Error('Invalid response format');
+        }
+      } catch (error) {
+        showResult('batchesResult', `❌ Error loading batches:\n\n${error.message}`, 'error');
+      }
+    }
+
+    async function getNextRoll() {
+      try {
+        const batchName = document.getElementById('batchNameInput').value.trim();
+        if (!batchName) {
+          return alert('Please enter a batch name');
+        }
+
+        showResult('rollResult', '⏳ Fetching next roll...', 'info');
+        
+        const response = await fetch(`${API_BASE_URL}/ucc/admission/next-roll/${encodeURIComponent(batchName)}`);
+        const data = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${data.message || 'Unknown error'}`);
+        }
+        
+        if (data.success) {
+          const output = `✅ Next Roll Information:\n\n` +
+            `Batch Name: ${data.batchName}\n` +
+            `Next Roll: ${String(data.nextRoll).padStart(3, '0')}\n` +
+            `Current Students: ${data.studentCount}\n\n` +
+            `You can use roll number: ${String(data.nextRoll).padStart(3, '0')}`;
+          showResult('rollResult', output, 'success');
+        } else {
+          throw new Error(data.message || 'Failed to get next roll');
+        }
+      } catch (error) {
+        showResult('rollResult', `❌ Error:\n\n${error.message}`, 'error');
+      }
+    }
+
+    async function submitTestAdmission() {
+      try {
+        const name = document.getElementById('studentName').value.trim();
+        const phone = document.getElementById('studentPhone').value.trim();
+        const guardian = document.getElementById('guardianPhone').value.trim();
+        const batchName = document.getElementById('admissionBatch').value.trim();
+
+        if (!name || !phone || !guardian || !batchName) {
+          return alert('Please fill all required fields');
+        }
+
+        showResult('admissionResult', '⏳ Submitting admission...', 'info');
+
+        const payload = {
+          roll: '',  // Let backend auto-generate
+          name,
+          phone,
+          guardianPhone: guardian,
+          guardianName: 'Test Guardian',
+          batchName,
+          courseFee: 12000,
+          discountType: 'none',
+          discountValue: 0,
+          discountReference: '',
+          initialPayment: 0,
+          paymentMethod: 'Cash',
+          transactionId: '',
+          collector: 'API Tester'
+        };
+
+        const response = await fetch(`${API_BASE_URL}/ucc/admission`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+          throw new Error(result.message || `HTTP ${response.status}`);
+        }
+
+        const student = result.student;
+        const output = `✅ Admission Successful!\n\n` +
+          `Student ID: ${student.studentId}\n` +
+          `Roll: ${student.roll}\n` +
+          `Name: ${student.name}\n` +
+          `Batch: ${student.batchName}\n` +
+          `Phone: ${student.phone}\n` +
+          `Course Fee: ৳${student.courseFee}\n` +
+          `Net Fee: ৳${student.finalFee}\n` +
+          `Total Due: ৳${student.totalDue}\n` +
+          `Status: ${student.paymentStatus}\n\n` +
+          `📄 Receipt data populated successfully!\n` +
+          `✅ This confirms the API is working correctly.`;
+
+        showResult('admissionResult', output, 'success');
+      } catch (error) {
+        showResult('admissionResult', `❌ Admission Failed:\n\n${error.message}\n\nPlease check:\n- Backend logs\n- MongoDB connection\n- Batch exists in database`, 'error');
+      }
+    }
+
+    // Auto-check backend on load
+    window.addEventListener('DOMContentLoaded', () => {
+      checkBackend();
+    });
+  </script>
+</body>
+</html>

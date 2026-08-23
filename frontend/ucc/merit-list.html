@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="bn">
 <head>
   <meta charset="UTF-8">
@@ -32,8 +32,17 @@
         <nav class="sidebar-nav">
     <a href="dashboard.html"    class="nav-item"><i class="fas fa-tachometer-alt"></i><span>Dashboard</span><span class="nav-tooltip">Dashboard</span></a>
     <a href="students.html"     class="nav-item"><i class="fas fa-users"></i><span>Students</span><span class="nav-tooltip">Students</span></a>
+    <a href="admission.html"    class="nav-item"><i class="fas fa-user-plus"></i><span>Admission</span><span class="nav-tooltip">Admission</span></a>
+    <a href="payment.html"      class="nav-item"><i class="fas fa-money-bill-wave"></i><span>Payment</span><span class="nav-tooltip">Payment</span></a>
+    <a href="finance.html"      class="nav-item"><i class="fas fa-chart-line"></i><span>Finance</span><span class="nav-tooltip">Finance</span></a>
+    <a href="expenses.html"     class="nav-item"><i class="fas fa-shopping-cart"></i><span>Expenses</span><span class="nav-tooltip">Expenses</span></a>
     <a href="exams.html"        class="nav-item active"><i class="fas fa-pencil-alt"></i><span>Exams</span><span class="nav-tooltip">Exams</span></a>
+    <a href="distribution.html" class="nav-item"><i class="fas fa-book-open"></i><span>Distribution</span><span class="nav-tooltip">Distribution</span></a>
     <a href="batches.html"      class="nav-item"><i class="fas fa-layer-group"></i><span>Batches</span><span class="nav-tooltip">Batches</span></a>
+    <a href="batch-transfer.html" class="nav-item">
+      <i class="fas fa-exchange-alt"></i><span>Batch Transfer</span>
+      <span class="nav-tooltip">Batch Transfer</span>
+    </a>
     <a href="reports.html"      class="nav-item"><i class="fas fa-chart-bar"></i><span>Reports</span><span class="nav-tooltip">Reports</span></a>
     <a href="settings.html"     class="nav-item"><i class="fas fa-cog"></i><span>Settings</span><span class="nav-tooltip">Settings</span></a>
   </nav>
@@ -107,7 +116,7 @@
         </div>
         <div class="ml-print-branch-details">
           <h1>UCC পাবনা শাখা</h1>
-          <p class="sub-motto">স্বপ্ন যেখানে সার্থক · এডওয়ার্ড কলেজ সংলগ্ন, রাধানগর, পাবনা</p>
+          <p class="sub-motto">স্বপ্ন যেখানে সার্থক · এড워য়ার্ড কলেজ সংলগ্ন, রাধানগর, পাবনা</p>
           <p class="sub-contacts"><i class="fas fa-phone-alt"></i> 01312-427799, 01775-932188 &nbsp;|&nbsp; <i class="fas fa-globe"></i> www.uccpabna.edu.bd</p>
         </div>
       </div>
@@ -127,14 +136,14 @@
       <table class="ml-table" id="mlTable">
         <thead>
           <tr>
-            <th class="ml-th-pos">Position</th>
-            <th>Roll</th>
-            <th>Student Name</th>
-            <th class="ml-th-marks">Obtained</th>
-            <th class="ml-th-marks">Total</th>
-            <th class="ml-th-marks">%</th>
+            <th class="ml-th-pos">Rank</th>
+            <th>Student</th>
+            <th class="ml-th-marks">Marks</th>
+            <th class="ml-th-correct">Correct</th>
+            <th class="ml-th-wrong">Wrong</th>
+            <th class="ml-th-pct">Percentage</th>
             <th class="ml-th-grade">Grade</th>
-            <th>Status</th>
+            <th class="ml-th-status">Status</th>
           </tr>
         </thead>
         <tbody id="mlTableBody"></tbody>
@@ -166,7 +175,7 @@
   <!-- Empty state -->
   <div class="ml-empty" id="mlEmpty" style="display:none;">
     <i class="fas fa-clipboard-list"></i>
-    <p>এই exam-এ এখনো কোনো mark entry হয়নি।</p>
+    <p>এই exam-এ এখনো কোনো mark entry হয়নি。</p>
     <a href="mark-entry.html" class="btn btn-primary" style="margin-top:14px;padding:10px 24px;">
       <i class="fas fa-pen"></i> Mark Entry করুন
     </a>
@@ -176,11 +185,11 @@
 </main>
 
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
-<div class="ex-toast hidden" id="exToast"></div>
+<div class="ex-toast hidden" id="exToast">
 
 <script src="assets/js/sidebar.js?v=2"></script>
 <script src="assets/js/exams.js"></script>
 <script src="assets/js/merit-list.js"></script>
+
 </body>
 </html>
-

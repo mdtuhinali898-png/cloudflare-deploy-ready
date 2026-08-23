@@ -164,7 +164,9 @@
     // -----------------------------
     // Sidebar student search (UCC)
     // -----------------------------
-    const API_BASE_URL = 'http://localhost:5002/api';
+    const API_BASE_URL = (window.location.protocol === 'http:' || window.location.protocol === 'https:')
+      ? (window.location.port === '5002' ? '/api' : `${window.location.protocol}//${window.location.hostname}:5002/api`)
+      : 'http://localhost:5002/api';
     const sidebarSearchInput = document.getElementById('sidebarSearchInput');
     const sidebarSearchResults = document.getElementById('sidebarSearchResults');
 

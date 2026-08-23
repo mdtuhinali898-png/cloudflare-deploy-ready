@@ -4,7 +4,7 @@
    ========================================================================== */
 document.addEventListener('DOMContentLoaded', () => {
   'use strict';
-  const API = 'http://localhost:5002/api';
+  const API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:5002/api' : '/api';
   let batches  = [];
   let students = [];
   let charts   = {};
@@ -87,7 +87,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /* ── Stats helper ── */
   function stats(batchName) {
-    const bs = students.filter(s => s.batchName === batchName || s.batch === batchName);
+    const bNameLower = (batchName || '').toLowerCase().trim();
+    const bs = students.filter(s => 
+      (s.batchName || '').toLowerCase().trim() === bNameLower || 
+      (s.batch || '').toLowerCase().trim() === bNameLower
+    );
     const total     = bs.length;
     const expected  = bs.reduce((a, s) => a + (s.finalFee || s.courseFee || s.netFee || 0), 0);
     const collected = bs.reduce((a, s) => a + (s.totalPaid || 0), 0);
@@ -195,10 +199,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /* ── Charts ── */
   function renderCharts() {
-    const names = batches.slice(0, 8).map(b => b.batchName.replace('-2026', '').replace('-', ' '));
+    const cleanName = n => n.replace(/-\d{4}$/, '').replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    const names = batches.slice(0, 8).map(b => cleanName(b.batchName));
     const counts = batches.slice(0, 8).map(b => stats(b.batchName).total);
     const cols   = batches.slice(0, 8).map(b => stats(b.batchName).collected);
     const dues   = batches.slice(0, 8).map(b => stats(b.batchName).due);
+
+    const labelFont = { family: "'Inter', sans-serif", weight: '600', size: 11 };
+    const tickStyle = { font: { family: "'Inter', sans-serif", size: 10, weight: '500' }, color: '#64748b', padding: 6 };
+    const gridStyle = { color: '#f1f5f9' };
 
     /* Enrollment chart */
     if (charts.e) charts.e.destroy();
@@ -211,14 +220,23 @@ document.addEventListener('DOMContentLoaded', () => {
           datasets: [{
             label: 'Students',
             data: counts,
-            backgroundColor: '#6366f1',
-            borderRadius: 5
+            backgroundColor: 'rgba(99,102,241,.85)',
+            hoverBackgroundColor: '#4f46e5',
+            borderRadius: 6,
+            borderSkipped: false,
+            barPercentage: 0.65
           }]
         },
         options: {
           responsive: true, maintainAspectRatio: false,
-          plugins: { legend: { display: false } },
-          scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+          plugins: {
+            legend: { display: false },
+            tooltip: { backgroundColor: '#0f172a', titleFont: { ...labelFont, size: 12 }, bodyFont: { size: 11 }, cornerRadius: 8, padding: 10 }
+          },
+          scales: {
+            x: { ticks: { ...tickStyle, maxRotation: 45, minRotation: 0 }, grid: { display: false } },
+            y: { beginAtZero: true, ticks: { ...tickStyle, stepSize: 1 }, grid: gridStyle, border: { display: false } }
+          }
         }
       });
     }
@@ -232,16 +250,19 @@ document.addEventListener('DOMContentLoaded', () => {
         data: {
           labels: names,
           datasets: [
-            { label: 'Collected (৳)', data: cols, backgroundColor: '#10b981', borderRadius: 5 },
-            { label: 'Due (৳)',       data: dues, backgroundColor: '#ef4444', borderRadius: 5 }
+            { label: 'Collected (৳)', data: cols, backgroundColor: 'rgba(16,185,129,.85)', hoverBackgroundColor: '#059669', borderRadius: 6, borderSkipped: false, barPercentage: 0.65 },
+            { label: 'Due (৳)',       data: dues, backgroundColor: 'rgba(239,68,68,.85)',  hoverBackgroundColor: '#dc2626', borderRadius: 6, borderSkipped: false, barPercentage: 0.65 }
           ]
         },
         options: {
           responsive: true, maintainAspectRatio: false,
-          plugins: { legend: { position: 'bottom' } },
+          plugins: {
+            legend: { position: 'bottom', labels: { font: labelFont, color: '#475569', usePointStyle: true, pointStyle: 'rectRounded', padding: 16 } },
+            tooltip: { backgroundColor: '#0f172a', titleFont: { ...labelFont, size: 12 }, bodyFont: { size: 11 }, cornerRadius: 8, padding: 10, callbacks: { label: ctx => ' ' + ctx.dataset.label + ': ৳' + ctx.raw.toLocaleString('en-IN') } }
+          },
           scales: {
-            x: { stacked: true },
-            y: { stacked: true, ticks: { callback: v => '৳' + (v/1000) + 'k' } }
+            x: { stacked: true, ticks: { ...tickStyle, maxRotation: 45, minRotation: 0 }, grid: { display: false } },
+            y: { stacked: true, ticks: { ...tickStyle, callback: v => '৳' + (v >= 1000 ? (v / 1000) + 'k' : v) }, grid: gridStyle, border: { display: false } }
           }
         }
       });
@@ -261,6 +282,9 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('batchFee').value       = b.baseFee || '';
     document.getElementById('batchAdmissionFee').value = b.admissionFee || '';
     document.getElementById('batchCoordinator').value  = b.coordinator || '';
+    if (document.getElementById('batchNextRoll')) {
+      document.getElementById('batchNextRoll').value  = b.nextRollNumber || 1;
+    }
     document.getElementById('batchStatus').value    = b.status || 'Active';
     document.getElementById('batchNotes').value     = b.notes || '';
     document.getElementById('batchModal').classList.add('active');
@@ -281,7 +305,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const b = batches.find(x => x._id === id);
     if (!b) return;
     const s  = stats(b.batchName);
-    const bs = students.filter(x => x.batchName === b.batchName || x.batch === b.batchName);
+    const bs = students.filter(x => x.batchName === b.batchName || x.batch === b.batchName)
+      .sort((a, b) => {
+        const rA = parseInt(String(a.roll || a.studentId || '0').replace(/[^0-9]/g, ''), 10) || 0;
+        const rB = parseInt(String(b.roll || b.studentId || '0').replace(/[^0-9]/g, ''), 10) || 0;
+        return rA - rB;
+      });
     const rate  = parseFloat(s.rate);
     const color = rate >= 80 ? '#059669' : rate >= 50 ? '#d97706' : '#dc2626';
     const healthCls = rate >= 80 ? '' : rate >= 50 ? 'mid' : 'low';
@@ -331,45 +360,68 @@ document.addEventListener('DOMContentLoaded', () => {
 
         <!-- KPI Cards -->
         <div class="detail-kpis">
-          <div>
-            <small>Students</small>
-            <b>${s.total} / ${b.capacity || 0}</b>
+          <div class="kpi-card" style="background:linear-gradient(135deg,#eef2ff,#e0e7ff);">
+            <div class="kpi-icon" style="background:#4f46e5;color:#fff;"><i class="fas fa-users"></i></div>
+            <div class="kpi-info">
+              <small style="color:#4338ca;font-size:10px;">Students</small>
+              <b style="color:#312e81;font-size:18px;">${s.total} / ${b.capacity || 0}</b>
+            </div>
           </div>
-          <div>
-            <small>Course Fee</small>
-            <b>৳${(b.baseFee || 0).toLocaleString('en-IN')}</b>
+          <div class="kpi-card" style="background:linear-gradient(135deg,#fefce8,#fef9c3);">
+            <div class="kpi-icon" style="background:#f59e0b;color:#fff;"><i class="fas fa-coins"></i></div>
+            <div class="kpi-info">
+              <small style="color:#92400e;font-size:10px;">Course Fee</small>
+              <b style="color:#78350f;font-size:18px;">৳${(b.baseFee || 0).toLocaleString('en-IN')}</b>
+            </div>
           </div>
-          <div style="background:#ecfdf5;border-color:#86efac;">
-            <small style="color:#065f46;">Collected</small>
-            <b style="color:#059669;">৳${s.collected.toLocaleString('en-IN')}</b>
+          <div class="kpi-card" style="background:linear-gradient(135deg,#ecfdf5,#d1fae5);">
+            <div class="kpi-icon" style="background:#059669;color:#fff;"><i class="fas fa-hand-holding-dollar"></i></div>
+            <div class="kpi-info">
+              <small style="color:#065f46;font-size:10px;">Collected</small>
+              <b style="color:#047857;font-size:18px;">৳${s.collected.toLocaleString('en-IN')}</b>
+            </div>
           </div>
-          <div style="background:#f8fafc;">
-            <small>Collection Rate</small>
-            <b style="color:${color};">${s.rate}%
-              <div class="health-track" style="margin-top:4px;">
-                <div class="health-fill ${healthCls}" style="width:${Math.min(100,rate)}%;"></div>
+          <div class="kpi-card" style="background:linear-gradient(135deg,${rate>=80?'#ecfdf5,#d1fae5':rate>=50?'#fffbeb,#fef3c7':'#fef2f2,#fecaca'});">
+            <div class="kpi-icon" style="background:${color};color:#fff;"><i class="fas fa-chart-line"></i></div>
+            <div class="kpi-info" style="width:100%;">
+              <small style="color:${rate>=80?'#065f46':rate>=50?'#92400e':'#991b1b'};font-size:10px;">Collection Rate</small>
+              <b style="color:${color};font-size:18px;">${s.rate}%</b>
+              <div style="margin-top:5px;height:6px;background:${rate>=80?'#a7f3d0':rate>=50?'#fde68a':'#fecaca'};border-radius:99px;overflow:hidden;">
+                <div style="height:100%;width:${Math.min(100,rate)}%;background:${color};border-radius:99px;transition:width .6s;"></div>
               </div>
-            </b>
+            </div>
           </div>
         </div>
 
         <!-- Quick Stats Row -->
-        <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
-          <div style="flex:1;min-width:120px;background:#ecfdf5;border:1px solid #86efac;border-radius:10px;padding:10px 14px;text-align:center;">
-            <div style="font-size:11px;font-weight:700;color:#065f46;text-transform:uppercase;margin-bottom:3px;">Paid Students</div>
-            <div style="font-size:20px;font-weight:800;color:#059669;">${paidCount}</div>
+        <div class="detail-stats-row">
+          <div class="detail-stat-card" style="background:linear-gradient(135deg,#ecfdf5,#d1fae5);">
+            <div class="stat-icon" style="background:#059669;color:#fff;"><i class="fas fa-check-circle"></i></div>
+            <div class="stat-info">
+              <small style="color:#065f46;font-size:10px;">Paid Students</small>
+              <b style="color:#047857;font-size:18px;">${paidCount}</b>
+            </div>
           </div>
-          <div style="flex:1;min-width:120px;background:#fef2f2;border:1px solid #fca5a5;border-radius:10px;padding:10px 14px;text-align:center;">
-            <div style="font-size:11px;font-weight:700;color:#991b1b;text-transform:uppercase;margin-bottom:3px;">Due Students</div>
-            <div style="font-size:20px;font-weight:800;color:#dc2626;">${dueCount}</div>
+          <div class="detail-stat-card" style="background:linear-gradient(135deg,#fef2f2,#fecaca);">
+            <div class="stat-icon" style="background:#dc2626;color:#fff;"><i class="fas fa-exclamation-circle"></i></div>
+            <div class="stat-info">
+              <small style="color:#991b1b;font-size:10px;">Due Students</small>
+              <b style="color:#dc2626;font-size:18px;">${dueCount}</b>
+            </div>
           </div>
-          ${b.startDate ? `<div style="flex:1;min-width:120px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;padding:10px 14px;text-align:center;">
-            <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;margin-bottom:3px;">Start Date</div>
-            <div style="font-size:14px;font-weight:700;color:#374151;">${b.startDate}</div>
+          ${b.startDate ? `<div class="detail-stat-card" style="background:linear-gradient(135deg,#f0f9ff,#e0f2fe);">
+            <div class="stat-icon" style="background:#0284c7;color:#fff;"><i class="fas fa-calendar-check"></i></div>
+            <div class="stat-info">
+              <small style="color:#075985;font-size:10px;">Start Date</small>
+              <b style="color:#0c4a6e;font-size:18px;">${new Date(b.startDate).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})}</b>
+            </div>
           </div>` : ''}
-          ${b.admissionFee ? `<div style="flex:1;min-width:120px;background:#f5f3ff;border:1px solid #c4b5fd;border-radius:10px;padding:10px 14px;text-align:center;">
-            <div style="font-size:11px;font-weight:700;color:#5b21b6;text-transform:uppercase;margin-bottom:3px;">Admission Fee</div>
-            <div style="font-size:14px;font-weight:700;color:#7c3aed;">৳${Number(b.admissionFee).toLocaleString('en-IN')}</div>
+          ${b.admissionFee ? `<div class="detail-stat-card" style="background:linear-gradient(135deg,#f5f3ff,#ede9fe);">
+            <div class="stat-icon" style="background:#7c3aed;color:#fff;"><i class="fas fa-id-card"></i></div>
+            <div class="stat-info">
+              <small style="color:#5b21b6;font-size:10px;">Admission Fee</small>
+              <b style="color:#6d28d9;font-size:18px;">৳${Number(b.admissionFee).toLocaleString('en-IN')}</b>
+            </div>
           </div>` : ''}
         </div>
 
@@ -414,30 +466,120 @@ document.addEventListener('DOMContentLoaded', () => {
 
   /* ── Delete Batch ── */
   window.deleteBatch = async function (id) {
+    console.log('🗑️ Delete batch called with ID:', id);
+    
     const b = batches.find(x => x._id === id);
-    if (!b) return;
-    const s = stats(b.batchName);
-    if (s.total > 0) {
-      toast(`❌ Cannot delete "${b.batchName}" — has ${s.total} students.`, true);
+    console.log('📦 Found batch:', b);
+    
+    if (!b) {
+      console.warn('❌ Batch not found');
+      toast('❌ Batch not found!', true);
       return;
     }
-    if (!confirm(`Delete batch "${b.batchName}"?`)) return;
+
+    const s = stats(b.batchName);
+    console.log(`📊 Batch stats for "${b.batchName}":`, s);
+    console.log(`   Total students: ${s.total}`);
+    
+    // Prepare warning message
+    let warningMsg = `⚠️ DELETE BATCH: "${b.batchName}"?\n\n`;
+    
+    if (s.total > 0) {
+      warningMsg += `⚠️ CRITICAL WARNING ⚠️\n\n`;
+      warningMsg += `This batch has ${s.total} student${s.total > 1 ? 's' : ''}.\n\n`;
+      warningMsg += `Deleting this batch will PERMANENTLY DELETE:\n`;
+      warningMsg += `• All ${s.total} student${s.total > 1 ? 's' : ''} in this batch\n`;
+      warningMsg += `• All payment records\n`;
+      warningMsg += `• All distribution records\n`;
+      warningMsg += `• All exam results\n`;
+      warningMsg += `• Financial data worth ৳${s.collected.toLocaleString('en-IN')}\n\n`;
+      warningMsg += `⚠️ THIS CANNOT BE UNDONE!\n\n`;
+      warningMsg += `Are you absolutely sure?`;
+    } else {
+      warningMsg += `This batch has no students.\n\n`;
+      warningMsg += `The batch will be permanently deleted.\n`;
+      warningMsg += `This action cannot be undone.\n\n`;
+      warningMsg += `Continue?`;
+    }
+
+    console.log('✅ Showing confirmation dialog...');
+    const confirmed = confirm(warningMsg);
+    console.log('User confirmed:', confirmed);
+    
+    if (!confirmed) {
+      console.log('❌ User cancelled deletion');
+      return;
+    }
+
+    // Show loading toast
+    toast('⏳ Deleting batch and all related data...', false);
 
     try {
-      const res = await fetch(API + '/ucc/batches/' + id, { method: 'DELETE' });
+      const url = API + '/ucc/batches/' + id;
+      console.log('🌐 Calling CASCADE DELETE API:', url);
+      
+      const res = await fetch(url, { method: 'DELETE' });
+      console.log('📡 API Response status:', res.status, res.statusText);
+      
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error('❌ API Error response:', errorText);
+        throw new Error(`HTTP error! status: ${res.status} - ${errorText}`);
+      }
+      
       const d = await res.json();
+      console.log('📦 API Response data:', d);
+      
       if (d.success) {
+        console.log('✅ Batch and all related data deleted successfully from server');
+        
+        // Remove batch from local array
         batches = batches.filter(x => x._id !== id);
-        updateStats(); renderBatches(); renderCharts();
-        toast('✅ Batch deleted!');
+        
+        // Remove students from local array
+        students = students.filter(x => 
+          x.batchName.toLowerCase().trim() !== b.batchName.toLowerCase().trim()
+        );
+        
+        console.log('📦 Updated batches array length:', batches.length);
+        console.log('👥 Updated students array length:', students.length);
+        
+        updateStats();
+        renderBatches();
+        renderCharts();
+        
+        // Show detailed success message
+        let successMsg = `✅ Batch "${b.batchName}" deleted successfully!`;
+        if (d.deleted) {
+          successMsg += `\n\nDeleted:\n`;
+          successMsg += `• ${d.deleted.students || 0} students\n`;
+          successMsg += `• ${d.deleted.payments || 0} payments\n`;
+          successMsg += `• ${d.deleted.distributions || 0} distributions\n`;
+          successMsg += `• ${d.deleted.results || 0} results`;
+        }
+        
+        toast(successMsg);
       } else {
+        console.error('❌ Server reported failure:', d.message);
         toast('❌ ' + (d.message || 'Delete failed'), true);
       }
-    } catch (_) {
-      /* Demo mode — delete locally */
+    } catch (err) {
+      console.error('💥 Delete batch error:', err);
+      console.log('🔧 Falling back to demo mode (local deletion)');
+      
+      // Demo mode — delete locally
       batches = batches.filter(x => x._id !== id);
-      updateStats(); renderBatches(); renderCharts();
-      toast('✅ Batch deleted (demo mode)!');
+      students = students.filter(x => 
+        x.batchName.toLowerCase().trim() !== b.batchName.toLowerCase().trim()
+      );
+      
+      console.log('📦 Updated batches array length (demo):', batches.length);
+      console.log('👥 Updated students array length (demo):', students.length);
+      
+      updateStats();
+      renderBatches();
+      renderCharts();
+      toast('✅ Batch deleted (offline mode)!');
     }
   };
 
@@ -454,6 +596,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const sess = document.getElementById('batchSession').value.trim();
     const stat = document.getElementById('batchStatus').value;
     const notes= document.getElementById('batchNotes').value.trim();
+    const nextRollNum = parseInt(document.getElementById('batchNextRoll')?.value, 10) || 1;
 
     if (!name) { toast('❌ Batch name is required.', true); return; }
 
@@ -467,7 +610,8 @@ document.addEventListener('DOMContentLoaded', () => {
       coordinator:  coord,
       session:      sess,
       status:       stat,
-      notes
+      notes,
+      nextRollNumber: nextRollNum
     };
 
     try {
@@ -512,7 +656,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const b  = batches.find(x => x._id === id);
     if (!b) return;
     const s  = stats(b.batchName);
-    const bs = students.filter(x => x.batchName === b.batchName || x.batch === b.batchName);
+    const bs = students.filter(x => x.batchName === b.batchName || x.batch === b.batchName)
+      .sort((a, b) => {
+        const rA = parseInt(String(a.roll || a.studentId || '0').replace(/[^0-9]/g, ''), 10) || 0;
+        const rB = parseInt(String(b.roll || b.studentId || '0').replace(/[^0-9]/g, ''), 10) || 0;
+        return rA - rB;
+      });
     const now = new Date();
     const dateStr = now.toLocaleDateString('en-GB', { day:'2-digit', month:'long', year:'numeric' });
     const timeStr = now.toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit' });

@@ -1,11 +1,11 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Reports | UCC Pabna</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link rel="stylesheet" href="assets/css/design-system.css?v=2"><link rel="stylesheet" href="assets/css/dashboard.css">
-  <link rel="stylesheet" href="assets/css/reports.css"><script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link rel="stylesheet" href="assets/css/reports.css?v=5"><script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 <aside class="sidebar" id="sidebar">
@@ -22,9 +22,15 @@
   <a href="students.html" class="nav-item"><i class="fas fa-users"></i><span>Students</span><span class="nav-tooltip">Students</span></a>
   <a href="admission.html" class="nav-item"><i class="fas fa-user-plus"></i><span>Admission</span><span class="nav-tooltip">Admission</span></a>
   <a href="payment.html" class="nav-item"><i class="fas fa-money-bill-wave"></i><span>Payment</span><span class="nav-tooltip">Payment</span></a>
+  <a href="finance.html" class="nav-item"><i class="fas fa-chart-line"></i><span>Finance</span><span class="nav-tooltip">Finance</span></a>
+  <a href="expenses.html" class="nav-item"><i class="fas fa-shopping-cart"></i><span>Expenses</span><span class="nav-tooltip">Expenses</span></a>
   <a href="exams.html" class="nav-item"><i class="fas fa-pencil-alt"></i><span>Exams</span><span class="nav-tooltip">Exams</span></a>
   <a href="distribution.html" class="nav-item"><i class="fas fa-book-open"></i><span>Distribution</span><span class="nav-tooltip">Distribution</span></a>
   <a href="batches.html" class="nav-item"><i class="fas fa-layer-group"></i><span>Batches</span><span class="nav-tooltip">Batches</span></a>
+    <a href="batch-transfer.html" class="nav-item">
+      <i class="fas fa-exchange-alt"></i><span>Batch Transfer</span>
+      <span class="nav-tooltip">Batch Transfer</span>
+    </a>
   <a href="reports.html" class="nav-item active"><i class="fas fa-chart-bar"></i><span>Reports</span><span class="nav-tooltip">Reports</span></a>
   <a href="settings.html" class="nav-item"><i class="fas fa-cog"></i><span>Settings</span><span class="nav-tooltip">Settings</span></a>
  </nav>
@@ -34,11 +40,15 @@
  <header class="top-header"><h1 class="page-title">Reports &amp; Analytics</h1><div class="user-info"><div class="report-avatar"><i class="fas fa-user-shield"></i></div><div class="user-details"><span class="user-name" id="uccAdminName">UCC Administrator</span><span class="user-role">Pabna Branch Head</span></div></div></header>
  <section class="batch-hero">
    <div><span class="batch-eyebrow">UCC PABNA · BRANCH INTELLIGENCE</span><h2>Reports that turn branch activity into action.</h2><p>Track collections, outstanding dues, batch health and material delivery in one place.</p></div>
-   <div class="hero-actions"><button class="btn btn-secondary" onclick="printDailyStatement()"><i class="fas fa-file-invoice-dollar"></i> Daily statement</button><button class="btn btn-secondary" onclick="printActiveReport()"><i class="fas fa-print"></i> Print report</button><button class="btn btn-primary" onclick="exportReport()"><i class="fas fa-file-csv"></i> Export CSV</button></div>
+   <div class="hero-actions"><button class="btn btn-secondary" onclick="printDailyStatement()" title="Print the statement for the selected daily statement date"><i class="fas fa-file-invoice-dollar"></i> Print daily statement</button><button class="btn btn-secondary" onclick="printActiveReport()" title="Print the report tab currently open"><i class="fas fa-print"></i> Print current report</button><button class="btn btn-primary" onclick="exportReport()" title="Export the currently filtered collection data"><i class="fas fa-file-csv"></i> Export current data</button></div>
  </section>
- <section class="report-filter no-print"><div class="filter-field"><label>From</label><input type="date" id="fromDate"></div><div class="filter-field"><label>To</label><input type="date" id="toDate"></div><div class="filter-field"><label>Batch</label><select id="batchFilter"><option value="all">All batches</option></select></div><div class="filter-field"><label>Payment method</label><select id="methodFilter"><option value="all">All methods</option><option>Cash</option><option>bKash</option><option>Nagad</option><option>Bank</option></select></div><div class="filter-field daily-print-date"><label>Daily statement date</label><input type="date" id="dailyStatementDate"></div><button class="btn btn-primary filter-apply" onclick="applyFilters()"><i class="fas fa-filter"></i> Apply</button><button class="reset-filter" onclick="resetFilters()">Reset</button></section>
- <section class="report-tabs no-print" aria-label="Report type">
-   <button class="report-tab active" data-tab="overview"><i class="fas fa-chart-pie"></i> Overview</button><button class="report-tab" data-tab="collection"><i class="fas fa-wallet"></i> Collection</button><button class="report-tab" data-tab="dues"><i class="fas fa-triangle-exclamation"></i> Dues &amp; Follow-up</button><button class="report-tab" data-tab="batch"><i class="fas fa-layer-group"></i> Batch Performance</button><button class="report-tab" data-tab="batchwise"><i class="fas fa-table-cells-large"></i> Batch-wise Report</button><button class="report-tab" data-tab="materials"><i class="fas fa-boxes-stacked"></i> Material Audit</button><button class="report-tab" data-tab="ledger"><i class="fas fa-file-invoice"></i> Student Ledger</button>
+ <section class="report-tabs no-print" aria-label="Report type" role="tablist">
+   <button class="report-tab active" data-tab="overview" role="tab" aria-selected="true" aria-controls="overviewPane"><i class="fas fa-chart-pie"></i> Overview</button><button class="report-tab" data-tab="collection" role="tab" aria-selected="false" aria-controls="collectionPane"><i class="fas fa-wallet"></i> Collection</button><button class="report-tab" data-tab="dues" role="tab" aria-selected="false" aria-controls="duesPane"><i class="fas fa-triangle-exclamation"></i> Dues &amp; Follow-up</button><button class="report-tab" data-tab="batch" role="tab" aria-selected="false" aria-controls="batchPane"><i class="fas fa-layer-group"></i> Batch Performance</button><button class="report-tab" data-tab="batchwise" role="tab" aria-selected="false" aria-controls="batchwisePane"><i class="fas fa-table-cells-large"></i> Batch-wise Report</button><button class="report-tab" data-tab="materials" role="tab" aria-selected="false" aria-controls="materialsPane"><i class="fas fa-boxes-stacked"></i> Material Audit</button><button class="report-tab" data-tab="ledger" role="tab" aria-selected="false" aria-controls="ledgerPane"><i class="fas fa-file-invoice"></i> Student Ledger</button>
+ </section>
+ <section class="tab-filter-zone no-print" id="tabFilterZone" aria-live="polite">
+   <section class="report-filter" id="reportFilter" aria-describedby="filterHelp"><div class="filter-field date-filter"><label for="fromDate">From</label><input type="date" id="fromDate"></div><div class="filter-field date-filter"><label for="toDate">To</label><input type="date" id="toDate"></div><div class="filter-field batch-filter"><label for="batchFilter">Batch</label><select id="batchFilter"><option value="all">All batches</option></select></div><div class="filter-field method-filter"><label for="methodFilter">Payment method</label><select id="methodFilter"><option value="all">All methods</option><option>Cash</option><option>bKash</option><option>Nagad</option><option>Bank</option><option>Bank Transfer</option><option>Card</option><option>POS Card</option><option>Online</option><option>Other</option></select></div><div class="filter-field daily-print-date daily-filter"><label for="dailyStatementDate">Daily statement date</label><input type="date" id="dailyStatementDate"></div><button class="btn btn-primary filter-apply" onclick="applyFilters()"><i class="fas fa-filter"></i> Apply filters</button><button class="reset-filter" onclick="resetFilters()" title="Restore the default report period">Reset</button></section>
+   <div class="report-filter-feedback" id="reportFilterFeedback"><span id="filterHelp">Choose a date range, batch or payment method, then apply filters.</span><strong id="activeFilterSummary">Loading report data…</strong><span id="reportLoadStatus" role="status"></span></div>
+   <div class="tab-context-note" id="tabContextNote" hidden><i class="fas fa-circle-info"></i><span></span></div>
  </section>
   <div class="print-header"><div><h1>UCC পাবনা শাখা</h1><p>এডওয়ার্ড কলেজ, রথঘর সংলগ্ন, রাধানগর, পাবনা · Phone: 01312-427799</p><small>Branch Operations Report · <span id="printDateRange"></span></small></div><span class="print-header-tag">Reports</span></div>
   <div class="print-header-line"></div>
@@ -271,7 +281,7 @@
        </div>
        <div class="table-responsive">
          <table class="bw-student-table">
-           <thead><tr><th>Roll</th><th>Name</th><th>Guardian</th><th class="money">Paid</th><th>Material</th><th>Status</th><th>Actions</th></tr></thead>
+           <thead><tr><th>Roll</th><th>Student &amp; Guardian</th><th class="money">Paid</th><th>Material</th><th>Status</th><th style="text-align:center">Actions</th></tr></thead>
            <tbody id="bwPaidBody"></tbody>
          </table>
        </div>
@@ -295,6 +305,6 @@
  <footer class="main-footer">© 2026 UCC পাবনা শাখা। All rights reserved. Designed and developed by Tuhin.</footer>
 </main>
 <div class="toast" id="toast"></div>
-<script src="assets/js/sidebar.js?v=2"></script><script src="assets/js/reports.js?v=2"></script>
+<script src="assets/js/sidebar.js?v=2"></script><script src="assets/js/reports.js?v=5"></script>
 </body></html>
 

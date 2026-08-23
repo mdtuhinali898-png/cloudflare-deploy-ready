@@ -1,9 +1,9 @@
-<!DOCTYPE html>
-<html lang="bn">
+﻿<!DOCTYPE html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Exams — UCC পাবনা Admin</title>
+  <title>Exams — UCC Pabna Admin</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
   <link rel="stylesheet" href="assets/css/design-system.css?v=2">
   <link rel="stylesheet" href="assets/css/dashboard.css">
@@ -16,7 +16,7 @@
   <div class="sidebar-header">
     <a href="index.html" class="sidebar-logo">
       <div class="logo-icon"><i class="fas fa-graduation-cap"></i></div>
-      <span>UCC <span class="gradient-text">পাবনা</span> <small class="admin-badge">Admin</small></span>
+      <span>UCC <span class="gradient-text">Pabna</span> <small class="admin-badge">Admin</small></span>
     </a>
     <button class="sidebar-toggle" id="sidebarToggle"><i class="fas fa-chevron-left"></i></button>
   </div>
@@ -32,9 +32,15 @@
     <a href="students.html"     class="nav-item"><i class="fas fa-users"></i><span>Students</span><span class="nav-tooltip">Students</span></a>
     <a href="admission.html"    class="nav-item"><i class="fas fa-user-plus"></i><span>Admission</span><span class="nav-tooltip">Admission</span></a>
     <a href="payment.html"      class="nav-item"><i class="fas fa-money-bill-wave"></i><span>Payment</span><span class="nav-tooltip">Payment</span></a>
+    <a href="finance.html"      class="nav-item"><i class="fas fa-chart-line"></i><span>Finance</span><span class="nav-tooltip">Finance</span></a>
+    <a href="expenses.html"     class="nav-item"><i class="fas fa-shopping-cart"></i><span>Expenses</span><span class="nav-tooltip">Expenses</span></a>
     <a href="exams.html"        class="nav-item active"><i class="fas fa-pencil-alt"></i><span>Exams</span><span class="nav-tooltip">Exams</span></a>
     <a href="distribution.html" class="nav-item"><i class="fas fa-book-open"></i><span>Distribution</span><span class="nav-tooltip">Distribution</span></a>
     <a href="batches.html"      class="nav-item"><i class="fas fa-layer-group"></i><span>Batches</span><span class="nav-tooltip">Batches</span></a>
+    <a href="batch-transfer.html" class="nav-item">
+      <i class="fas fa-exchange-alt"></i><span>Batch Transfer</span>
+      <span class="nav-tooltip">Batch Transfer</span>
+    </a>
     <a href="reports.html"      class="nav-item"><i class="fas fa-chart-bar"></i><span>Reports</span><span class="nav-tooltip">Reports</span></a>
     <a href="settings.html"     class="nav-item"><i class="fas fa-cog"></i><span>Settings</span><span class="nav-tooltip">Settings</span></a>
   </nav>
@@ -52,7 +58,7 @@
       <img src="https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=100" alt="Admin" class="user-avatar">
       <div class="user-details">
         <span class="user-name" id="uccAdminName">UCC Admin</span>
-        <span class="user-role">UCC পাবনা শাখা</span>
+        <span class="user-role">UCC Pabna Branch</span>
       </div>
     </div>
   </header>
@@ -61,7 +67,7 @@
   <div class="ex-banner">
     <div>
       <h2><i class="fas fa-pen-ruler"></i> Exam & Model Test Management</h2>
-      <p>নতুন exam তৈরি করুন, mark entry দিন এবং merit list print করুন।</p>
+      <p>Create new exams, enter marks, and print merit lists.</p>
     </div>
     <div class="ex-banner-actions">
       <a href="mark-entry.html" class="btn btn-secondary"><i class="fas fa-pen"></i> Mark Entry</a>
@@ -95,18 +101,13 @@
     <div class="ex-filter-field">
       <label>Batch</label>
       <select id="filterBatch" onchange="applyFilter()">
-        <option value="all">সব Batch</option>
-        <option>Medical-2026-A</option>
-        <option>Medical-2026-B</option>
-        <option>Engineering-2026</option>
-        <option>Varsity-A-2026</option>
-        <option>Varsity-B-2026</option>
+        <option value="all">All Batches</option>
       </select>
     </div>
     <div class="ex-filter-field">
       <label>Exam Type</label>
       <select id="filterType" onchange="applyFilter()">
-        <option value="all">সব Type</option>
+        <option value="all">All Types</option>
         <option value="MCQ">MCQ</option>
         <option value="Written">Written</option>
         <option value="Mixed">Mixed</option>
@@ -116,14 +117,14 @@
     <div class="ex-filter-field">
       <label>Status</label>
       <select id="filterStatus" onchange="applyFilter()">
-        <option value="all">সব Status</option>
+        <option value="all">All Statuses</option>
         <option value="Published">Published</option>
         <option value="Draft">Draft</option>
       </select>
     </div>
     <div class="ex-filter-field" style="flex:1;min-width:200px;">
       <label>Search</label>
-      <input type="text" id="filterSearch" placeholder="Exam name খুঁজুন..." oninput="applyFilter()">
+      <input type="text" id="filterSearch" placeholder="Search exam name..." oninput="applyFilter()">
     </div>
     <button class="btn btn-secondary" onclick="resetFilter()"><i class="fas fa-rotate-left"></i> Reset</button>
   </div>
@@ -156,7 +157,7 @@
     </div>
   </div>
 
-  <footer class="main-footer">© 2026 UCC পাবনা শাখা। All rights reserved. Designed and developed by Tuhin.</footer>
+  <footer class="main-footer">© 2026 UCC Pabna Branch. All rights reserved. Designed and developed by Tuhin.</footer>
 </main>
 
 <!-- Create Exam Modal -->
@@ -164,8 +165,8 @@
   <div class="ex-modal-box">
     <div class="ex-modal-hdr">
       <div>
-        <h3><i class="fas fa-plus-circle"></i> New Exam তৈরি করুন</h3>
-        <p>Exam-এর সব তথ্য দিন</p>
+        <h3><i class="fas fa-plus-circle"></i> Create New Exam</h3>
+        <p>Enter all exam information</p>
       </div>
       <button class="ex-modal-close" onclick="closeCreateModal()"><i class="fas fa-times"></i></button>
     </div>
@@ -173,23 +174,18 @@
       <div class="ex-form-grid">
         <div class="ex-field">
           <label>Exam Name *</label>
-          <input type="text" id="newExamName" class="ex-input" placeholder="যেমন: Model Test 01">
+          <input type="text" id="newExamName" class="ex-input" placeholder="e.g. Model Test 01">
         </div>
         <div class="ex-field">
           <label>Batch *</label>
           <select id="newExamBatch" class="ex-input">
-            <option value="">-- Batch বেছে নিন --</option>
-            <option>Medical-2026-A</option>
-            <option>Medical-2026-B</option>
-            <option>Engineering-2026</option>
-            <option>Varsity-A-2026</option>
-            <option>Varsity-B-2026</option>
+            <option value="">-- Select Batch --</option>
           </select>
         </div>
         <div class="ex-field">
           <label>Exam Type *</label>
           <select id="newExamType" class="ex-input">
-            <option value="">-- Type বেছে নিন --</option>
+            <option value="">-- Select Type --</option>
             <option value="MCQ">MCQ</option>
             <option value="Written">Written</option>
             <option value="Mixed">Mixed</option>
@@ -198,7 +194,7 @@
         </div>
         <div class="ex-field">
           <label>Subject / Topic</label>
-          <input type="text" id="newExamSubject" class="ex-input" placeholder="যেমন: Physics + Chemistry">
+          <input type="text" id="newExamSubject" class="ex-input" placeholder="e.g. Physics + Chemistry">
         </div>
         <div class="ex-field">
           <label>Date *</label>
@@ -206,25 +202,25 @@
         </div>
         <div class="ex-field">
           <label>Total Marks *</label>
-          <input type="number" id="newExamTotal" class="ex-input" placeholder="যেমন: 100" min="1">
+          <input type="number" id="newExamTotal" class="ex-input" placeholder="e.g. 100" min="1">
         </div>
         <div class="ex-field">
           <label>Pass Marks</label>
-          <input type="number" id="newExamPass" class="ex-input" placeholder="যেমন: 40" min="0">
+          <input type="number" id="newExamPass" class="ex-input" placeholder="e.g. 40" min="0">
         </div>
         <div class="ex-field">
           <label>Duration (minutes)</label>
-          <input type="number" id="newExamDuration" class="ex-input" placeholder="যেমন: 90" min="0">
+          <input type="number" id="newExamDuration" class="ex-input" placeholder="e.g. 90" min="0">
         </div>
       </div>
       <div class="ex-field" style="margin-top:12px;">
         <label>Notes</label>
-        <textarea id="newExamNotes" class="ex-input" rows="2" placeholder="অতিরিক্ত তথ্য (optional)"></textarea>
+        <textarea id="newExamNotes" class="ex-input" rows="2" placeholder="Additional notes (optional)"></textarea>
       </div>
-      <p class="ex-demo-note"><i class="fas fa-circle-info"></i> Demo mode — data locally stored. API connect করলে <code>POST /api/ucc/exams</code> call হবে।</p>
+      <p class="ex-demo-note"><i class="fas fa-circle-info"></i> Demo mode — data locally stored. When API is connected, <code>POST /api/ucc/exams</code> will be called.</p>
       <div class="ex-modal-actions">
         <button class="btn btn-secondary" onclick="closeCreateModal()"><i class="fas fa-times"></i> Cancel</button>
-        <button class="btn btn-primary"   onclick="saveExam()"><i class="fas fa-save"></i> Exam Save করুন</button>
+        <button class="btn btn-primary"   onclick="saveExam()"><i class="fas fa-save"></i> Save Exam</button>
       </div>
     </div>
   </div>
@@ -234,16 +230,16 @@
 <div class="ex-modal-overlay" id="deleteModal" style="display:none;" onclick="closeDeleteModal(event)">
   <div class="ex-modal-box" style="max-width:420px;">
     <div class="ex-modal-hdr" style="background:linear-gradient(135deg,#dc2626,#991b1b);">
-      <div><h3><i class="fas fa-trash"></i> Exam Delete করবেন?</h3><p>এই কাজ undo করা যাবে না।</p></div>
+      <div><h3><i class="fas fa-trash"></i> Delete Exam?</h3><p>This action cannot be undone.</p></div>
       <button class="ex-modal-close" onclick="closeDeleteModal()"><i class="fas fa-times"></i></button>
     </div>
     <div class="ex-modal-body" style="text-align:center;">
       <div style="font-size:48px;margin-bottom:12px;">🗑️</div>
       <p style="font-size:15px;font-weight:700;color:#0f172a;" id="deleteExamName">—</p>
-      <p style="font-size:13px;color:#64748b;margin-bottom:20px;">এই exam-এর সব mark entry-ও মুছে যাবে।</p>
+      <p style="font-size:13px;color:#64748b;margin-bottom:20px;">All mark entries for this exam will also be deleted.</p>
       <div style="display:flex;gap:12px;justify-content:center;">
-        <button class="btn btn-secondary" onclick="closeDeleteModal()">বাতিল</button>
-        <button class="btn btn-danger"    onclick="confirmDelete()"><i class="fas fa-trash"></i> Delete করুন</button>
+        <button class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+        <button class="btn btn-danger"    onclick="confirmDelete()"><i class="fas fa-trash"></i> Delete Exam</button>
       </div>
     </div>
   </div>

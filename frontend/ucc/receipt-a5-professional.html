@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment Receipt - UCC Pabna</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    
+    <style>
+        * { 
+            margin: 0; 
+            padding: 0; 
+            box-sizing: border-box;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #f1f5f9;
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+        
+        /* No-print buttons */
+        .no-print {
+            text-align: center;
+            margin-bottom: 8px;
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+        }
+        .no-print button {
+            padding: 8px 16px;
+            font-size: 12px;
+            font-weight: 700;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .btn-print {
+            background: #4f46e5;
+            color: white;
+        }
+        .btn-back {
+            background: #fff;
+            color: #475569;
+            border: 1px solid #cbd5e1;
+        }
+        
+        /* A5 Receipt (148mm × 210mm) */
+        .receipt {
+            width: 148mm;
+            height: 210mm;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        /* Header - BIGGER */
+        .header {
+            background: linear-gradient(135deg, #1e1b4b 0%, #312e81 55%, #4f46e5 100%);
+            color: #fff;
+            padding: 16px 18px;
+        }
+        .header h1 {
+            font-size: 20px;
+            font-weight: 900;
+            margin: 0 0 3px;
+        }
+        .header p {
+            font-size: 9px;
+            margin: 1px 0;
+            opacity: 0.85;
+        }
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+        }
+        .receipt-badge {
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.3);
+            padding: 5px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 800;
+        }
+        .header-line {
+            height: 3px;
+            background: linear-gradient(90deg, #f59e0b, rgba(255,255,255,0.5), #f59e0b);
+            margin-top: 8px;
+            border-radius: 2px;
+        }
+        
+        /* Info Strip - BIGGER */
+        .info-strip {
+            background: linear-gradient(135deg, #eef2ff, #e0e7ff);
+            border: 1px solid #c7d2fe;
+            padding: 12px 14px;
+            margin: 12px 14px;
+            border-radius: 10px;
+            display: flex;
+            gap: 12px;
+            justify-content: space-between;
+            position: relative;
+        }
+        .info-strip-label {
+            position: absolute;
+            top: -8px;
+            right: 14px;
+            background: linear-gradient(135deg, #4f46e5, #7c3aed);
+            color: #fff;
+            font-size: 7px;
+            font-weight: 800;
+            text-transform: uppercase;
+            padding: 3px 10px;
+            border-radius: 10px;
+            letter-spacing: 0.5px;
+        }
+        .info-box {
+            flex: 1;
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 8px 10px;
+            text-align: center;
+        }
+        .info-label {
+            font-size: 7px;
+            font-weight: 800;
+            text-transform: uppercase;
+            color: #64748b;
+            letter-spacing: 0.3px;
+            margin-bottom: 2px;
+        }
+        .info-value {
+            font-size: 11px;
+            font-weight: 900;
+            color: #0f172a;
+            margin-top: 2px;
+        }
+        
+        /* Content */
+        .content {
+            padding: 0 14px 10px;
+        }
+        
+        /* Section */
+        .section {
+            margin: 12px 0;
+        }
+        .section-title {
+            font-size: 11px;
+            font-weight: 800;
+            color: #0f172a;
+            margin-bottom: 6px;
+            padding: 4px 8px;
+            background: #f8fafc;
+            border-left: 4px solid #4f46e5;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .section-title i {
+            font-size: 10px;
+        }
+        
+        /* Table - BIGGER & READABLE */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 9px;
+            border: 1px solid #cbd5e1;
+            margin-bottom: 8px;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        th {
+            background: #4f46e5 !important;
+            color: #fff !important;
+            padding: 6px 8px;
+            text-align: left;
+            font-size: 8px;
+            font-weight: 800;
+            text-transform: uppercase;
+            border: 1px solid #3730a3;
+        }
+        th.right, td.right {
+            text-align: right;
+        }
+        td {
+            padding: 5px 8px;
+            border: 1px solid #e2e8f0;
+            line-height: 1.4;
+            vertical-align: middle;
+        }
+        tbody tr:nth-child(even) td {
+            background: #f8fafc !important;
+        }
+        
+        /* Financial table colors */
+        .fin-table th {
+            background: #dc2626 !important;
+            border-color: #b91c1c !important;
+        }
+        .discount-row td {
+            background: #f3e8ff !important;
+            color: #7c3aed;
+            font-weight: 700;
+            font-size: 9px;
+        }
+        .payment-row td {
+            background: #ecfdf5 !important;
+            color: #059669;
+            font-weight: 700;
+            font-size: 9px;
+        }
+        .total-row td {
+            background: linear-gradient(135deg, #4f46e5, #7c3aed) !important;
+            color: #fff !important;
+            font-weight: 900;
+            font-size: 10px;
+        }
+        .due-row td {
+            background: #fef2f2 !important;
+            color: #dc2626;
+            font-weight: 900;
+            font-size: 10px;
+        }
+        .due-row.paid td {
+            background: #ecfdf5 !important;
+            color: #059669;
+        }
+        
+        /* Signature - In Content Flow (Not Overlapping) */
+        .signature {
+            display: flex;
+            justify-content: space-between;
+            margin: 16px 14px 0;
+            padding: 0 0 80px 0;
+            gap: 20px;
+        }
+        .signature div {
+            flex: 1;
+            text-align: center;
+            max-width: 33%;
+        }
+        .signature .line {
+            border-top: 1.5px solid #333;
+            margin: 0 auto 6px;
+            width: 100%;
+        }
+        .signature p {
+            font-size: 8px;
+            color: #475569;
+            font-weight: 600;
+            margin: 0;
+        }
+        
+        /* Footer - Separate at Bottom */
+        .footer {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            margin: 0;
+            padding: 8px 14px;
+            background: #f8fafc;
+            border-top: 2px dashed #cbd5e1;
+            text-align: center;
+        }
+        .footer p {
+            font-size: 7.5px;
+            color: #64748b;
+            line-height: 1.5;
+            margin: 2px 0;
+        }
+        .footer strong {
+            color: #4f46e5;
+            font-size: 8px;
+        }
+        
+        /* Loading/Error */
+        .loading, .error {
+            text-align: center;
+            padding: 40px 20px;
+        }
+        .loading i {
+            font-size: 32px;
+            color: #4f46e5;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .error i {
+            font-size: 32px;
+            color: #dc2626;
+        }
+        
+        /* Print CSS */
+        @media print {
+            @page {
+                size: A5 portrait;
+                margin: 0;
+            }
+            * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+            html, body {
+                background: white !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                display: block !important;
+            }
+            body {
+                display: flex !important;
+                justify-content: center !important;
+                align-items: flex-start !important;
+            }
+            .no-print {
+                display: none !important;
+            }
+            .receipt {
+                width: 148mm !important;
+                height: 210mm !important;
+                border: none !important;
+                overflow: visible !important;
+                margin: 0 auto !important;
+            }
+            #loading, #error {
+                display: none !important;
+            }
+            #receiptContent {
+                display: block !important;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="no-print">
+    <button class="btn-print" onclick="window.print()">
+        <i class="fas fa-print"></i> Print Receipt
+    </button>
+    <button class="btn-back" onclick="history.back()">
+        <i class="fas fa-arrow-left"></i> Back
+    </button>
+</div>
+
+<div class="receipt">
+    
+    <!-- Loading -->
+    <div class="loading" id="loading">
+        <i class="fas fa-spinner"></i>
+        <p style="margin-top:10px;font-size:12px;color:#64748b;">Loading receipt...</p>
+    </div>
+    
+    <!-- Error -->
+    <div class="error" id="error" style="display:none;">
+        <i class="fas fa-exclamation-triangle"></i>
+        <h3 style="margin-top:10px;font-size:14px;color:#dc2626;">Receipt Not Found</h3>
+        <p id="errorMessage" style="font-size:11px;color:#64748b;margin-top:5px;">Unable to load receipt</p>
+    </div>
+    
+    <!-- Receipt Content -->
+    <div id="receiptContent" style="display:none;">
+        
+        <!-- Header -->
+        <div class="header">
+            <div class="header-top">
+                <div style="flex:1;">
+                    <h1>UCC পাবনা শাখা</h1>
+                    <p>এডওয়ার্ড কলেজ, রথঘর সংলগ্ন, রাধানগর, পাবনা</p>
+                    <p>Phone: 01312-427799 | Email: uccpabna@gmail.com</p>
+                    <p style="margin-top:2px;font-size:5.5px;opacity:0.7;">Generated: <b id="generatedDate">--</b></p>
+                </div>
+                <div style="text-align:right;">
+                    <div style="font-size:6px;opacity:0.7;margin-bottom:2px;">OFFICIAL RECEIPT</div>
+                    <div class="receipt-badge" id="receiptNo">UCC-REC-0001</div>
+                </div>
+            </div>
+            <div class="header-line"></div>
+        </div>
+        
+        <!-- Info Strip -->
+        <div class="info-strip">
+            <span class="info-strip-label">PAYMENT INFORMATION</span>
+            <div class="info-box">
+                <div class="info-label">Receipt No</div>
+                <div class="info-value" id="receiptNoShort">---</div>
+            </div>
+            <div class="info-box">
+                <div class="info-label">Date</div>
+                <div class="info-value" id="receiptDate">---</div>
+            </div>
+            <div class="info-box">
+                <div class="info-label">Type</div>
+                <div class="info-value" id="paymentType">Payment</div>
+            </div>
+        </div>
+        
+        <!-- Content -->
+        <div class="content">
+            
+            <!-- Student Info -->
+            <div class="section">
+                <div class="section-title">
+                    <i class="fas fa-user-graduate"></i> STUDENT INFORMATION
+                </div>
+                <table>
+                    <tr>
+                        <th style="width:40%;">Field</th>
+                        <th>Details</th>
+                    </tr>
+                    <tr>
+                        <td>Student Roll</td>
+                        <td id="studentRoll">---</td>
+                    </tr>
+                    <tr>
+                        <td>Student Name</td>
+                        <td id="studentName">---</td>
+                    </tr>
+                    <tr>
+                        <td>Batch / Program</td>
+                        <td id="studentBatch">---</td>
+                    </tr>
+                    <tr>
+                        <td>Phone</td>
+                        <td id="studentPhone">---</td>
+                    </tr>
+                    <tr>
+                        <td>Guardian Phone</td>
+                        <td id="guardianPhone">---</td>
+                    </tr>
+                    <tr>
+                        <td>Payment Method</td>
+                        <td id="paymentMethod">---</td>
+                    </tr>
+                </table>
+            </div>
+            
+            <!-- Financial Summary -->
+            <div class="section">
+                <div class="section-title">
+                    <i class="fas fa-money-bill-wave"></i> FINANCIAL SUMMARY
+                </div>
+                <table class="fin-table">
+                    <tr>
+                        <th style="width:60%;">Description</th>
+                        <th class="right">Amount (৳)</th>
+                    </tr>
+                    <tr>
+                        <td>Total Course Fee</td>
+                        <td class="right" id="totalFee">0</td>
+                    </tr>
+                    <tr class="discount-row" id="discountRow" style="display:none;">
+                        <td>💰 Discount Applied</td>
+                        <td class="right" id="discountAmount">0</td>
+                    </tr>
+                    <tr class="total-row">
+                        <td>Net Payable Amount</td>
+                        <td class="right" id="netFee">0</td>
+                    </tr>
+                    <tr class="payment-row">
+                        <td>✅ This Payment</td>
+                        <td class="right" id="paidAmount">0</td>
+                    </tr>
+                    <tr>
+                        <td>Total Paid to Date</td>
+                        <td class="right" id="totalPaid">0</td>
+                    </tr>
+                    <tr class="due-row" id="dueRow">
+                        <td>📊 Remaining Due</td>
+                        <td class="right" id="dueAmount">0</td>
+                    </tr>
+                </table>
+            </div>
+            
+        </div>
+        
+        <!-- Signature Section (Above Footer) -->
+        <div class="signature">
+            <div>
+                <div class="line"></div>
+                <p>Student Signature</p>
+            </div>
+            <div>
+                <div class="line"></div>
+                <p>Collector Signature</p>
+            </div>
+            <div>
+                <div class="line"></div>
+                <p>Authorized Signature</p>
+            </div>
+        </div>
+        
+        <!-- Footer -->
+        <div class="footer">
+            <p><strong>🎯 Thank you for choosing UCC Pabna!</strong></p>
+            <p>স্বপ্ন যেখানে সার্থক • Where Dreams Come True</p>
+            <p>Visit: www.uccpabna.edu.bd | Email: uccpabna@gmail.com</p>
+        </div>
+        
+    </div>
+</div>
+
+<script>
+const API_BASE_URL = 'http://localhost:5002/api';
+
+function fmt(amount) {
+    return Number(amount || 0).toLocaleString('en-IN');
+}
+
+function formatDate(dateStr) {
+    if (!dateStr) return new Date().toLocaleDateString('en-GB');
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+async function loadReceiptData() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const receiptNo = urlParams.get('receipt');
+    const roll = urlParams.get('roll');
+    
+    console.log('[RECEIPT] Loading:', { receiptNo, roll });
+    
+    if (!receiptNo && !roll) {
+        showError('No receipt information provided');
+        return;
+    }
+    
+    try {
+        let data = null;
+        
+        // Try API
+        if (receiptNo) {
+            const url = `${API_BASE_URL}/ucc/payments/receipt/${encodeURIComponent(receiptNo)}?roll=${roll || ''}`;
+            console.log('[RECEIPT] API:', url);
+            const res = await fetch(url);
+            if (res.ok) {
+                data = await res.json();
+                console.log('[RECEIPT] Data:', data);
+            }
+        }
+        
+        // Fallback: search by roll
+        if (!data && roll) {
+            console.log('[RECEIPT] Fallback search by roll...');
+            const res = await fetch(`${API_BASE_URL}/ucc/students?search=${encodeURIComponent(roll)}`);
+            if (res.ok) {
+                const result = await res.json();
+                if (result.success && result.students && result.students.length > 0) {
+                    const student = result.students[0];
+                    data = {
+                        success: true,
+                        payment: {
+                            receiptNo: receiptNo || `UCC-${student.roll}`,
+                            date: new Date().toISOString(),
+                            paymentMethod: 'Cash',
+                            amount: 0,
+                            paymentType: 'Payment'
+                        },
+                        student: {
+                            roll: student.roll,
+                            name: student.name,
+                            batch: student.batchName,
+                            phone: student.phone,
+                            guardian: student.guardianPhone || 'N/A',
+                            courseFee: student.courseFee || student.finalFee,
+                            discountAmount: student.discountAmount || 0,
+                            finalFee: student.finalFee,
+                            totalPaid: student.totalPaid,
+                            totalDue: student.totalDue
+                        }
+                    };
+                }
+            }
+        }
+        
+        if (!data || !data.success) {
+            throw new Error('Receipt not found');
+        }
+        
+        populateReceipt(data);
+        
+    } catch (err) {
+        console.error('[RECEIPT] Error:', err);
+        showError(err.message);
+    }
+}
+
+function populateReceipt(data) {
+    const payment = data.payment || {};
+    const student = data.student || {};
+    
+    // Header
+    document.getElementById('receiptNo').textContent = payment.receiptNo || 'N/A';
+    document.getElementById('receiptNoShort').textContent = payment.receiptNo || 'N/A';
+    document.getElementById('generatedDate').textContent = formatDate(payment.date);
+    document.getElementById('receiptDate').textContent = formatDate(payment.date);
+    document.getElementById('paymentType').textContent = payment.paymentType || 'Payment';
+    
+    // Student
+    document.getElementById('studentRoll').textContent = student.roll || 'N/A';
+    document.getElementById('studentName').textContent = student.name || 'N/A';
+    document.getElementById('studentBatch').textContent = student.batch || student.batchName || 'N/A';
+    document.getElementById('studentPhone').textContent = student.phone || 'N/A';
+    document.getElementById('guardianPhone').textContent = student.guardian || student.guardianPhone || 'N/A';
+    document.getElementById('paymentMethod').textContent = payment.paymentMethod || 'Cash';
+    
+    // Financial
+    const courseFee = student.courseFee || student.finalFee || 0;
+    const discount = student.discountAmount || student.discount || 0;
+    const netFee = student.finalFee || (courseFee - discount);
+    const thisPayment = payment.amount || payment.paid || 0;
+    const totalPaid = student.totalPaid || 0;
+    const due = student.totalDue || student.due || 0;
+    
+    document.getElementById('totalFee').textContent = fmt(courseFee);
+    document.getElementById('netFee').textContent = fmt(netFee);
+    document.getElementById('paidAmount').textContent = fmt(thisPayment);
+    document.getElementById('totalPaid').textContent = fmt(totalPaid);
+    document.getElementById('dueAmount').textContent = fmt(due);
+    
+    if (discount > 0) {
+        document.getElementById('discountRow').style.display = 'table-row';
+        document.getElementById('discountAmount').textContent = fmt(discount);
+    }
+    
+    if (due <= 0) {
+        document.getElementById('dueRow').classList.add('paid');
+        document.getElementById('dueRow').querySelector('td:first-child').innerHTML = '✅ Fully Paid';
+    }
+    
+    // Show
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('receiptContent').style.display = 'block';
+    
+    console.log('[RECEIPT] ✅ Done!');
+    
+    // Auto-print
+    if (urlParams.get('autoPrint') === 'true') {
+        setTimeout(() => window.print(), 800);
+    }
+}
+
+function showError(message) {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('error').style.display = 'block';
+    document.getElementById('errorMessage').textContent = message;
+}
+
+window.addEventListener('DOMContentLoaded', loadReceiptData);
+</script>
+
+</body>
+</html>
