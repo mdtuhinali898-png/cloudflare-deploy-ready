@@ -181,7 +181,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     window.editStudent = (id) => {
-        window.location.href = `add-student.html?edit=${id}`;
+        window.location.href = `student-profile.html?id=${encodeURIComponent(id)}&edit=1`;
     };
 
     window.goToPayment = (id) => {

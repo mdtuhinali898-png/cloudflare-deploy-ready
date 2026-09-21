@@ -35,8 +35,15 @@ router.get('/', async (req, res) => {
         
         // Execute query with pagination (allow large limits for reports)
         const limitValue = limit > 1000 ? 10000 : limit;
-        const students = await Student.find(query)
-            .sort({ createdAt: -1 })
+        const sortOrder = batch && batch !== 'all'
+            ? { studentId: 1 }
+            : { createdAt: -1 };
+        const studentsQuery = Student.find(query)
+            .sort(sortOrder);
+        if (batch && batch !== 'all') {
+            studentsQuery.collation({ locale: 'en', numericOrdering: true });
+        }
+        const students = await studentsQuery
             .limit(limitValue)
             .skip((page - 1) * limitValue);
         
@@ -125,22 +132,33 @@ router.get('/batches/list', async (req, res) => {
 });
 
 // @route   GET /api/students/:id
-// @desc    Get single student by ID (case-insensitive)
+// @desc    Get single student by ID (exact case-insensitive match)
 // @access  Public
 router.get('/:id', async (req, res) => {
     try {
-        // Case-insensitive exact match first
+        const idParam = (req.params.id || '').trim();
+        if (!idParam) {
+            return res.status(400).json({ success: false, message: 'Student ID is required' });
+        }
+
+        const escapedId = idParam.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+        // 1. Exact match by studentId (case-insensitive)
         let student = await Student.findOne({
-            studentId: { $regex: `^${req.params.id}$`, $options: 'i' }
+            studentId: { $regex: `^${escapedId}$`, $options: 'i' }
         });
 
-        // Fallback: search by name or phone
+        // 2. If not found and param is a valid MongoDB ObjectId (24 hex characters)
+        if (!student && idParam.match(/^[0-9a-fA-F]{24}$/)) {
+            student = await Student.findById(idParam);
+        }
+
+        // 3. Fallback: exact match by phone or exact match by name
         if (!student) {
             student = await Student.findOne({
                 $or: [
-                    { studentId: { $regex: req.params.id, $options: 'i' } },
-                    { name:      { $regex: req.params.id, $options: 'i' } },
-                    { phone:     { $regex: req.params.id, $options: 'i' } }
+                    { phone: idParam },
+                    { name: { $regex: `^${escapedId}$`, $options: 'i' } }
                 ]
             });
         }

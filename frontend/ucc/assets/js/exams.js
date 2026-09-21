@@ -56,15 +56,18 @@ async function loadExamsFromApi() {
         id: e._id,
         name: e.title || e.examCode || '',
         batch: e.batchName || '',
+        batchId: e.batchId || null,
         type: e.program || 'Medical',
         subject: (e.subjects && e.subjects.length) ? e.subjects.map(s => s.subjectName).join(' + ') : '',
         date: e.examDate ? new Date(e.examDate).toISOString().split('T')[0] : '',
         total: e.totalMarks || 100,
-        pass: (e.subjects && e.subjects.length && e.subjects[0].passMarks) ? e.subjects[0].passMarks : 40,
+        pass: (e.subjects && e.subjects.length) ? e.subjects.reduce((sum, s) => sum + (s.passMarks || 0), 0) : 40,
         subjects: e.subjects || [],
-        duration: 0,
+        negativeMarking: e.negativeMarking === true,
+        negativeMarkPerWrong: e.negativeMarkPerWrong != null ? e.negativeMarkPerWrong : 0.25,
+        duration: e.duration || 0,
         status: e.status === 'Completed' ? 'Published' : 'Draft',
-        notes: ''
+        notes: e.notes || ''
       }));
     }
 
@@ -209,7 +212,8 @@ function renderTable() {
           <a href="mark-entry.html?exam=${e.id}" class="ex-act ex-act-mark"><i class="fas fa-pen"></i> Marks</a>
           <a href="merit-list.html?exam=${e.id}" class="ex-act ex-act-merit"><i class="fas fa-list-ol"></i> Merit</a>
           ${pubBtn}
-          <button class="ex-act ex-act-del" onclick="openDeleteModal('${e.id}')"><i class="fas fa-trash"></i></button>
+          <button class="ex-act ex-act-csv" title="Download Merit CSV" onclick="downloadExamCSV('${e.id}')"><i class="fas fa-file-csv"></i> CSV</button>
+          <button class="ex-act ex-act-del" onclick="openDeleteModal('${e.id}')" title="Delete Exam"><i class="fas fa-trash"></i></button>
         </div>
       </td>
     </tr>`;
@@ -243,40 +247,197 @@ async function toggleStatus(id) {
   exToast(`"${exam.name}" → ${exam.status}`);
 }
 
-/* ── Create Exam Modal ── */
+/* ── Create Exam Modal & Dynamic Subject Builder ── */
+let modalSubjects = [];
+
+function toggleModalNeg(el) {
+  const wrap = $('newExamNegRateWrap');
+  if (wrap) wrap.style.display = el.checked ? 'flex' : 'none';
+}
+
+function renderModalSubjects() {
+  const list = $('modalSubjectsList');
+  if (!list) return;
+
+  if (!modalSubjects.length) {
+    modalSubjects = [{ name: 'General', full: 100, pass: 40 }];
+  }
+
+  list.innerHTML = modalSubjects.map((s, idx) => `
+    <div class="ex-sub-row" id="subRow-${idx}">
+      <div>
+        <input type="text" placeholder="Subject Name (e.g. Physics)" value="${s.name || ''}"
+          oninput="onSubjectFieldChange(${idx}, 'name', this.value)">
+      </div>
+      <div>
+        <input type="number" placeholder="Full Marks" min="1" value="${s.full != null ? s.full : ''}"
+          oninput="onSubjectFieldChange(${idx}, 'full', this.value)">
+      </div>
+      <div>
+        <input type="number" placeholder="Pass Marks" min="0" value="${s.pass != null ? s.pass : ''}"
+          oninput="onSubjectFieldChange(${idx}, 'pass', this.value)">
+      </div>
+      <div>
+        <button type="button" class="ex-sub-del" title="Remove Subject" onclick="removeModalSubjectRow(${idx})">
+          <i class="fas fa-trash"></i>
+        </button>
+      </div>
+    </div>
+  `).join('');
+
+  updateSubjectTotals();
+}
+
+function onSubjectFieldChange(idx, field, val) {
+  if (!modalSubjects[idx]) return;
+  if (field === 'name') {
+    modalSubjects[idx].name = val;
+  } else if (field === 'full') {
+    modalSubjects[idx].full = val === '' ? '' : Math.max(1, parseInt(val) || 0);
+  } else if (field === 'pass') {
+    modalSubjects[idx].pass = val === '' ? '' : Math.max(0, parseInt(val) || 0);
+  }
+  updateSubjectTotals();
+}
+
+function addModalSubjectRow(name = '', full = 25, pass = 10) {
+  modalSubjects.push({ name, full, pass });
+  renderModalSubjects();
+  setTimeout(() => {
+    const list = $('modalSubjectsList');
+    if (list) list.scrollTop = list.scrollHeight;
+  }, 50);
+}
+
+function removeModalSubjectRow(idx) {
+  if (modalSubjects.length <= 1) {
+    exToast('At least 1 subject is required.', 'error');
+    return;
+  }
+  modalSubjects.splice(idx, 1);
+  renderModalSubjects();
+}
+
+function addSubjectPreset(preset) {
+  if (preset === 'medical') {
+    modalSubjects = [
+      { name: 'Physics', full: 25, pass: 10 },
+      { name: 'Chemistry', full: 25, pass: 10 },
+      { name: 'Biology', full: 30, pass: 12 },
+      { name: 'English', full: 10, pass: 4 },
+      { name: 'General Knowledge', full: 10, pass: 4 }
+    ];
+    $('newExamType').value = 'Model Test';
+  } else if (preset === 'varsity_a') {
+    modalSubjects = [
+      { name: 'Physics', full: 25, pass: 10 },
+      { name: 'Chemistry', full: 25, pass: 10 },
+      { name: 'Higher Math', full: 25, pass: 10 },
+      { name: 'Biology', full: 25, pass: 10 }
+    ];
+    $('newExamType').value = 'MCQ';
+  } else if (preset === 'varsity_b') {
+    modalSubjects = [
+      { name: 'Bangla', full: 35, pass: 14 },
+      { name: 'English', full: 35, pass: 14 },
+      { name: 'General Knowledge', full: 30, pass: 12 }
+    ];
+    $('newExamType').value = 'MCQ';
+  }
+  renderModalSubjects();
+  exToast(`Preset "${preset}" loaded!`);
+}
+
+function updateSubjectTotals() {
+  const count = modalSubjects.length;
+  const calcTotal = modalSubjects.reduce((sum, s) => sum + (Number(s.full) || 0), 0);
+  const calcPass = modalSubjects.reduce((sum, s) => sum + (Number(s.pass) || 0), 0);
+
+  if ($('modalSubCount')) $('modalSubCount').textContent = count;
+  if ($('modalCalcTotal')) $('modalCalcTotal').textContent = `${calcTotal} Marks`;
+  if ($('modalCalcPass')) $('modalCalcPass').textContent = `${calcPass} Marks`;
+}
+
 function openCreateModal() {
   $('createModal').style.display = 'flex';
   $('newExamDate').value = new Date().toISOString().split('T')[0];
+  
+  // Default subjects (4 subjects by default)
+  modalSubjects = [
+    { name: 'Physics', full: 25, pass: 10 },
+    { name: 'Chemistry', full: 25, pass: 10 },
+    { name: 'Biology', full: 25, pass: 10 },
+    { name: 'GK & English', full: 25, pass: 10 }
+  ];
+  renderModalSubjects();
+
+  // Reset negative switch
+  const negEn = $('newExamNegEnabled');
+  if (negEn) {
+    negEn.checked = false;
+    toggleModalNeg(negEn);
+  }
   
   // Populate batch dropdown from DB
   loadBatches().then(() => {});
   
   setTimeout(() => $('newExamName').focus(), 80);
 }
+
 function closeCreateModal(e) {
   if (e && e.target !== $('createModal')) return;
   $('createModal').style.display = 'none';
 }
+
 async function saveExam() {
   const name  = $('newExamName').value.trim();
   const batch = $('newExamBatch').value;
   const type  = $('newExamType').value;
   const date  = $('newExamDate').value;
-  const total = parseInt($('newExamTotal').value) || 0;
+  const negEnabled = $('newExamNegEnabled')?.checked === true;
+  const negRate = parseFloat($('newExamNegRate')?.value) || 0.25;
 
   if (!name)  { exToast('Please enter exam name.', 'error'); $('newExamName').focus(); return; }
   if (!batch) { exToast('Please select a batch.', 'error'); return; }
   if (!type)  { exToast('Please select exam type.', 'error'); return; }
   if (!date)  { exToast('Please select a date.', 'error'); return; }
-  if (!total) { exToast('Please enter total marks.', 'error'); return; }
+
+  // Validate subjects
+  if (!modalSubjects || !modalSubjects.length) {
+    exToast('Please add at least 1 subject.', 'error');
+    return;
+  }
+  for (let i = 0; i < modalSubjects.length; i++) {
+    const s = modalSubjects[i];
+    if (!s.name || !s.name.trim()) {
+      exToast(`Please enter name for Subject #${i+1}.`, 'error');
+      return;
+    }
+    if (!s.full || Number(s.full) <= 0) {
+      exToast(`Please enter valid Full Marks (>0) for "${s.name}".`, 'error');
+      return;
+    }
+  }
+
+  const totalMarks = modalSubjects.reduce((sum, s) => sum + Number(s.full), 0);
+  const matchedBatch = cachedBatches.find(b => b.batchName === batch);
 
   const payload = {
     title: name,
     program: type,
+    batchId: matchedBatch ? matchedBatch._id : null,
     batchName: batch,
     examDate: new Date(date).toISOString(),
-    totalMarks: total,
-    subjects: [{ subjectName: $('newExamSubject').value.trim() || type, fullMarks: total, passMarks: parseInt($('newExamPass').value) || 0 }],
+    totalMarks: totalMarks,
+    negativeMarking: negEnabled,
+    negativeMarkPerWrong: negRate,
+    subjects: modalSubjects.map(s => ({
+      subjectName: s.name.trim(),
+      fullMarks: Number(s.full),
+      passMarks: Number(s.pass) || 0
+    })),
+    duration: parseInt($('newExamDuration')?.value) || 0,
+    notes: $('newExamNotes')?.value.trim() || '',
     status: 'Scheduled'
   };
 
@@ -289,14 +450,15 @@ async function saveExam() {
     const data = await res.json();
     if (data.success) {
       $('createModal').style.display = 'none';
-      ['newExamName','newExamSubject','newExamTotal','newExamPass','newExamDuration','newExamNotes']
-        .forEach(id => $(id).value = '');
+      ['newExamName','newExamDuration','newExamNotes'].forEach(id => {
+        if ($(id)) $(id).value = '';
+      });
       $('newExamBatch').value = '';
       $('newExamType').value  = '';
       await loadExamsFromApi();
       applyFilter();
       renderStats();
-      exToast(`✅ "${name}" created (Draft)`);
+      exToast(`✅ "${name}" (${modalSubjects.length} subjects, ${totalMarks} marks) created!`);
     } else {
       exToast('❌ ' + (data.message || 'Save failed'), 'error');
     }
@@ -340,6 +502,113 @@ async function confirmDelete() {
   renderStats();
 }
 
+/* ── CSV Download ── */
+async function downloadExamCSV(examId) {
+  const exam = EXAM_DEMO.exams.find(e => e.id === examId);
+  if (!exam) {
+    exToast('Exam not found', 'error');
+    return;
+  }
+
+  exToast(`Generating CSV for "${exam.name}"...`);
+
+  try {
+    const res = await fetch(`${API_BASE}/ucc/results/merit-list/${examId}`);
+    const data = await res.json();
+
+    if (!data.success || !data.meritList || !data.meritList.length) {
+      exToast('No results/entries found for this exam.', 'error');
+      return;
+    }
+
+    // Sort: Present by position, Absent at the bottom
+    const sorted = [...data.meritList].sort((a, b) => {
+      const isAbsA = a.status === 'Absent';
+      const isAbsB = b.status === 'Absent';
+      if (isAbsA && !isAbsB) return 1;
+      if (!isAbsA && isAbsB) return -1;
+      return (a.meritPosition || 9999) - (b.meritPosition || 9999);
+    });
+
+    const hasMultiSubjects = exam.subjects && exam.subjects.length > 1;
+    const subHeaders = hasMultiSubjects ? exam.subjects.map(s => `${s.subjectName} (${s.fullMarks})`) : [];
+
+    const header = [
+      'Roll',
+      'Name',
+      'Student Phone',
+      'Guardian Phone',
+      ...subHeaders,
+      'Total Marks',
+      'Correct',
+      'Wrong',
+      'Rank',
+      'Percentage',
+      'Grade',
+      'Status'
+    ];
+
+    const rows = sorted.map(r => {
+      const isAbsent = r.status === 'Absent';
+      const studentPhone = (r.studentId && r.studentId.phone) ? r.studentId.phone : (r.phone || '');
+      const guardianPhone = (r.studentId && r.studentId.guardianPhone) ? r.studentId.guardianPhone : (r.guardianPhone || '');
+      const correct = isAbsent ? '—' : (r.correctAnswer != null ? r.correctAnswer : '');
+      const wrong = isAbsent ? '—' : (r.wrongAnswer != null ? r.wrongAnswer : '');
+      const marks = isAbsent ? 'ABS' : (r.totalObtained != null ? r.totalObtained : 0);
+      const rank = isAbsent ? '—' : (r.meritPosition || '—');
+      const pct = isAbsent ? '0%' : `${r.percentage != null ? r.percentage : 0}%`;
+      const grade = isAbsent ? 'ABS' : getGrade(r.percentage || 0);
+      const status = r.status || (isAbsent ? 'Absent' : 'Pass');
+
+      const subMarks = hasMultiSubjects
+        ? exam.subjects.map((sub, sIdx) => {
+            if (isAbsent) return 'ABS';
+            const sm = (r.subjectMarks && r.subjectMarks.length)
+              ? r.subjectMarks.find(item => item.subjectName === sub.subjectName || (sIdx === 0 && !item.subjectName))
+              : null;
+            return sm && sm.marksObtained != null ? sm.marksObtained : '—';
+          })
+        : [];
+
+      return [
+        r.studentRoll || '',
+        r.studentName || '',
+        studentPhone,
+        guardianPhone,
+        ...subMarks,
+        marks,
+        correct,
+        wrong,
+        rank,
+        pct,
+        grade,
+        status
+      ];
+    });
+
+    const csv = [header, ...rows]
+      .map(row => row.map(v => `"${String(v != null ? v : '').replace(/"/g, '""')}"`).join(','))
+      .join('\r\n');
+
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const cleanExamName = (exam.name || 'Exam').replace(/[^a-zA-Z0-9_\u0980-\u09FF-]/g, '_');
+    const cleanBatch = (exam.batch || 'Batch').replace(/[^a-zA-Z0-9_\u0980-\u09FF-]/g, '_');
+    a.download = `MeritList_${cleanExamName}_${cleanBatch}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    exToast(`✅ CSV downloaded for "${exam.name}"`);
+  } catch (err) {
+    console.error('CSV download error:', err);
+    exToast('Failed to download CSV', 'error');
+  }
+}
+
 /* ── Auth ── */
 function initPage() {
   const user = JSON.parse(sessionStorage.getItem('uccAdminUser') || '{}');
@@ -374,6 +643,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 /* ── Export for other pages ── */
-window.EXAM_DEMO     = EXAM_DEMO;
-window.calcPositions = calcPositions;
-window.getGrade      = getGrade;
+window.EXAM_DEMO        = EXAM_DEMO;
+window.calcPositions    = calcPositions;
+window.getGrade         = getGrade;
+window.downloadExamCSV  = downloadExamCSV;

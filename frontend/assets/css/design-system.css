@@ -353,6 +353,107 @@ a {
     color: #4f46e5;
 }
 
+.finance-nav-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.finance-nav-heading {
+    display: flex;
+    align-items: center;
+    position: relative;
+}
+
+.finance-nav-heading .nav-item {
+    flex: 1;
+    padding-right: 38px;
+}
+
+.finance-nav-toggle {
+    position: absolute;
+    right: 8px;
+    width: 24px;
+    height: 24px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: #94a3b8;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.finance-nav-toggle:hover {
+    color: #4f46e5;
+    background: #eef2ff;
+}
+
+.finance-nav-toggle i {
+    width: auto;
+    margin: 0;
+    font-size: 0.7rem;
+    transition: transform 180ms ease;
+}
+
+    padding-right: 14px;
+    transform: rotate(180deg);
+}
+
+.finance-nav-group.open .finance-nav-toggle {
+    color: #0f766e;
+}
+
+.finance-nav-submenu {
+    display: none;
+    flex-direction: column;
+    gap: 2px;
+    display: none;
+    padding-left: 12px;
+    border-left: 1px solid #dbe3f0;
+}
+
+.finance-nav-group.open .finance-nav-submenu {
+    display: flex;
+}
+
+.finance-nav-submenu .nav-item {
+    padding: 8px 12px;
+    font-size: 0.84rem;
+}
+
+.finance-nav-submenu .nav-item i {
+    width: 18px;
+    margin-right: 9px;
+    font-size: 0.95rem;
+}
+
+.sidebar.collapsed .finance-nav-group {
+    position: relative;
+}
+
+.sidebar.collapsed .finance-nav-heading .nav-item {
+    padding-right: 11px;
+}
+
+.sidebar.collapsed .finance-nav-toggle {
+    display: none;
+}
+
+.sidebar.collapsed .finance-nav-submenu {
+    display: none;
+}
+
+.sidebar.collapsed .finance-nav-heading .nav-item .nav-tooltip {
+    display: none;
+}
+
+.sidebar.collapsed .finance-nav-heading .nav-item:hover .nav-tooltip {
+    display: block;
+}
+
 .sidebar.collapsed .nav-item {
     justify-content: center;
     padding: 11px;

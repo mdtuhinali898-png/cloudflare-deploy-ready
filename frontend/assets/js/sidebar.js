@@ -12,6 +12,77 @@
 
     if (!sidebar) return;
 
+    // Keep finance navigation compact while preserving the dashboard link.
+    function setupFinanceMenu() {
+        const nav = sidebar.querySelector('.sidebar-nav');
+        const financeLink = nav?.querySelector('a.nav-item[href="finance.html"]');
+        let expensesLink = nav?.querySelector('a.nav-item[href="expenses.html"]');
+        let payrollLink = nav?.querySelector('a.nav-item[href="payroll.html"]');
+        if (!nav || !financeLink || nav.querySelector('.finance-nav-group')) return;
+
+        const createFinanceLink = (href, icon, label) => {
+            const link = document.createElement('a');
+            link.href = href;
+            link.className = 'nav-item';
+            link.innerHTML = `<i class="fas ${icon}"></i><span>${label}</span><span class="nav-tooltip">${label}</span>`;
+            return link;
+        };
+
+        if (!expensesLink) expensesLink = createFinanceLink('expenses.html', 'fa-file-invoice-dollar', 'Expenses');
+        if (!payrollLink) payrollLink = createFinanceLink('payroll.html', 'fa-users-cog', 'Payroll');
+
+        const group = document.createElement('div');
+        group.className = 'finance-nav-group';
+        group.innerHTML = `
+            <div class="finance-nav-heading">
+                <a href="#" class="nav-item finance-nav-trigger">
+                    <i class="fas fa-briefcase"></i><span>Finance Management</span><span class="nav-tooltip">Finance Management</span>
+                </a>
+                <button type="button" class="finance-nav-toggle" aria-label="Toggle finance menu" aria-expanded="false">
+                    <i class="fas fa-chevron-down"></i>
+                </button>
+            </div>
+            <div class="finance-nav-submenu"></div>`;
+
+        const trigger = group.querySelector('.finance-nav-trigger');
+        const toggle = group.querySelector('.finance-nav-toggle');
+        const submenu = group.querySelector('.finance-nav-submenu');
+        toggle.style.display = 'none';
+        const dashboardWasActive = financeLink.classList.contains('active');
+
+        const financeLabel = financeLink.querySelector('span:not(.nav-tooltip)');
+        const financeTooltip = financeLink.querySelector('.nav-tooltip');
+        if (financeLabel) financeLabel.textContent = 'Finance Dashboard';
+        if (financeTooltip) financeTooltip.textContent = 'Finance Dashboard';
+
+        trigger.classList.toggle('active', dashboardWasActive);
+        submenu.append(expensesLink, payrollLink);
+        nav.insertBefore(group, nav.querySelector('a.nav-item[href="book-store.html"]') || nav.firstElementChild);
+
+        const setOpen = (open) => {
+            group.classList.toggle('open', open);
+            toggle.setAttribute('aria-expanded', String(open));
+        };
+
+        toggle.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            setOpen(!group.classList.contains('open'));
+        });
+
+        trigger.addEventListener('click', (event) => {
+            event.preventDefault();
+            sidebar.querySelectorAll('.nav-item.active').forEach(item => item.classList.remove('active'));
+            trigger.classList.add('active');
+            setOpen(!group.classList.contains('open'));
+        });
+
+        const currentPage = window.location.pathname.split('/').pop() || 'dashboard.html';
+        setOpen(currentPage === 'expenses.html' || currentPage === 'payroll.html');
+    }
+
+    setupFinanceMenu();
+
     // Restore collapsed state
     const wasCollapsed = localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true';
     if (wasCollapsed) {
@@ -98,7 +169,7 @@
     });
 
     // Optional: Click on active nav item to collapse
-    sidebar.querySelectorAll('.nav-item.active').forEach(item => {
+    sidebar.querySelectorAll('.nav-item.active:not(.finance-nav-trigger):not([href="finance.html"])').forEach(item => {
         item.addEventListener('click', () => {
             if (!sidebar.classList.contains('collapsed')) {
                 toggleSidebar();
@@ -121,6 +192,13 @@
         const activeLink = document.querySelector(`.nav-item[href="${pageName}"]`);
         if (activeLink) {
             activeLink.classList.add('active');
+        }
+
+        const financeGroup = document.querySelector('.finance-nav-group');
+        if (financeGroup && (pageName === 'expenses.html' || pageName === 'payroll.html')) {
+            financeGroup.classList.add('open');
+            financeGroup.querySelector('.finance-nav-trigger')?.classList.add('active');
+            financeGroup.querySelector('.finance-nav-toggle')?.setAttribute('aria-expanded', 'true');
         }
     }
     

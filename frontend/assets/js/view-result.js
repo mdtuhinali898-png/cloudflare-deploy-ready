@@ -128,9 +128,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td><span class="${getGradeClass(r.grade)}" style="font-weight:600;">${r.grade}</span></td>
                     <td><small>${r.remarks || '-'}</small></td>
                     <td>
-                        <button class="btn-view-results" onclick="viewStudentResult('${r.studentId}')" 
-                                style="padding:4px 10px; font-size:11px;">
-                            <i class="fas fa-eye"></i> View
+                        <button class="btn-result-view" onclick="viewStudentResult('${r.studentId}')" title="View Result Card">
+                            <i class="fas fa-eye"></i>
+                            <span>View</span>
                         </button>
                     </td>
                 </tr>

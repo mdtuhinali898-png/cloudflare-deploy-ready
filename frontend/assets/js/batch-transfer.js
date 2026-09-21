@@ -1,4 +1,5 @@
 // assets/js/batch-transfer.js
+// Modern, User-Friendly Batch Transfer Controller
 
 document.addEventListener('DOMContentLoaded', () => {
 
@@ -12,28 +13,40 @@ const API_BASE_URL = window.location.protocol === 'http:' && window.location.hos
 let currentStudent = null;
 let batchesData = [];
 let allStudentsData = [];
+let debounceTimer = null;
 
 // DOM elements
 const searchInput = document.getElementById('searchInput');
+const searchBtn = document.getElementById('searchBtn');
+const clearSearchBtn = document.getElementById('clearSearchBtn');
+const searchSuggestions = document.getElementById('searchSuggestions');
 const loadingSpinner = document.getElementById('loadingSpinner');
 const notFound = document.getElementById('notFound');
+const transferWorkflow = document.getElementById('transferWorkflow');
 const studentDetailsCard = document.getElementById('studentDetailsCard');
 const transferFormSection = document.getElementById('transferFormSection');
 const transferSuccess = document.getElementById('transferSuccess');
 const targetBatchSelect = document.getElementById('targetBatch');
 const newStudentIdDisplay = document.getElementById('newStudentIdDisplay');
+const newBatchFeeDisplay = document.getElementById('newBatchFeeDisplay');
+const feeDifferenceBadge = document.getElementById('feeDifferenceBadge');
+const copyNewIdBtn = document.getElementById('copyNewIdBtn');
 const transferBtn = document.getElementById('transferBtn');
 const confirmModal = document.getElementById('confirmModal');
+const recentTransfersBody = document.getElementById('recentTransfersBody');
 
 // ============================================
-// 2. INITIALIZE
+// 2. INITIALIZATION
 // ============================================
 async function init() {
-    await loadBatches();
-    await loadAllStudents();
     setupEventListeners();
+    await loadBatches();
+    loadRecentTransfers();
     
-    // Check URL for student ID parameter
+    // Background prefetch for instant search
+    loadAllStudents();
+
+    // Check URL for student ID parameter (e.g. ?studentId=H26-001)
     const urlParams = new URLSearchParams(window.location.search);
     const studentId = urlParams.get('studentId');
     if (studentId) {
@@ -43,13 +56,13 @@ async function init() {
 }
 
 // ============================================
-// 3. LOAD DATA
+// 3. DATA LOADING
 // ============================================
 async function loadBatches() {
     try {
         const response = await fetch(`${API_BASE_URL}/batches`);
         const result = await response.json();
-        if (result.success) {
+        if (result.success && Array.isArray(result.data)) {
             batchesData = result.data;
         }
     } catch (error) {
@@ -59,267 +72,425 @@ async function loadBatches() {
 
 async function loadAllStudents() {
     try {
-        const response = await fetch(`${API_BASE_URL}/students?limit=5000`);
+        const response = await fetch(`${API_BASE_URL}/students?limit=1000`);
         const result = await response.json();
         if (result.success || result.students) {
             allStudentsData = result.students || result.data || [];
         }
     } catch (error) {
-        console.error('Error loading students:', error);
+        console.error('Error loading students for auto-suggest:', error);
     }
 }
 
 // ============================================
-// 4. SEARCH STUDENT
+// 4. LIVE SEARCH & AUTO-SUGGEST
 // ============================================
-window.searchStudent = async function() {
+function handleSearchInput() {
     const query = searchInput.value.trim();
-    if (!query) {
-        alert('Please enter a Student ID or Phone Number');
+
+    if (query.length > 0) {
+        if (clearSearchBtn) clearSearchBtn.style.display = 'block';
+    } else {
+        if (clearSearchBtn) clearSearchBtn.style.display = 'none';
+        hideSuggestions();
         return;
     }
 
-    // Show loading
+    // Debounce live suggestions
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+        showSuggestions(query);
+    }, 200);
+}
+
+function showSuggestions(query) {
+    if (!searchSuggestions || allStudentsData.length === 0) return;
+
+    const lowerQuery = query.toLowerCase();
+    const matches = allStudentsData.filter(s => 
+        (s.studentId && s.studentId.toLowerCase().includes(lowerQuery)) ||
+        (s.name && s.name.toLowerCase().includes(lowerQuery)) ||
+        (s.phone && s.phone.includes(query)) ||
+        (s.guardianPhone && s.guardianPhone.includes(query)) ||
+        (s.roll && String(s.roll).includes(query))
+    ).slice(0, 5);
+
+    if (matches.length === 0) {
+        hideSuggestions();
+        return;
+    }
+
+    searchSuggestions.innerHTML = matches.map(s => `
+        <div class="bt-suggestion-item" data-id="${s.studentId}">
+            <div class="bt-suggestion-avatar">
+                ${s.photo ? `<img src="${s.photo}" alt="${s.name}">` : `<i class="fas fa-user-graduate"></i>`}
+            </div>
+            <div class="bt-suggestion-info">
+                <div class="bt-suggestion-name">${s.name}</div>
+                <div class="bt-suggestion-meta">
+                    <span><i class="fas fa-id-card"></i> ${s.studentId}</span>
+                    <span><i class="fas fa-layer-group"></i> ${s.batch || 'No Batch'}</span>
+                    ${s.phone ? `<span><i class="fas fa-phone"></i> ${s.phone}</span>` : ''}
+                    ${s.guardianPhone ? `<span><i class="fas fa-user-shield"></i> G: ${s.guardianPhone}</span>` : ''}
+                </div>
+            </div>
+        </div>
+    `).join('');
+
+    searchSuggestions.classList.add('active');
+
+    // Attach click events
+    searchSuggestions.querySelectorAll('.bt-suggestion-item').forEach(el => {
+        el.addEventListener('click', () => {
+            const selectedId = el.getAttribute('data-id');
+            searchInput.value = selectedId;
+            hideSuggestions();
+            searchStudent();
+        });
+    });
+}
+
+function hideSuggestions() {
+    if (searchSuggestions) {
+        searchSuggestions.classList.remove('active');
+        searchSuggestions.innerHTML = '';
+    }
+}
+
+// ============================================
+// 5. SEARCH STUDENT
+// ============================================
+window.searchStudent = async function() {
+    hideSuggestions();
+    const query = searchInput.value.trim();
+    if (!query) {
+        searchInput.focus();
+        return;
+    }
+
+    // Update UI states
     loadingSpinner.classList.add('active');
+    if (transferWorkflow) transferWorkflow.classList.remove('active');
     studentDetailsCard.classList.remove('active');
     transferFormSection.classList.remove('active');
     transferSuccess.classList.remove('active');
     notFound.classList.remove('active');
-    document.getElementById('searchBtn').disabled = true;
+    searchBtn.disabled = true;
 
     try {
-        // Try to find by student ID first (exact match)
-        let response = await fetch(`${API_BASE_URL}/students/${encodeURIComponent(query)}`);
-        let result = await response.json();
+        // Search by exact student ID, phone or name
+        const response = await fetch(`${API_BASE_URL}/students/${encodeURIComponent(query)}`);
+        const result = await response.json();
 
-        if (!result.success) {
-            // Try searching with query param
-            response = await fetch(`${API_BASE_URL}/students?search=${encodeURIComponent(query)}&limit=1`);
-            result = await response.json();
-            
-            if (result.success || result.students) {
-                const students = result.students || result.data || [];
-                if (students.length > 0) {
-                    currentStudent = students[0];
-                } else {
-                    throw new Error('Student not found');
-                }
+        if (result.success && result.student) {
+            const s = result.student;
+            const q = query.trim().toLowerCase();
+            const idMatches = s.studentId && s.studentId.toLowerCase() === q;
+            const cleanDigits = query.replace(/[^0-9]/g, '');
+            const phoneMatches = cleanDigits.length >= 5 && (
+                (s.phone && s.phone.replace(/[^0-9]/g, '') === cleanDigits) ||
+                (s.guardianPhone && s.guardianPhone.replace(/[^0-9]/g, '') === cleanDigits)
+            );
+            const nameMatches = s.name && s.name.toLowerCase() === q;
+
+            if (idMatches || phoneMatches || nameMatches) {
+                currentStudent = s;
+                displayStudentDetails(currentStudent);
             } else {
                 throw new Error('Student not found');
             }
         } else {
-            currentStudent = result.student;
+            throw new Error('Student not found');
         }
-
-        // Show student details
-        displayStudentDetails(currentStudent);
-        
     } catch (error) {
         console.error('Search error:', error);
         notFound.classList.add('active');
         currentStudent = null;
     } finally {
         loadingSpinner.classList.remove('active');
-        document.getElementById('searchBtn').disabled = false;
+        searchBtn.disabled = false;
     }
 };
 
 // ============================================
-// 5. DISPLAY STUDENT DETAILS
+// 6. DISPLAY STUDENT DETAILS
 // ============================================
 function displayStudentDetails(student) {
-    // Header
-    document.getElementById('studentNameDisplay').textContent = student.name;
-    document.getElementById('studentIdDisplay').textContent = student.studentId;
-    document.getElementById('currentBatchDisplay').textContent = student.batch;
+    // Left profile information
+    document.getElementById('studentNameDisplay').textContent = student.name || 'Unnamed Student';
+    document.getElementById('studentIdDisplay').textContent = student.studentId || '-';
+    
+    // Hidden fallback fields
+    const cb = document.getElementById('currentBatchDisplay');
+    if (cb) cb.textContent = student.batch || '-';
+    const dsId = document.getElementById('detailStudentId');
+    if (dsId) dsId.textContent = student.studentId || '-';
+    const dn = document.getElementById('detailName');
+    if (dn) dn.textContent = student.name || '-';
 
     // Avatar
     const avatarContainer = document.getElementById('studentAvatarLarge');
-    if (student.photo) {
-        avatarContainer.innerHTML = `<img src="${student.photo}" alt="${student.name}">`;
-    } else {
-        avatarContainer.innerHTML = `<i class="fas fa-user-graduate"></i>`;
+    if (avatarContainer) {
+        if (student.photo) {
+            avatarContainer.innerHTML = `<img src="${student.photo}" alt="${student.name}">`;
+        } else {
+            avatarContainer.innerHTML = `<i class="fas fa-user-graduate"></i>`;
+        }
     }
 
-    // Details grid
-    document.getElementById('detailStudentId').textContent = student.studentId;
-    document.getElementById('detailName').textContent = student.name;
-    document.getElementById('detailPhone').textContent = student.phone || '-';
-    document.getElementById('detailBatch').textContent = student.batch;
-    document.getElementById('detailFee').textContent = student.fee ? `৳${student.fee}` : '-';
-    
+    // Detail specs
+    const detailPhone = document.getElementById('detailPhone');
+    if (detailPhone) detailPhone.textContent = student.phone || '-';
+
+    const detailGuardianPhone = document.getElementById('detailGuardianPhone');
+    if (detailGuardianPhone) {
+        if (student.guardianPhone) {
+            detailGuardianPhone.textContent = student.guardianPhone;
+            if (student.guardianName) {
+                detailGuardianPhone.title = `Guardian: ${student.guardianName}`;
+            }
+        } else if (student.guardianName) {
+            detailGuardianPhone.textContent = student.guardianName;
+        } else {
+            detailGuardianPhone.textContent = '-';
+        }
+    }
+
+    const detailBatch = document.getElementById('detailBatch');
+    if (detailBatch) detailBatch.textContent = student.batch || '-';
+
+    const currentFee = student.fee || 0;
+    const detailFee = document.getElementById('detailFee');
+    if (detailFee) detailFee.textContent = `৳${currentFee.toLocaleString('en-US')}`;
+
     const statusEl = document.getElementById('detailStatus');
-    statusEl.innerHTML = `<span class="status-badge status-${student.status.toLowerCase()}">${student.status}</span>`;
+    if (statusEl) {
+        const isInactive = student.status && student.status.toLowerCase() === 'inactive';
+        statusEl.innerHTML = `<span class="bt-status-badge ${isInactive ? 'status-inactive' : 'status-active'}">${student.status || 'Active'}</span>`;
+    }
 
-    // Show details card
-    studentDetailsCard.classList.add('active');
-    notFound.classList.remove('active');
+    // Inactive alert
+    const inactiveWarning = document.getElementById('inactiveWarning');
+    if (inactiveWarning) {
+        const isInactive = student.status && student.status.toLowerCase() === 'inactive';
+        inactiveWarning.style.display = isInactive ? 'flex' : 'none';
+    }
 
-    // Load target batch dropdown (exclude current batch)
+    // Target batch dropdown
     populateTargetBatches(student.batch);
-    
-    // Show transfer form
+
+    // Show workflow card
+    if (transferWorkflow) transferWorkflow.classList.add('active');
+    studentDetailsCard.classList.add('active');
     transferFormSection.classList.add('active');
+    notFound.classList.remove('active');
     transferSuccess.classList.remove('active');
-    
-    // Reset form fields
+
+    // Reset right side inputs
     document.getElementById('transferFee').value = 0;
     document.getElementById('transferNotes').value = '';
-    transferBtn.disabled = true;
+    resetTargetPreview();
 }
 
 // ============================================
-// 6. POPULATE TARGET BATCHES
+// 7. POPULATE TARGET BATCHES
 // ============================================
 function populateTargetBatches(currentBatch) {
-    targetBatchSelect.innerHTML = '<option value="">Select Target Batch</option>';
-    
-    let hasOtherBatches = false;
-    
+    targetBatchSelect.innerHTML = '<option value="">-- Choose New Batch --</option>';
+    let availableCount = 0;
+
     batchesData.forEach(batch => {
+        // Exclude student's current batch
         if (batch.name !== currentBatch && batch.status === 'Active') {
             const option = document.createElement('option');
             option.value = batch.name;
-            option.textContent = `${batch.name} (Fee: ৳${batch.fee})`;
+            option.textContent = `${batch.name} (৳${batch.fee || 0})`;
+            option.dataset.fee = batch.fee || 0;
             targetBatchSelect.appendChild(option);
-            hasOtherBatches = true;
+            availableCount++;
         }
     });
-    
-    if (!hasOtherBatches) {
+
+    if (availableCount === 0) {
         const option = document.createElement('option');
         option.value = '';
-        option.textContent = 'No other batches available';
+        option.textContent = 'No other active batches available';
         option.disabled = true;
         targetBatchSelect.appendChild(option);
     }
-    
+}
+
+// ============================================
+// 8. ON TARGET BATCH CHANGE
+// ============================================
+window.onTargetBatchChange = function() {
+    const targetBatch = targetBatchSelect.value;
+    if (!targetBatch || !currentStudent) {
+        resetTargetPreview();
+        return;
+    }
+
+    // Calculate new ID
+    const newId = generateNewStudentId(targetBatch);
+    newStudentIdDisplay.textContent = newId;
+    if (copyNewIdBtn) copyNewIdBtn.style.display = 'inline-flex';
+
+    // Calculate new fee and difference
+    const targetBatchObj = batchesData.find(b => b.name === targetBatch);
+    const newFee = targetBatchObj ? (targetBatchObj.fee || 0) : (currentStudent.fee || 0);
+    const currentFee = currentStudent.fee || 0;
+    const diff = newFee - currentFee;
+
+    if (newBatchFeeDisplay) {
+        newBatchFeeDisplay.textContent = `৳${newFee.toLocaleString('en-US')}`;
+    }
+
+    if (feeDifferenceBadge) {
+        if (diff > 0) {
+            feeDifferenceBadge.className = 'bt-diff-badge increase';
+            feeDifferenceBadge.textContent = `+৳${diff} increase`;
+        } else if (diff < 0) {
+            feeDifferenceBadge.className = 'bt-diff-badge decrease';
+            feeDifferenceBadge.textContent = `-৳${Math.abs(diff)} decrease`;
+        } else {
+            feeDifferenceBadge.className = 'bt-diff-badge neutral';
+            feeDifferenceBadge.textContent = 'Same fee';
+        }
+    }
+
+    // Enable transfer action
+    transferBtn.disabled = false;
+};
+
+function resetTargetPreview() {
     newStudentIdDisplay.textContent = '---';
+    if (copyNewIdBtn) copyNewIdBtn.style.display = 'none';
+    if (newBatchFeeDisplay) newBatchFeeDisplay.textContent = '৳0';
+    if (feeDifferenceBadge) {
+        feeDifferenceBadge.className = 'bt-diff-badge neutral';
+        feeDifferenceBadge.textContent = 'No change';
+    }
     transferBtn.disabled = true;
 }
 
 // ============================================
-// 7. ON TARGET BATCH CHANGE
-// ============================================
-window.onTargetBatchChange = function() {
-    const targetBatch = targetBatchSelect.value;
-    
-    if (!targetBatch || !currentStudent) {
-        newStudentIdDisplay.textContent = '---';
-        transferBtn.disabled = true;
-        return;
-    }
-    
-    // Generate new student ID for target batch
-    const newId = generateNewStudentId(targetBatch);
-    newStudentIdDisplay.textContent = newId;
-    
-    // Enable transfer button
-    transferBtn.disabled = false;
-};
-
-// ============================================
-// 8. GENERATE NEW STUDENT ID
+// 9. GENERATE NEW STUDENT ID
 // ============================================
 function generateNewStudentId(targetBatch) {
-    // Count existing students in target batch (excluding current student)
+    const targetBatchObj = batchesData.find(b => b.name === targetBatch);
+    
+    // Count existing students in target batch
     const batchStudents = allStudentsData.filter(s => s.batch === targetBatch && s.studentId !== currentStudent.studentId);
     const nextNumber = batchStudents.length + 1;
-    
-    // Generate prefix from batch name
-    const words = targetBatch.split(' ');
-    let prefix;
-    if (words.length >= 2) {
-        const firstPart = words[0].substring(0, Math.min(2, words[0].length)).toUpperCase();
-        const lastPart = words[words.length - 1].substring(2);
-        prefix = firstPart + lastPart;
-    } else {
-        prefix = targetBatch.substring(0, 3).toUpperCase();
+
+    // Use stored prefix or fallback
+    let prefix = (targetBatchObj && targetBatchObj.prefix) ? targetBatchObj.prefix : '';
+    if (!prefix) {
+        const words = targetBatch.split(' ');
+        if (words.length >= 2) {
+            const firstPart = words[0].substring(0, Math.min(2, words[0].length)).toUpperCase();
+            const lastPart = words[words.length - 1].substring(2);
+            prefix = firstPart + lastPart;
+        } else {
+            prefix = targetBatch.substring(0, 3).toUpperCase();
+        }
     }
-    
+
     return `${prefix}-${String(nextNumber).padStart(3, '0')}`;
 }
 
 // ============================================
-// 9. SHOW CONFIRM MODAL
+// 10. COPY STUDENT ID
+// ============================================
+window.copyNewStudentId = function() {
+    const idText = newStudentIdDisplay.textContent;
+    if (!idText || idText === '---') return;
+
+    navigator.clipboard.writeText(idText).then(() => {
+        const originalIcon = copyNewIdBtn.innerHTML;
+        copyNewIdBtn.innerHTML = '<i class="fas fa-check" style="color:#10b981;"></i>';
+        setTimeout(() => {
+            copyNewIdBtn.innerHTML = originalIcon;
+        }, 1500);
+    }).catch(err => {
+        console.error('Failed to copy ID:', err);
+    });
+};
+
+// ============================================
+// 11. CONFIRM MODAL
 // ============================================
 window.showConfirmModal = function() {
     if (!currentStudent || !targetBatchSelect.value) return;
-    
+
     const targetBatch = targetBatchSelect.value;
     const newId = newStudentIdDisplay.textContent;
     const transferFee = parseFloat(document.getElementById('transferFee').value) || 0;
     const notes = document.getElementById('transferNotes').value.trim();
-    
-    // Find target batch details
     const targetBatchObj = batchesData.find(b => b.name === targetBatch);
-    
+    const newFee = targetBatchObj ? targetBatchObj.fee : currentStudent.fee;
+
     const confirmDetails = document.getElementById('confirmDetails');
     confirmDetails.innerHTML = `
-        <div>
-            <span class="label">Student Name</span>
-            <span class="value">${currentStudent.name}</span>
+        <div class="bt-confirm-row">
+            <span class="bt-confirm-label">Student Name</span>
+            <span class="bt-confirm-val">${currentStudent.name}</span>
         </div>
-        <div>
-            <span class="label">Current Batch</span>
-            <span class="value">${currentStudent.batch}</span>
+        <div class="bt-confirm-row">
+            <span class="bt-confirm-label">Current Batch</span>
+            <span class="bt-confirm-val">${currentStudent.batch}</span>
         </div>
-        <div>
-            <span class="label">Current ID</span>
-            <span class="value">${currentStudent.studentId}</span>
+        <div class="bt-confirm-row">
+            <span class="bt-confirm-label">Current ID</span>
+            <span class="bt-confirm-val">${currentStudent.studentId}</span>
         </div>
-        <div>
-            <span class="label">Target Batch</span>
-            <span class="value highlight">${targetBatch}</span>
+        <div class="bt-confirm-row">
+            <span class="bt-confirm-label">Target Batch</span>
+            <span class="bt-confirm-val highlight">${targetBatch}</span>
         </div>
-        <div>
-            <span class="label">New Student ID</span>
-            <span class="value highlight">${newId}</span>
+        <div class="bt-confirm-row">
+            <span class="bt-confirm-label">New Student ID</span>
+            <span class="bt-confirm-val highlight">${newId}</span>
         </div>
-        ${targetBatchObj ? `<div><span class="label">New Fee</span><span class="value">৳${targetBatchObj.fee}</span></div>` : ''}
-        <div>
-            <span class="label">Transfer Fee</span>
-            <span class="value">${transferFee > 0 ? '৳' + transferFee : 'None'}</span>
+        <div class="bt-confirm-row">
+            <span class="bt-confirm-label">New Monthly Fee</span>
+            <span class="bt-confirm-val">৳${(newFee || 0).toLocaleString('en-US')}</span>
         </div>
-        ${notes ? `<div><span class="label">Notes</span><span class="value">${notes}</span></div>` : ''}
+        ${transferFee > 0 ? `
+        <div class="bt-confirm-row">
+            <span class="bt-confirm-label">Transfer Fee</span>
+            <span class="bt-confirm-val">৳${transferFee}</span>
+        </div>` : ''}
+        ${notes ? `
+        <div class="bt-confirm-row">
+            <span class="bt-confirm-label">Notes</span>
+            <span class="bt-confirm-val">${notes}</span>
+        </div>` : ''}
     `;
-    
+
     confirmModal.classList.add('active');
 };
 
-// ============================================
-// 10. CLOSE CONFIRM MODAL
-// ============================================
 window.closeConfirmModal = function() {
     confirmModal.classList.remove('active');
 };
 
-// Close modal on outside click
-confirmModal.addEventListener('click', (e) => {
-    if (e.target === confirmModal) {
-        closeConfirmModal();
-    }
-});
-
 // ============================================
-// 11. EXECUTE TRANSFER
+// 12. EXECUTE TRANSFER
 // ============================================
 window.executeTransfer = async function() {
     const targetBatch = targetBatchSelect.value;
     const transferFee = parseFloat(document.getElementById('transferFee').value) || 0;
     const notes = document.getElementById('transferNotes').value.trim();
     
-    // Disable confirm button
     const confirmBtn = document.getElementById('confirmTransferBtn');
     confirmBtn.disabled = true;
-    confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
-    
+    confirmBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Transferring...';
+
     try {
         const response = await fetch(`${API_BASE_URL}/batches/transfer`, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 studentId: currentStudent.studentId,
                 targetBatch: targetBatch,
@@ -327,33 +498,66 @@ window.executeTransfer = async function() {
                 notes: notes
             })
         });
-        
+
         const result = await response.json();
-        
+
         if (result.success) {
-            // Close modal
             closeConfirmModal();
-            
-            // Hide transfer form, show success
-            transferFormSection.classList.remove('active');
+
+            // Hide workflow, show success state
+            if (transferWorkflow) transferWorkflow.classList.remove('active');
             studentDetailsCard.classList.remove('active');
-            
+            transferFormSection.classList.remove('active');
+
             const data = result.data;
-            document.getElementById('successDetails').innerHTML = `
-                <div><strong>Student:</strong> ${data.student.name}</div>
-                <div><strong>From:</strong> ${data.previousBatch} (ID: ${data.previousStudentId})</div>
-                <div><strong>To:</strong> ${data.targetBatch} (ID: ${data.newStudentId})</div>
-                ${transferFee > 0 ? `<div><strong>Transfer Fee:</strong> ৳${transferFee}</div>` : ''}
-                <div><strong>Date:</strong> ${new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+            const successDetails = document.getElementById('successDetails');
+            successDetails.innerHTML = `
+                <div class="bt-summary-item">
+                    <span class="bt-summary-label">Student Name</span>
+                    <span class="bt-summary-val">${data.student.name}</span>
+                </div>
+                <div class="bt-summary-item">
+                    <span class="bt-summary-label">Transfer Date</span>
+                    <span class="bt-summary-val">${new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                </div>
+                <div class="bt-summary-item">
+                    <span class="bt-summary-label">From Batch</span>
+                    <span class="bt-summary-val">${data.previousBatch} <small>(${data.previousStudentId})</small></span>
+                </div>
+                <div class="bt-summary-item">
+                    <span class="bt-summary-label">To Batch</span>
+                    <span class="bt-summary-val text-primary">${data.targetBatch} <small>(${data.newStudentId})</small></span>
+                </div>
+                ${transferFee > 0 ? `
+                <div class="bt-summary-item">
+                    <span class="bt-summary-label">Transfer Fee</span>
+                    <span class="bt-summary-val">৳${transferFee}</span>
+                </div>` : ''}
+                <div class="bt-summary-item">
+                    <span class="bt-summary-label">Record Status</span>
+                    <span class="bt-summary-val text-success"><i class="fas fa-check-circle"></i> Payments & Results Linked</span>
+                </div>
             `;
-            
+
             transferSuccess.classList.add('active');
+
+            // Save to local recent history & refresh table
+            recordRecentTransfer({
+                studentName: data.student.name,
+                currentStudentId: data.newStudentId,
+                previousBatch: data.previousBatch,
+                currentBatch: data.targetBatch,
+                transferFee: transferFee,
+                date: new Date().toISOString()
+            });
+
         } else {
-            alert('❌ Transfer failed: ' + result.message);
+            alert('❌ Transfer Failed: ' + result.message);
         }
+
     } catch (error) {
         console.error('Transfer error:', error);
-        alert('❌ Transfer failed. Please ensure the backend server is running.');
+        alert('❌ Network or server error. Please ensure backend server is operational.');
     } finally {
         confirmBtn.disabled = false;
         confirmBtn.innerHTML = '<i class="fas fa-check"></i> Confirm Transfer';
@@ -361,56 +565,184 @@ window.executeTransfer = async function() {
 };
 
 // ============================================
-// 12. RESET
+// 13. RESET ACTIONS
 // ============================================
 window.resetForm = function() {
     targetBatchSelect.value = '';
     document.getElementById('transferFee').value = 0;
     document.getElementById('transferNotes').value = '';
-    newStudentIdDisplay.textContent = '---';
-    transferBtn.disabled = true;
+    resetTargetPreview();
 };
 
 window.resetAll = function() {
     currentStudent = null;
     searchInput.value = '';
-    searchInput.focus();
-    
+    hideSuggestions();
+    if (clearSearchBtn) clearSearchBtn.style.display = 'none';
+
+    if (transferWorkflow) transferWorkflow.classList.remove('active');
     studentDetailsCard.classList.remove('active');
     transferFormSection.classList.remove('active');
     transferSuccess.classList.remove('active');
     notFound.classList.remove('active');
-    
-    targetBatchSelect.innerHTML = '<option value="">Select Target Batch</option>';
-    newStudentIdDisplay.textContent = '---';
-    transferBtn.disabled = true;
+
+    targetBatchSelect.innerHTML = '<option value="">-- Choose New Batch --</option>';
     document.getElementById('transferFee').value = 0;
     document.getElementById('transferNotes').value = '';
+    resetTargetPreview();
+
+    searchInput.focus();
 };
 
 // ============================================
-// 13. SIDEBAR TOGGLE
+// 14. RECENT TRANSFERS LOG
 // ============================================
-const sidebarToggle = document.getElementById('sidebarToggle');
-if (sidebarToggle) {
-    sidebarToggle.addEventListener('click', () => {
-        document.getElementById('sidebar').classList.toggle('active');
-    });
+window.loadRecentTransfers = async function() {
+    if (!recentTransfersBody) return;
+
+    const refreshIcon = document.getElementById('recentRefreshIcon');
+    if (refreshIcon) refreshIcon.classList.add('fa-spin');
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/batches/transfers/recent`);
+        const data = await response.json();
+
+        if (data.success && Array.isArray(data.transfers) && data.transfers.length > 0) {
+            renderRecentTransfers(data.transfers);
+        } else {
+            // Fallback to localStorage records
+            const localRecords = getLocalRecentTransfers();
+            if (localRecords.length > 0) {
+                renderRecentTransfers(localRecords);
+            } else {
+                recentTransfersBody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="bt-table-empty">
+                            <i class="fas fa-inbox"></i> No recent batch transfers recorded yet.
+                        </td>
+                    </tr>
+                `;
+            }
+        }
+    } catch (error) {
+        const localRecords = getLocalRecentTransfers();
+        if (localRecords.length > 0) {
+            renderRecentTransfers(localRecords);
+        } else {
+            recentTransfersBody.innerHTML = `
+                <tr>
+                    <td colspan="7" class="bt-table-empty">
+                        <i class="fas fa-info-circle"></i> Unable to load recent transfers from server.
+                    </td>
+                </tr>
+            `;
+        }
+    } finally {
+        if (refreshIcon) setTimeout(() => refreshIcon.classList.remove('fa-spin'), 400);
+    }
+};
+
+function renderRecentTransfers(list) {
+    if (!recentTransfersBody) return;
+
+    recentTransfersBody.innerHTML = list.map(item => {
+        // Parse from rawNote if available
+        let fromBatch = item.previousBatch || 'Previous';
+        let toBatch = item.currentBatch || 'Target';
+        let fee = item.transferFee || 0;
+        
+        if (item.rawNote) {
+            const matchFrom = item.rawNote.match(/From "([^"]+)"/);
+            const matchTo = item.rawNote.match(/To "([^"]+)"/);
+            const matchFee = item.rawNote.match(/Transfer Fee: ৳([0-9]+)/);
+            if (matchFrom) fromBatch = matchFrom[1];
+            if (matchTo) toBatch = matchTo[1];
+            if (matchFee) fee = matchFee[1];
+        }
+
+        const dateStr = item.updatedAt || item.date;
+        const formattedDate = dateStr 
+            ? new Date(dateStr).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+            : 'Recent';
+
+        return `
+            <tr>
+                <td>
+                    <strong>${item.studentName || 'Student'}</strong><br>
+                    <small class="text-muted" style="font-family:monospace;">${item.currentStudentId || ''}</small>
+                </td>
+                <td><span class="bt-status-badge" style="background:#f1f5f9;color:#475569;">${fromBatch}</span></td>
+                <td class="text-center">
+                    <span class="bt-transfer-arrow-pill"><i class="fas fa-arrow-right"></i></span>
+                </td>
+                <td><span class="bt-status-badge status-active">${toBatch}</span></td>
+                <td>${fee > 0 ? `৳${fee}` : '<span class="text-muted">None</span>'}</td>
+                <td><small>${formattedDate}</small></td>
+                <td><span class="bt-status-badge status-active"><i class="fas fa-check"></i> Completed</span></td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function recordRecentTransfer(record) {
+    try {
+        const history = getLocalRecentTransfers();
+        history.unshift(record);
+        localStorage.setItem('edusmart_recent_transfers', JSON.stringify(history.slice(0, 15)));
+        loadRecentTransfers();
+    } catch (e) {
+        console.warn('LocalStorage unavailable:', e);
+    }
+}
+
+function getLocalRecentTransfers() {
+    try {
+        const data = localStorage.getItem('edusmart_recent_transfers');
+        return data ? JSON.parse(data) : [];
+    } catch (e) {
+        return [];
+    }
 }
 
 // ============================================
-// 14. EVENT LISTENERS
+// 15. EVENT LISTENERS
 // ============================================
 function setupEventListeners() {
+    // Search input enter & typing
     searchInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
             searchStudent();
         }
     });
+
+    searchInput.addEventListener('input', handleSearchInput);
+
+    // Hide suggestions on outside click
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.bt-input-icon-group')) {
+            hideSuggestions();
+        }
+    });
+
+    // Close modal on escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && confirmModal.classList.contains('active')) {
+            closeConfirmModal();
+        }
+    });
+
+    // Sidebar toggle support
+    const sidebarToggle = document.getElementById('sidebarToggle');
+    if (sidebarToggle) {
+        sidebarToggle.addEventListener('click', () => {
+            const sidebar = document.getElementById('sidebar');
+            if (sidebar) sidebar.classList.toggle('active');
+        });
+    }
 }
 
 // ============================================
-// 15. INITIALIZE
+// 16. RUN
 // ============================================
 init();
 

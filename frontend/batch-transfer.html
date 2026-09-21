@@ -1,12 +1,16 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="bn">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Batch Transfer - Student ERP</title>
+    <title>Batch Transfer - EduSmart ERP</title>
+    <!-- Fonts & Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@600;700;800&display=swap" rel="stylesheet">
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="assets/css/design-system.css">
     <link rel="stylesheet" href="assets/css/dashboard.css">
     <link rel="stylesheet" href="assets/css/batch-transfer.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
 
@@ -34,10 +38,11 @@
             <a href="add-student.html" class="nav-item"><i class="fas fa-user-plus"></i><span>Admission</span><span class="nav-tooltip">Admission</span></a>
             <a href="exams.html" class="nav-item"><i class="fas fa-pencil-alt"></i><span>Exams</span><span class="nav-tooltip">Exams</span></a>
             <a href="payments.html" class="nav-item"><i class="fas fa-money-bill-wave"></i><span>Payments</span><span class="nav-tooltip">Payments</span></a>
-            <a href="receipt.html" class="nav-item"><i class="fas fa-receipt"></i><span>Receipts</span><span class="nav-tooltip">Receipts</span></a>
+            <a href="receipt.html" class="nav-item" style="display:none"><i class="fas fa-receipt"></i><span>Receipts</span><span class="nav-tooltip">Receipts</span></a>
             <a href="reports.html" class="nav-item"><i class="fas fa-chart-bar"></i><span>Reports</span><span class="nav-tooltip">Reports</span></a>
             <a href="finance.html" class="nav-item"><i class="fas fa-chart-line"></i><span>Finance</span><span class="nav-tooltip">Finance</span></a>
             <a href="expenses.html" class="nav-item"><i class="fas fa-shopping-cart"></i><span>Expenses</span><span class="nav-tooltip">Expenses</span></a>
+            <a href="book-store.html" class="nav-item"><i class="fas fa-book"></i><span>Book Store</span><span class="nav-tooltip">Book Store</span></a>
             <a href="batches.html" class="nav-item"><i class="fas fa-layer-group"></i><span>Batches</span><span class="nav-tooltip">Batches</span></a>
             <a href="batch-transfer.html" class="nav-item active"><i class="fas fa-exchange-alt"></i><span>Batch Transfer</span><span class="nav-tooltip">Batch Transfer</span></a>
             <a href="settings.html" class="nav-item"><i class="fas fa-cog"></i><span>Settings</span><span class="nav-tooltip">Settings</span></a>
@@ -50,9 +55,10 @@
 
     <!-- Main Content -->
     <main class="main-content">
+
         <!-- Top Header -->
         <header class="top-header">
-            <h1 class="page-title">Batch Transfer</h1>
+            <h1 class="page-title">Batch Transfer Hub</h1>
             <div class="user-info">
                 <img src="https://i.pravatar.cc/45" alt="Admin" class="user-avatar">
                 <div class="user-details">
@@ -62,161 +68,344 @@
             </div>
         </header>
 
-        <!-- Page Header -->
-        <div class="page-header-action">
-            <div>
-                <h2>Transfer Student to Another Batch</h2>
-                <p>Search for a student by ID and transfer them to a different batch</p>
+        <!-- Page Hero Banner -->
+        <div class="bt-hero-banner">
+            <div class="bt-hero-text">
+                <div class="bt-badge-tag"><i class="fas fa-arrows-split-up-and-left"></i> Batch Migration System</div>
+                <h2>Student Batch Transfer</h2>
+                <p>Seamlessly migrate students between academic batches with real-time ID preview, fee recalculation, and 100% preserved transaction history.</p>
             </div>
-            <a href="batches.html" class="btn-primary">
-                <i class="fas fa-layer-group"></i> Manage Batches
-            </a>
+            <div class="bt-hero-actions">
+                <a href="batches.html" class="bt-btn-secondary">
+                    <i class="fas fa-layer-group"></i> Manage Batches
+                </a>
+            </div>
         </div>
 
-        <!-- Search Section -->
-        <section class="search-section">
-            <h3><i class="fas fa-search"></i> Search Student</h3>
-            <div class="search-box">
-                <input type="text" id="searchInput" placeholder="Enter Student ID (e.g., H26-001) or Phone Number..." autocomplete="off">
-                <button class="btn-search" id="searchBtn" onclick="searchStudent()">
-                    <i class="fas fa-search"></i> Search
+        <!-- Search Bar Section -->
+        <section class="bt-search-card">
+            <div class="bt-search-header">
+                <span class="bt-search-label-icon"><i class="fas fa-user-tag"></i></span>
+                <div>
+                    <h3>Find Student</h3>
+                    <p>Search by Student ID (e.g. H26-001), Roll, or Registered Phone Number</p>
+                </div>
+            </div>
+            <div class="bt-search-control-wrap">
+                <div class="bt-input-icon-group">
+                    <i class="fas fa-search bt-search-icon"></i>
+                    <input
+                        type="text"
+                        id="searchInput"
+                        class="bt-search-field"
+                        placeholder="Type student ID, phone number or name..."
+                        autocomplete="off"
+                    >
+                    <button type="button" class="bt-clear-search" id="clearSearchBtn" onclick="resetAll()" title="Clear search">
+                        <i class="fas fa-times"></i>
+                    </button>
+                    <!-- Live Suggestions Dropdown -->
+                    <div class="bt-search-suggestions" id="searchSuggestions"></div>
+                </div>
+                <button class="bt-btn-primary bt-search-submit" id="searchBtn" onclick="searchStudent()">
+                    <i class="fas fa-search"></i> <span>Search Student</span>
                 </button>
             </div>
         </section>
 
-        <!-- Loading Spinner -->
-        <div class="loading-spinner" id="loadingSpinner">
-            <div class="spinner"></div>
-            <p>Searching student...</p>
+        <!-- Loading State -->
+        <div class="bt-state-box bt-loading" id="loadingSpinner">
+            <div class="bt-spinner"></div>
+            <h4>Searching Student Record...</h4>
+            <p>Fetching enrolled student details from the database</p>
         </div>
 
-        <!-- Student Not Found -->
-        <div class="not-found" id="notFound">
-            <div class="not-found-icon"><i class="fas fa-user-slash"></i></div>
+        <!-- Not Found State -->
+        <div class="bt-state-box bt-not-found" id="notFound">
+            <div class="bt-not-found-icon"><i class="fas fa-user-slash"></i></div>
             <h3>Student Not Found</h3>
-            <p>No student found with the provided ID. Please check and try again.</p>
-        </div>
-
-        <!-- Student Details Card -->
-        <div class="student-details-card" id="studentDetailsCard">
-            <div class="student-details-header">
-                <div class="student-avatar-large" id="studentAvatarLarge">
-                    <i class="fas fa-user-graduate"></i>
-                </div>
-                <div class="student-header-info">
-                    <h2 id="studentNameDisplay">-</h2>
-                    <p><i class="fas fa-id-card"></i> ID: <span id="studentIdDisplay">-</span></p>
-                    <p><i class="fas fa-layer-group"></i> Current Batch: <span id="currentBatchDisplay">-</span></p>
-                </div>
-            </div>
-            <div class="student-details-body">
-                <div class="details-grid">
-                    <div class="detail-item">
-                        <label>Student ID</label>
-                        <strong id="detailStudentId">-</strong>
-                    </div>
-                    <div class="detail-item">
-                        <label>Full Name</label>
-                        <strong id="detailName">-</strong>
-                    </div>
-                    <div class="detail-item">
-                        <label>Phone</label>
-                        <strong id="detailPhone">-</strong>
-                    </div>
-                    <div class="detail-item">
-                        <label>Current Batch</label>
-                        <strong><span class="current-batch-badge" id="detailBatch">-</span></strong>
-                    </div>
-                    <div class="detail-item">
-                        <label>Monthly Fee</label>
-                        <strong id="detailFee">-</strong>
-                    </div>
-                    <div class="detail-item">
-                        <label>Status</label>
-                        <strong id="detailStatus">-</strong>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Transfer Form Section -->
-        <div class="transfer-form-section" id="transferFormSection">
-            <h3><i class="fas fa-exchange-alt"></i> Batch Transfer Details</h3>
-            <form id="transferForm" onsubmit="return false;">
-                <div class="transfer-form">
-                    <div class="form-group">
-                        <label>Target Batch <span class="required">*</span></label>
-                        <select id="targetBatch" onchange="onTargetBatchChange()">
-                            <option value="">Select Target Batch</option>
-                        </select>
-                        <div class="input-hint">Select the batch to transfer this student to</div>
-                    </div>
-                    <div class="form-group">
-                        <label>New Student ID (Auto-generated)</label>
-                        <div class="new-id-preview" id="newIdPreview">
-                            <label>New ID in Target Batch</label>
-                            <div class="new-id-value" id="newStudentIdDisplay">---</div>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label>Transfer Fee (৳)</label>
-                        <input type="number" id="transferFee" placeholder="0" min="0" value="0">
-                        <div class="input-hint">Optional transfer/change fee</div>
-                    </div>
-                    <div class="form-group">
-                        <label>Notes (Optional)</label>
-                        <input type="text" id="transferNotes" placeholder="Reason for transfer...">
-                    </div>
-                    <div class="form-group form-group-full">
-                        <div class="fee-info">
-                            <i class="fas fa-info-circle"></i>
-                            <span>The student's student ID will be automatically updated to match the new batch's ID format. All payment records will remain linked to the student.</span>
-                        </div>
-                    </div>
-                    <div class="form-actions">
-                        <button type="button" class="btn-cancel" onclick="resetForm()">
-                            <i class="fas fa-undo"></i> Reset
-                        </button>
-                        <button type="button" class="btn-success" id="transferBtn" onclick="showConfirmModal()" disabled>
-                            <i class="fas fa-exchange-alt"></i> Transfer Batch
-                        </button>
-                    </div>
-                </div>
-            </form>
-        </div>
-
-        <!-- Success Message -->
-        <div class="transfer-success" id="transferSuccess">
-            <div class="success-icon"><i class="fas fa-check-circle"></i></div>
-            <h3>✅ Batch Transfer Successful!</h3>
-            <p>The student has been transferred to the new batch successfully.</p>
-            <div class="success-details" id="successDetails">
-                <!-- Injected by JS -->
-            </div>
-            <button class="btn-primary" onclick="resetAll()">
-                <i class="fas fa-redo"></i> Transfer Another Student
+            <p>No active record matched the ID or phone number provided. Please verify the credentials and search again.</p>
+            <button class="bt-btn-secondary" onclick="document.getElementById('searchInput').focus()">
+                <i class="fas fa-redo"></i> Try Again
             </button>
         </div>
 
-        <!-- Confirmation Modal -->
-        <div class="modal" id="confirmModal">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h3><i class="fas fa-exclamation-triangle"></i> Confirm Batch Transfer</h3>
-                    <button class="modal-close" onclick="closeConfirmModal()">&times;</button>
+        <!-- HERO "FROM ➔ TO" VISUAL TRANSFER FLOW -->
+        <div class="bt-workflow-container" id="transferWorkflow">
+
+            <!-- Inactive Warning Banner -->
+            <div class="bt-inactive-alert" id="inactiveWarning" style="display: none;">
+                <div class="bt-alert-icon"><i class="fas fa-exclamation-triangle"></i></div>
+                <div class="bt-alert-content">
+                    <strong>Notice: Student Status is Inactive</strong>
+                    <span>This student is currently marked as Inactive. Transferring will update their batch, but verify before proceeding.</span>
                 </div>
-                <div class="modal-body">
-                    <p style="color:#666; margin-bottom:10px;">Please review the transfer details below carefully:</p>
-                    <div class="confirm-details" id="confirmDetails">
-                        <!-- Injected by JS -->
+            </div>
+
+            <div class="bt-transfer-flow-card">
+
+                <!-- LEFT SIDE: CURRENT BATCH DETAILS -->
+                <div class="bt-flow-column bt-source-col" id="studentDetailsCard">
+                    <div class="bt-col-header">
+                        <span class="bt-col-tag bt-source-tag"><i class="fas fa-sign-out-alt"></i> CURRENT BATCH (FROM)</span>
+                        <button type="button" class="bt-btn-icon-link" onclick="resetAll()" title="Search Another Student">
+                            <i class="fas fa-user-plus"></i> Change
+                        </button>
                     </div>
-                    <p style="color:#e74a3b; font-size:13px; margin-top:10px;">
-                        <i class="fas fa-exclamation-circle"></i> This action will update the student's batch and ID. This cannot be undone automatically.
-                    </p>
+
+                    <div class="bt-student-profile-summary">
+                        <div class="bt-avatar-box" id="studentAvatarLarge">
+                            <i class="fas fa-user-graduate"></i>
+                        </div>
+                        <div class="bt-profile-info">
+                            <h3 class="bt-student-name" id="studentNameDisplay">-</h3>
+                            <div class="bt-profile-submeta">
+                                <span class="bt-id-pill"><i class="fas fa-id-card"></i> <span id="studentIdDisplay">-</span></span>
+                                <span id="detailStatus"><span class="bt-status-badge status-active">Active</span></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bt-detail-specs-grid">
+                        <div class="bt-spec-item">
+                            <span class="bt-spec-label"><i class="fas fa-phone"></i> Student Phone</span>
+                            <span class="bt-spec-value" id="detailPhone">-</span>
+                        </div>
+                        <div class="bt-spec-item">
+                            <span class="bt-spec-label"><i class="fas fa-user-shield"></i> Guardian Phone</span>
+                            <span class="bt-spec-value" id="detailGuardianPhone">-</span>
+                        </div>
+                        <div class="bt-spec-item">
+                            <span class="bt-spec-label"><i class="fas fa-layer-group"></i> Current Batch</span>
+                            <span class="bt-spec-value bt-batch-highlight" id="detailBatch">-</span>
+                        </div>
+                        <div class="bt-spec-item">
+                            <span class="bt-spec-label"><i class="fas fa-bangladeshi-taka-sign"></i> Monthly Fee</span>
+                            <span class="bt-spec-value bt-fee-highlight" id="detailFee">-</span>
+                        </div>
+                    </div>
+
+                    <div class="bt-security-trust-pill">
+                        <i class="fas fa-shield-check text-success"></i>
+                        <span>Payment & Academic History Protected</span>
+                    </div>
+
+                    <!-- Hidden fields for script backwards-compatibility -->
+                    <span id="currentBatchDisplay" style="display:none;">-</span>
+                    <span id="detailStudentId" style="display:none;">-</span>
+                    <span id="detailName" style="display:none;">-</span>
                 </div>
-                <div class="modal-footer">
-                    <button class="btn-cancel" onclick="closeConfirmModal()">Cancel</button>
-                    <button class="btn-success" id="confirmTransferBtn" onclick="executeTransfer()">
+
+                <!-- CENTER: TRANSFER TRANSITION CONNECTOR -->
+                <div class="bt-flow-connector">
+                    <div class="bt-connector-line"></div>
+                    <div class="bt-connector-badge" title="Batch Transfer Transition">
+                        <i class="fas fa-arrow-right bt-arrow-desktop"></i>
+                        <i class="fas fa-arrow-down bt-arrow-mobile"></i>
+                    </div>
+                    <span class="bt-connector-label">MIGRATE</span>
+                    <div class="bt-connector-line"></div>
+                </div>
+
+                <!-- RIGHT SIDE: TARGET BATCH CONFIGURATION -->
+                <div class="bt-flow-column bt-target-col" id="transferFormSection">
+                    <div class="bt-col-header">
+                        <span class="bt-col-tag bt-target-tag"><i class="fas fa-sign-in-alt"></i> TARGET BATCH (TO)</span>
+                        <span class="bt-required-badge">* Required</span>
+                    </div>
+
+                    <form id="transferForm" onsubmit="return false;" class="bt-target-form">
+
+                        <!-- Target Batch Selector -->
+                        <div class="bt-field-group">
+                            <label for="targetBatch" class="bt-field-label">
+                                <span>Target Batch</span> <span class="text-danger">*</span>
+                            </label>
+                            <div class="bt-select-wrapper">
+                                <select id="targetBatch" class="bt-select-field" onchange="onTargetBatchChange()">
+                                    <option value="">-- Choose New Batch --</option>
+                                </select>
+                                <i class="fas fa-chevron-down bt-select-arrow"></i>
+                            </div>
+                        </div>
+
+                        <!-- Dynamic ID & Fee Comparison Cards -->
+                        <div class="bt-target-preview-grid">
+                            
+                            <!-- Auto-generated New ID Card -->
+                            <div class="bt-preview-card" id="newIdPreview">
+                                <div class="bt-preview-card-header">
+                                    <span class="bt-preview-title"><i class="fas fa-fingerprint"></i> New Student ID</span>
+                                    <button type="button" class="bt-copy-id-btn" id="copyNewIdBtn" onclick="copyNewStudentId()" title="Copy ID" style="display:none;">
+                                        <i class="fas fa-copy"></i>
+                                    </button>
+                                </div>
+                                <div class="bt-preview-id-display" id="newStudentIdDisplay">---</div>
+                                <span class="bt-preview-note">Auto-formatted with target batch prefix</span>
+                            </div>
+
+                            <!-- New Fee & Fee Difference Badge -->
+                            <div class="bt-preview-card">
+                                <div class="bt-preview-card-header">
+                                    <span class="bt-preview-title"><i class="fas fa-receipt"></i> New Monthly Fee</span>
+                                    <span class="bt-diff-badge neutral" id="feeDifferenceBadge">No change</span>
+                                </div>
+                                <div class="bt-preview-fee-display" id="newBatchFeeDisplay">৳0</div>
+                                <span class="bt-preview-note">Adjusted to target batch rate</span>
+                            </div>
+
+                        </div>
+
+                        <!-- Optional Transfer Fee & Notes Row -->
+                        <div class="bt-optional-fields-row">
+                            
+                            <!-- Transfer Fee (Optional) -->
+                            <div class="bt-field-group bt-half-field">
+                                <label for="transferFee" class="bt-field-label">
+                                    <span>Transfer Fee (৳)</span>
+                                    <span class="bt-badge-optional">Optional</span>
+                                </label>
+                                <div class="bt-input-prefix-wrapper">
+                                    <span class="bt-currency-symbol">৳</span>
+                                    <input 
+                                        type="number" 
+                                        id="transferFee" 
+                                        class="bt-input-field" 
+                                        placeholder="0" 
+                                        min="0" 
+                                        value="0"
+                                    >
+                                </div>
+                            </div>
+
+                            <!-- Transfer Notes (Optional) -->
+                            <div class="bt-field-group bt-half-field">
+                                <label for="transferNotes" class="bt-field-label">
+                                    <span>Reason / Notes</span>
+                                    <span class="bt-badge-optional">Optional</span>
+                                </label>
+                                <input 
+                                    type="text" 
+                                    id="transferNotes" 
+                                    class="bt-input-field" 
+                                    placeholder="e.g. Schedule conflict, student request..."
+                                >
+                            </div>
+
+                        </div>
+
+                        <!-- Reassurance Banner -->
+                        <div class="bt-reassurance-note">
+                            <i class="fas fa-shield-check"></i>
+                            <span>All prior payments, dues, and academic examination history will remain strictly linked under the student's new ID.</span>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="bt-form-footer">
+                            <button type="button" class="bt-btn-secondary" id="resetBtn" onclick="resetForm()">
+                                <i class="fas fa-undo"></i> Reset
+                            </button>
+                            <button type="button" class="bt-btn-primary bt-btn-execute" id="transferBtn" onclick="showConfirmModal()" disabled>
+                                <i class="fas fa-exchange-alt"></i> <span>Execute Batch Transfer</span>
+                            </button>
+                        </div>
+
+                    </form>
+                </div>
+
+            </div>
+
+        </div>
+
+        <!-- Success Feedback Card -->
+        <div class="bt-state-box bt-success" id="transferSuccess">
+            <div class="bt-success-glow"></div>
+            <div class="bt-success-icon"><i class="fas fa-check-circle"></i></div>
+            <h3>Batch Transfer Completed Successfully</h3>
+            <p>The student has been relocated to the target batch, and their ID has been updated across system records.</p>
+            <div class="bt-success-card-summary" id="successDetails">
+                <!-- Populated dynamically by JS -->
+            </div>
+            <div class="bt-success-actions">
+                <button type="button" class="bt-btn-primary" onclick="resetAll()">
+                    <i class="fas fa-redo"></i> Transfer Another Student
+                </button>
+                <a href="batches.html" class="bt-btn-secondary">
+                    <i class="fas fa-layer-group"></i> View Batches
+                </a>
+            </div>
+        </div>
+
+        <!-- Recent Transfers Section -->
+        <section class="bt-recent-section">
+            <div class="bt-recent-header">
+                <div class="bt-recent-title">
+                    <span class="bt-recent-icon"><i class="fas fa-clock-rotate-left"></i></span>
+                    <div>
+                        <h3>Recent Batch Transfers</h3>
+                        <p>Latest migration logs and student batch updates</p>
+                    </div>
+                </div>
+                <button type="button" class="bt-btn-sm-refresh" onclick="loadRecentTransfers()" title="Refresh recent list">
+                    <i class="fas fa-sync-alt" id="recentRefreshIcon"></i> Refresh
+                </button>
+            </div>
+            <div class="bt-table-responsive">
+                <table class="bt-recent-table">
+                    <thead>
+                        <tr>
+                            <th>Student</th>
+                            <th>Previous Batch</th>
+                            <th class="text-center">Transfer</th>
+                            <th>Target Batch</th>
+                            <th>Transfer Fee</th>
+                            <th>Date</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="recentTransfersBody">
+                        <tr>
+                            <td colspan="7" class="bt-table-empty">
+                                <i class="fas fa-info-circle"></i> Loading recent transfers...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Confirmation Review Modal -->
+        <div class="bt-modal" id="confirmModal">
+            <div class="bt-modal-backdrop" onclick="closeConfirmModal()"></div>
+            <div class="bt-modal-dialog">
+                <div class="bt-modal-header">
+                    <div class="bt-modal-title-group">
+                        <div class="bt-modal-icon-badge"><i class="fas fa-triangle-exclamation"></i></div>
+                        <div>
+                            <h4>Confirm Batch Transfer</h4>
+                            <p>Verify the transition details before applying database changes</p>
+                        </div>
+                    </div>
+                    <button type="button" class="bt-modal-close" onclick="closeConfirmModal()" aria-label="Close modal">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                
+                <div class="bt-modal-body">
+                    <div class="bt-confirm-diff-card" id="confirmDetails">
+                        <!-- Populated by JS -->
+                    </div>
+                    <div class="bt-modal-warning-bar">
+                        <i class="fas fa-info-circle"></i>
+                        <span>This operation will immediately assign the new student ID and update academic records.</span>
+                    </div>
+                </div>
+
+                <div class="bt-modal-footer">
+                    <button type="button" class="bt-btn-secondary" onclick="closeConfirmModal()">
+                        Cancel
+                    </button>
+                    <button type="button" class="bt-btn-primary bt-btn-confirm" id="confirmTransferBtn" onclick="executeTransfer()">
                         <i class="fas fa-check"></i> Confirm Transfer
                     </button>
                 </div>
@@ -225,10 +414,12 @@
 
         <!-- Footer -->
         <footer class="main-footer">
-            <p>© 2026 Student ERP Management System | Developed by Tuhin Ali</p>
+            <p>© 2026 EduSmart ERP Management System | Developed by Tuhin Ali</p>
         </footer>
+
     </main>
 
+    <!-- Scripts -->
     <script src="assets/js/sidebar.js"></script>
     <script src="assets/js/batch-transfer.js"></script>
 </body>

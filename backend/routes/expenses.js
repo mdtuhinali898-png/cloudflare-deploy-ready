@@ -19,7 +19,7 @@ router.get('/', async (req, res) => {
         } = req.query;
         
         let query = {};
-        
+
         if (date) query.date = date;
         if (category && category !== 'all') query.category = category;
         if (method && method !== 'all') query.paymentMethod = method;
@@ -53,19 +53,21 @@ router.get('/', async (req, res) => {
         const sort = { [sortBy]: sortOrder === 'desc' ? -1 : 1 };
         const skip = (parseInt(page) - 1) * parseInt(limit);
         
-        const expenses = await Expense.find(query)
-            .sort(sort)
-            .skip(skip)
-            .limit(parseInt(limit));
-        
-        const total = await Expense.countDocuments(query);
-        
-        // Total filtered amount
-        const filteredExpenses = await Expense.find(query);
-        const totalFilteredAmount = filteredExpenses.reduce((sum, e) => sum + e.amount, 0);
-        
-        // Get unique vendors for filter
-        const vendors = await Expense.distinct('vendor', { vendor: { $ne: '' } });
+        const [expenses, total, filteredTotals, vendors] = await Promise.all([
+            Expense.find(query)
+                .sort(sort)
+                .skip(skip)
+                .limit(parseInt(limit)),
+            Expense.countDocuments(query),
+            Expense.aggregate([
+                { $match: query },
+                { $group: { _id: null, totalFilteredAmount: { $sum: { $ifNull: ['$amount', 0] } } } }
+            ]),
+            Expense.distinct('vendor', { vendor: { $ne: '' } })
+        ]);
+
+        // Calculate the filtered total in MongoDB without loading every matching document.
+        const totalFilteredAmount = filteredTotals[0]?.totalFilteredAmount || 0;
         
         res.json({
             success: true,
@@ -81,6 +83,138 @@ router.get('/', async (req, res) => {
         res.status(500).json({ success: false, message: 'Error fetching expenses', error: error.message });
     }
 });
+
+// @route   GET /api/expenses/summary
+// @desc    Get expense KPI totals in one database request
+// @access  Public
+router.get('/summary', async (req, res) => {
+    try {
+        const now = new Date();
+        const toDateString = date => {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
+        const today = toDateString(now);
+        const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+        const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+        const monthEnd = toDateString(new Date(nextMonth.getTime() - 86400000));
+
+        const [summary] = await Expense.aggregate([{
+            $group: {
+                _id: null,
+                allTimeAmount: { $sum: { $ifNull: ['$amount', 0] } },
+                allTimeCount: { $sum: 1 },
+                thisMonthAmount: { $sum: { $cond: [
+                    { $and: [
+                        { $gte: ['$date', monthStart] },
+                        { $lte: ['$date', monthEnd] },
+                        { $eq: ['$status', 'Approved'] }
+                    ] },
+                    { $ifNull: ['$amount', 0] },
+                    0
+                ] } },
+                pendingCount: { $sum: { $cond: [{ $eq: ['$status', 'Pending Approval'] }, 1, 0] } },
+                todayAmount: { $sum: { $cond: [
+                    { $and: [{ $eq: ['$date', today] }, { $eq: ['$status', 'Approved'] }] },
+                    { $ifNull: ['$amount', 0] },
+                    0
+                ] } },
+                todayCount: { $sum: { $cond: [
+                    { $and: [{ $eq: ['$date', today] }, { $eq: ['$status', 'Approved'] }] },
+                    1,
+                    0
+                ] } }
+            }
+        }]);
+
+        res.json({
+            success: true,
+            allTimeAmount: summary?.allTimeAmount || 0,
+            allTimeCount: summary?.allTimeCount || 0,
+            thisMonthAmount: summary?.thisMonthAmount || 0,
+            thisMonthLabel: now.toLocaleString('default', { month: 'long', year: 'numeric' }),
+            pendingCount: summary?.pendingCount || 0,
+            todayAmount: summary?.todayAmount || 0,
+            todayCount: summary?.todayCount || 0
+        });
+    } catch (error) {
+        console.error('Error fetching expense summary:', error);
+        res.status(500).json({ success: false, message: 'Error fetching expense summary', error: error.message });
+    }
+});
+
+// ==========================================================================
+// Category routes — MUST be declared BEFORE /:id and POST / wildcards
+// ==========================================================================
+
+router.get('/categories/all', async (req, res) => {
+    try {
+        const categories = await ExpenseCategory.find({ isActive: true }).sort({ name: 1 });
+        res.json({ success: true, categories });
+    } catch (error) {
+        console.error('Error fetching categories:', error);
+        res.status(500).json({ success: false, message: 'Error fetching categories', error: error.message });
+    }
+});
+
+router.post('/categories', async (req, res) => {
+    try {
+        const category = new ExpenseCategory(req.body);
+        await category.save();
+        res.status(201).json({ success: true, message: 'Category added successfully', category });
+    } catch (error) {
+        console.error('Error creating category:', error);
+        res.status(500).json({ success: false, message: 'Error creating category', error: error.message });
+    }
+});
+
+router.put('/categories/:id', async (req, res) => {
+    try {
+        const category = await ExpenseCategory.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+        if (!category) return res.status(404).json({ success: false, message: 'Category not found' });
+        res.json({ success: true, message: 'Category updated successfully', category });
+    } catch (error) {
+        console.error('Error updating category:', error);
+        res.status(500).json({ success: false, message: 'Error updating category', error: error.message });
+    }
+});
+
+router.delete('/categories/:id', async (req, res) => {
+    try {
+        const category = await ExpenseCategory.findByIdAndDelete(req.params.id);
+        if (!category) return res.status(404).json({ success: false, message: 'Category not found' });
+        res.json({ success: true, message: 'Category deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting category:', error);
+        res.status(500).json({ success: false, message: 'Error deleting category', error: error.message });
+    }
+});
+
+// @route   POST /api/expenses/bulk-export
+// @desc    Get multiple expenses by IDs for bulk operations
+// @access  Public
+router.post('/bulk-export', async (req, res) => {
+    try {
+        const { ids } = req.body;
+        if (!ids || !Array.isArray(ids) || ids.length === 0) {
+            return res.status(400).json({ success: false, message: 'Expense IDs required' });
+        }
+        
+        const expenses = await Expense.find({ _id: { $in: ids } }).sort({ date: -1 });
+        const totalAmount = expenses.reduce((sum, e) => sum + e.amount, 0);
+        
+        res.json({ success: true, expenses, totalAmount, count: expenses.length });
+    } catch (error) {
+        console.error('Error in bulk export:', error);
+        res.status(500).json({ success: false, message: 'Error in bulk export', error: error.message });
+    }
+});
+
+// ==========================================================================
+// Wildcard routes — AFTER specific named routes
+// ==========================================================================
 
 // @route   GET /api/expenses/:id
 // @desc    Get single expense by ID
@@ -319,68 +453,5 @@ router.patch('/:id/void', async (req, res) => {
     }
 });
 
-// @route   POST /api/expenses/bulk-export
-// @desc    Get multiple expenses by IDs for bulk operations
-// @access  Public
-router.post('/bulk-export', async (req, res) => {
-    try {
-        const { ids } = req.body;
-        if (!ids || !Array.isArray(ids) || ids.length === 0) {
-            return res.status(400).json({ success: false, message: 'Expense IDs required' });
-        }
-        
-        const expenses = await Expense.find({ _id: { $in: ids } }).sort({ date: -1 });
-        const totalAmount = expenses.reduce((sum, e) => sum + e.amount, 0);
-        
-        res.json({ success: true, expenses, totalAmount, count: expenses.length });
-    } catch (error) {
-        console.error('Error in bulk export:', error);
-        res.status(500).json({ success: false, message: 'Error in bulk export', error: error.message });
-    }
-});
-
-// Category routes (unchanged but kept)
-router.get('/categories/all', async (req, res) => {
-    try {
-        const categories = await ExpenseCategory.find({ isActive: true }).sort({ name: 1 });
-        res.json({ success: true, categories });
-    } catch (error) {
-        console.error('Error fetching categories:', error);
-        res.status(500).json({ success: false, message: 'Error fetching categories', error: error.message });
-    }
-});
-
-router.post('/categories', async (req, res) => {
-    try {
-        const category = new ExpenseCategory(req.body);
-        await category.save();
-        res.status(201).json({ success: true, message: 'Category added successfully', category });
-    } catch (error) {
-        console.error('Error creating category:', error);
-        res.status(500).json({ success: false, message: 'Error creating category', error: error.message });
-    }
-});
-
-router.put('/categories/:id', async (req, res) => {
-    try {
-        const category = await ExpenseCategory.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
-        if (!category) return res.status(404).json({ success: false, message: 'Category not found' });
-        res.json({ success: true, message: 'Category updated successfully', category });
-    } catch (error) {
-        console.error('Error updating category:', error);
-        res.status(500).json({ success: false, message: 'Error updating category', error: error.message });
-    }
-});
-
-router.delete('/categories/:id', async (req, res) => {
-    try {
-        const category = await ExpenseCategory.findByIdAndDelete(req.params.id);
-        if (!category) return res.status(404).json({ success: false, message: 'Category not found' });
-        res.json({ success: true, message: 'Category deleted successfully' });
-    } catch (error) {
-        console.error('Error deleting category:', error);
-        res.status(500).json({ success: false, message: 'Error deleting category', error: error.message });
-    }
-});
 
 module.exports = router;

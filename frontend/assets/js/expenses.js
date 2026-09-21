@@ -19,7 +19,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
     loadCategories();
     loadExpenses();
-    loadCategoriesTable();
 
     const form = document.getElementById('expenseForm');
     if (form) form.addEventListener('submit', handleFormSubmit);
@@ -635,7 +634,6 @@ function generateVoucherHTML(e, instituteName) {
             <button class="btn btn-secondary" onclick="closeVoucherModal()" style="background:#e2e8f0; color:#334155; border:none; padding:8px 16px; border-radius:6px; font-weight:600; cursor:pointer;"><i class="fas fa-times"></i> Close</button>
         </div>
     </div>`;
-}
 }
 
 function printVoucher() {

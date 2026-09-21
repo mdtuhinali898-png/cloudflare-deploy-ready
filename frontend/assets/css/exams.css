@@ -85,7 +85,7 @@
 .filter-group {
     display: flex;
     gap: 18px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
 }
 
@@ -105,6 +105,11 @@
 .filter-select:focus {
     border-color: var(--primary);
     box-shadow: 0 0 0 4px var(--primary-glow);
+}
+
+.filter-group .filter-select {
+    flex: 1 1 0;
+    min-width: 0;
 }
 
 /* Data Card */
@@ -740,5 +745,9 @@
     .filter-select {
         min-width: 100%;
         flex: 1;
+    }
+
+    .filter-group {
+        flex-wrap: wrap;
     }
 }

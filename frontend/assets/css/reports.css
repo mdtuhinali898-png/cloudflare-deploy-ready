@@ -1688,3 +1688,123 @@
         font-style: italic !important;
     }
 }
+
+
+/* ============================================
+   BOOK SALES TAB — Reports Page Styles
+   ============================================ */
+
+/* ── Book Sale Summary Cards ── */
+.booksale-summary-cards {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.booksale-summary-card {
+    background: var(--card-bg);
+    padding: 16px 18px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    border: 1px solid var(--border);
+    border-left-width: 4px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.05);
+    transition: transform .25s;
+}
+.booksale-summary-card:hover { transform: translateY(-3px); }
+
+.bs-report-orange { border-left-color: #f97316; }
+.bs-report-green  { border-left-color: #1cc88a; }
+.bs-report-blue   { border-left-color: #4e73df; }
+.bs-report-purple { border-left-color: #8b5cf6; }
+
+.bsr-icon {
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; color: #fff; flex-shrink: 0;
+}
+.bs-report-orange .bsr-icon { background: linear-gradient(135deg, #f97316, #ea580c); }
+.bs-report-green  .bsr-icon { background: linear-gradient(135deg, #1cc88a, #17a673); }
+.bs-report-blue   .bsr-icon { background: linear-gradient(135deg, #4e73df, #2e59d9); }
+.bs-report-purple .bsr-icon { background: linear-gradient(135deg, #8b5cf6, #6d28d9); }
+
+.bsr-info h3 { font-size: 20px; color: var(--dark); margin-bottom: 2px; font-weight: 700; }
+.bsr-info p  { font-size: 11px; color: var(--text-light); text-transform: uppercase; font-weight: 600; }
+
+/* ── Book Sale print header ── */
+.booksale-print-header {
+    display: none;
+    text-align: center;
+    padding: 10px 0 8px;
+    border-bottom: 2px solid #f97316;
+    margin-bottom: 12px;
+}
+.booksale-print-header h1 { font-size: 18px; color: #f97316; font-weight: 800; margin-bottom: 2px; }
+.booksale-print-header p  { font-size: 10px; color: #555; margin-bottom: 3px; }
+.booksale-print-header h2 { font-size: 14px; color: #333; margin-top: 4px; }
+
+/* ── Daily Activity — Book Sale item ── */
+.activity-item.activity-booksale .activity-icon {
+    background: linear-gradient(135deg, #f97316, #ea580c);
+}
+
+/* ── Daily Collection Summary — Book Sale column highlight ── */
+.daily-table td:nth-child(5),
+.daily-table th:nth-child(5) {
+    color: #f97316;
+}
+
+/* ── Responsive ── */
+@media (max-width: 992px) {
+    .booksale-summary-cards { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 576px) {
+    .booksale-summary-cards { grid-template-columns: 1fr 1fr; }
+}
+
+/* ── Print: Book Sales Tab ── */
+@media print {
+    /* When printing book sales tab */
+    body.printing-booksale .print-report-header { display: none !important; }
+
+    body.printing-booksale .booksale-print-header {
+        display: block !important;
+        text-align: center !important;
+        padding: 10px 0 8px !important;
+        border-bottom: 2px solid #f97316 !important;
+        margin-bottom: 12px !important;
+    }
+
+    body.printing-booksale .booksale-print-header h1 {
+        font-size: 18px !important;
+        color: #f97316 !important;
+        font-weight: 800 !important;
+    }
+
+    /* Daily collection table — 6 columns print */
+    .daily-table th:nth-child(3),
+    .daily-table td:nth-child(3),
+    .daily-table th:nth-child(4),
+    .daily-table td:nth-child(4),
+    .daily-table th:nth-child(5),
+    .daily-table td:nth-child(5) {
+        font-size: 7.5px !important;
+    }
+
+    /* Book sale orange color stays in print */
+    .daily-table td:nth-child(5) span {
+        color: #f97316 !important;
+    }
+
+    /* Print summary line in header */
+    #printSummaryLine {
+        font-size: 10px !important;
+        color: #333 !important;
+        font-weight: 600 !important;
+        margin-top: 4px !important;
+    }
+}

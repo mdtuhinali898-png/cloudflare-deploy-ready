@@ -1,18 +1,65 @@
 /* assets/css/students.css - ULTRA MODERN STUDENT DIRECTORY */
 @import url('design-system.css');
 
+.students-page {
+    background: #f4f7fb;
+}
+
+.students-page .top-header {
+    margin-bottom: 22px;
+}
+
+.students-page .page-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.students-page .page-title i {
+    color: #0f766e;
+    font-size: 1.05rem;
+}
+
 /* Header Action Banner */
 .page-header-action {
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 28px;
-    background: linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%);
+    background: linear-gradient(135deg, #123047 0%, #0f766e 100%);
     padding: 28px 32px;
     border-radius: var(--radius-lg);
     color: #ffffff;
     box-shadow: 0 12px 30px rgba(15, 23, 42, 0.25);
     border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.students-eyebrow,
+.section-kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    color: #99f6e4;
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+.page-header-action h2 {
+    margin-top: 8px;
+}
+
+.page-header-action .btn-primary {
+    background: #ffffff;
+    color: #0f766e;
+    border-color: #ffffff;
+    box-shadow: 0 8px 20px rgba(2, 44, 53, 0.2);
+}
+
+.page-header-action .btn-primary:hover {
+    background: #ecfeff;
+    color: #115e59;
 }
 
 .page-header-action h2 {
@@ -30,17 +77,61 @@
 /* Filter & Search Bar */
 .filter-section {
     background: var(--bg-card);
-    padding: 22px 28px;
+    padding: 20px 24px 22px;
     border-radius: var(--radius-lg);
     margin-bottom: 28px;
     border: 1px solid var(--border-color);
     box-shadow: var(--shadow-sm);
 }
 
+.filter-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding-bottom: 16px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid #e5eaf1;
+}
+
+.filter-heading h3 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 4px;
+    color: #17324d;
+    font-size: 0.98rem;
+}
+
+.filter-heading h3 i {
+    color: #0f766e;
+    font-size: 0.9rem;
+}
+
+.filter-heading p {
+    margin: 0;
+    color: #718096;
+    font-size: 0.8rem;
+}
+
+.filter-hint {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 10px;
+    border: 1px solid #ccfbf1;
+    border-radius: 999px;
+    color: #0f766e;
+    background: #f0fdfa;
+    font-size: 0.72rem;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
 .filter-group {
     display: flex;
     gap: 18px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     align-items: center;
 }
 
@@ -51,8 +142,21 @@
     font-size: 0.93rem;
     outline: none;
     min-width: 170px;
-    background: #ffffff;
+    background: #fbfdff;
     transition: all var(--transition-fast);
+}
+
+.filter-group .filter-select {
+    flex: 0 0 190px;
+}
+
+.filter-group .search-box {
+    flex: 1 1 auto;
+}
+
+.filter-select:hover,
+.search-box input:hover {
+    border-color: #a7b8c9;
 }
 
 .filter-select:focus, .search-box input:focus {
@@ -87,8 +191,101 @@
     height: 46px;
     border-radius: 50%;
     object-fit: cover;
-    border: 2px solid var(--primary-light);
+    border: 3px solid #d9f4ef;
     box-shadow: var(--shadow-sm);
+}
+
+.students-page .stat-card {
+    border-radius: 14px;
+    box-shadow: 0 5px 18px rgba(15, 23, 42, 0.06);
+}
+
+.students-page .stat-card:hover {
+    transform: translateY(-3px);
+}
+
+.students-page .data-card {
+    padding: 0;
+    overflow: hidden;
+    border-radius: 14px;
+    box-shadow: 0 7px 24px rgba(15, 23, 42, 0.06);
+}
+
+.students-page .card-header {
+    margin: 0;
+    padding: 20px 24px 16px;
+    background: #ffffff;
+}
+
+.students-page .card-header h3 {
+    margin-top: 5px;
+    margin-bottom: 0;
+    font-size: 1.05rem;
+}
+
+.students-page .card-header h3 i {
+    color: #0f766e;
+    background: #f0fdfa;
+}
+
+.students-page .data-table {
+    min-width: 980px;
+}
+
+.students-page .data-table thead th {
+    padding: 13px 16px;
+    background: #f7fafc;
+    color: #64748b;
+    border-top: 1px solid #edf1f5;
+    border-bottom: 1px solid #e5eaf1;
+    font-size: 0.7rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.students-page .data-table tbody td {
+    padding: 13px 16px;
+    color: #334155;
+    border-bottom: 1px solid #edf1f5;
+    font-size: 0.84rem;
+}
+
+.students-page .data-table tbody tr {
+    transition: background 0.18s ease;
+}
+
+.students-page .data-table tbody tr:hover {
+    background: #f8fbfc;
+}
+
+.status-active,
+.status-inactive {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 800;
+}
+
+.status-active {
+    color: #047857;
+    background: #d1fae5;
+}
+
+.status-inactive {
+    color: #b42318;
+    background: #fee4e2;
+}
+
+.status-active::before,
+.status-inactive::before {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    content: '';
+    background: currentColor;
 }
 
 /* Table Action Buttons Grid */
@@ -99,9 +296,11 @@
 }
 
 .action-btns button, .action-btns a {
-    padding: 8px 12px;
+    width: 32px;
+    height: 32px;
+    padding: 0;
     border: none;
-    border-radius: var(--radius-sm);
+    border-radius: 9px;
     cursor: pointer;
     font-size: 0.85rem;
     font-weight: 700;
@@ -112,6 +311,11 @@
     gap: 6px;
     transition: all var(--transition-base);
     text-decoration: none;
+}
+
+.action-btns button:focus-visible {
+    outline: 3px solid rgba(15, 118, 110, 0.22);
+    outline-offset: 2px;
 }
 
 .btn-view {
@@ -179,6 +383,19 @@
 
 /* Responsive Rules */
 @media (max-width: 768px) {
+    .students-page .page-header-action {
+        padding: 22px;
+    }
+
+    .filter-heading {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .students-page .card-header {
+        padding: 18px;
+    }
+
     .page-header-action {
         flex-direction: column;
         align-items: flex-start;
@@ -187,8 +404,13 @@
     .filter-group {
         flex-direction: column;
         align-items: stretch;
+        flex-wrap: wrap;
     }
     .filter-select, .search-box {
         width: 100%;
+    }
+
+    .filter-group .filter-select {
+        flex-basis: auto;
     }
 }

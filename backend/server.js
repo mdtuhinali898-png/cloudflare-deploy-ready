@@ -24,6 +24,8 @@ const payrollRoutes = require('./routes/payroll');
 const recurringExpenseRoutes = require('./routes/recurringExpenses');
 const incomeRoutes = require('./routes/incomes');
 const uccRoutes = require('./routes/ucc');
+const bookRoutes = require('./routes/books');
+const bookSaleRoutes = require('./routes/bookSales');
 
 const app = express();
 
@@ -58,6 +60,8 @@ app.use('/api/payroll', payrollRoutes);
 app.use('/api/recurring-expenses', recurringExpenseRoutes);
 app.use('/api/incomes', incomeRoutes);
 app.use('/api/ucc', uccRoutes);
+app.use('/api/books', bookRoutes);
+app.use('/api/book-sales', bookSaleRoutes);
 
 // Health check route
 app.get('/api/health', (req, res) => {

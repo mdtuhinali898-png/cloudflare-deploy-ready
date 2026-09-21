@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -162,11 +162,11 @@
 
 <!-- Create Exam Modal -->
 <div class="ex-modal-overlay" id="createModal" style="display:none;" onclick="closeCreateModal(event)">
-  <div class="ex-modal-box">
+  <div class="ex-modal-box" style="max-width:760px;">
     <div class="ex-modal-hdr">
       <div>
         <h3><i class="fas fa-plus-circle"></i> Create New Exam</h3>
-        <p>Enter all exam information</p>
+        <p>Define exam info, multiple subjects, marks breakdown & negative marking</p>
       </div>
       <button class="ex-modal-close" onclick="closeCreateModal()"><i class="fas fa-times"></i></button>
     </div>
@@ -193,35 +193,77 @@
           </select>
         </div>
         <div class="ex-field">
-          <label>Subject / Topic</label>
-          <input type="text" id="newExamSubject" class="ex-input" placeholder="e.g. Physics + Chemistry">
-        </div>
-        <div class="ex-field">
           <label>Date *</label>
           <input type="date" id="newExamDate" class="ex-input">
         </div>
-        <div class="ex-field">
-          <label>Total Marks *</label>
-          <input type="number" id="newExamTotal" class="ex-input" placeholder="e.g. 100" min="1">
+      </div>
+
+      <!-- Negative Marking Settings -->
+      <div class="ex-neg-toggle-card">
+        <div class="ex-neg-toggle-info">
+          <div class="ex-neg-icon"><i class="fas fa-balance-scale"></i></div>
+          <div>
+            <strong>Negative Marking System</strong>
+            <p>Deduct marks for wrong answers during mark entry</p>
+          </div>
         </div>
-        <div class="ex-field">
-          <label>Pass Marks</label>
-          <input type="number" id="newExamPass" class="ex-input" placeholder="e.g. 40" min="0">
+        <div class="ex-neg-ctrls">
+          <label class="ex-switch">
+            <input type="checkbox" id="newExamNegEnabled" onchange="toggleModalNeg(this)">
+            <span class="ex-slider"></span>
+          </label>
+          <div id="newExamNegRateWrap" style="display:none;align-items:center;gap:6px;">
+            <label style="font-size:12px;font-weight:700;color:#701a75;">Per Wrong:</label>
+            <select id="newExamNegRate" class="ex-input" style="padding:6px 10px;font-size:13px;width:95px;">
+              <option value="0.25">0.25</option>
+              <option value="0.50">0.50</option>
+              <option value="0.75">0.75</option>
+              <option value="1.00">1.00</option>
+            </select>
+          </div>
         </div>
+      </div>
+
+      <!-- Subject Builder Section -->
+      <div class="ex-subjects-section">
+        <div class="ex-subjects-hdr">
+          <div>
+            <h4><i class="fas fa-layer-group" style="color:#4f46e5;"></i> Subjects & Marks Distribution *</h4>
+            <p>Add 1, 2, 3, 4+ subjects with full marks & pass marks</p>
+          </div>
+          <div class="ex-subjects-actions">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="addSubjectPreset('medical')"><i class="fas fa-stethoscope"></i> Medical</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="addSubjectPreset('varsity_a')"><i class="fas fa-atom"></i> 'Ka' Unit</button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="addSubjectPreset('varsity_b')"><i class="fas fa-book-open"></i> 'Kha' Unit</button>
+            <button type="button" class="btn btn-primary btn-sm" onclick="addModalSubjectRow()"><i class="fas fa-plus"></i> Add Subject</button>
+          </div>
+        </div>
+        
+        <div class="ex-subjects-list" id="modalSubjectsList">
+          <!-- Dynamically generated rows -->
+        </div>
+
+        <div class="ex-subjects-summary">
+          <div>Subjects: <strong id="modalSubCount">0</strong></div>
+          <div>Total Exam Marks: <strong id="modalCalcTotal">0</strong></div>
+          <div>Total Pass Marks: <strong id="modalCalcPass">0</strong></div>
+        </div>
+      </div>
+
+      <div class="ex-form-grid" style="margin-top:12px;">
         <div class="ex-field">
           <label>Duration (minutes)</label>
           <input type="number" id="newExamDuration" class="ex-input" placeholder="e.g. 90" min="0">
         </div>
+        <div class="ex-field">
+          <label>Notes (Optional)</label>
+          <input type="text" id="newExamNotes" class="ex-input" placeholder="Special instructions...">
+        </div>
       </div>
-      <div class="ex-field" style="margin-top:12px;">
-        <label>Notes</label>
-        <textarea id="newExamNotes" class="ex-input" rows="2" placeholder="Additional notes (optional)"></textarea>
-      </div>
-      <p class="ex-demo-note"><i class="fas fa-circle-info"></i> Demo mode — data locally stored. When API is connected, <code>POST /api/ucc/exams</code> will be called.</p>
-      <div class="ex-modal-actions">
-        <button class="btn btn-secondary" onclick="closeCreateModal()"><i class="fas fa-times"></i> Cancel</button>
-        <button class="btn btn-primary"   onclick="saveExam()"><i class="fas fa-save"></i> Save Exam</button>
-      </div>
+    </div>
+    <div class="ex-modal-actions">
+      <button class="btn btn-secondary" onclick="closeCreateModal()"><i class="fas fa-times"></i> Cancel</button>
+      <button class="btn btn-primary"   onclick="saveExam()"><i class="fas fa-save"></i> Save Exam</button>
     </div>
   </div>
 </div>

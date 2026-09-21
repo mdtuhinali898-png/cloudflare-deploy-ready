@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -60,6 +60,31 @@
     .badge-distributed { background: #dcfce7; color: #15803d; padding: 4px 10px; border-radius: 12px; font-weight: 700; font-size: 11px; }
     .badge-partial { background: #fef3c7; color: #b45309; padding: 4px 10px; border-radius: 12px; font-weight: 700; font-size: 11px; }
     .badge-pending { background: #fee2e2; color: #b91c1c; padding: 4px 10px; border-radius: 12px; font-weight: 700; font-size: 11px; }
+    
+    .badge-status-active { background: #dcfce7; color: #15803d; padding: 3px 8px; border-radius: 10px; font-weight: 700; font-size: 11px; display: inline-flex; align-items: center; gap: 4px; }
+    .badge-status-inactive { background: #fee2e2; color: #b91c1c; padding: 3px 8px; border-radius: 10px; font-weight: 700; font-size: 11px; display: inline-flex; align-items: center; gap: 4px; }
+
+    .ucc-btn-purple { background: #8b5cf6; color: #fff; }
+    .ucc-btn-blue   { background: #3b82f6; color: #fff; }
+    
+    .ucc-btn-status-active {
+      background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; font-weight: 700;
+    }
+    .ucc-btn-status-active:hover {
+      background: #059669; color: #ffffff;
+    }
+    .ucc-btn-status-inactive {
+      background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; font-weight: 700;
+    }
+    .ucc-btn-status-inactive:hover {
+      background: #dc2626; color: #ffffff;
+    }
+    .ucc-btn-icon-del {
+      background: #fff1f2; color: #e11d48; border: 1px solid #fecdd3;
+    }
+    .ucc-btn-icon-del:hover {
+      background: #e11d48; color: #ffffff;
+    }
 
     .modal-overlay {
       position: fixed; inset: 0; background: rgba(0,0,0,0.5);
@@ -170,7 +195,7 @@
   </div>
 
   <div class="filter-card">
-    <div class="filter-grid">
+    <div class="filter-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
       <div>
         <label style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:4px;display:block;">Search Student</label>
         <input type="text" id="studentSearch" class="form-control-custom" placeholder="Search by name, roll or phone..." oninput="applyFilters()">
@@ -198,6 +223,14 @@
           <option value="Pending">Pending</option>
         </select>
       </div>
+      <div>
+        <label style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:4px;display:block;">Enrollment Status</label>
+        <select id="filterStatus" class="form-control-custom" onchange="applyFilters()">
+          <option value="all">All Status</option>
+          <option value="Active">Active Only</option>
+          <option value="Inactive">Inactive Only</option>
+        </select>
+      </div>
     </div>
   </div>
 
@@ -217,8 +250,8 @@
             <th>Net Fee</th>
             <th>Paid</th>
             <th>Due</th>
-            <th>Status</th>
-            <th>Actions</th>
+            <th>Material Status</th>
+            <th style="min-width: 240px;">Actions</th>
           </tr>
         </thead>
         <tbody id="studentTableBody">
@@ -238,6 +271,10 @@
 
 <script src="assets/js/sidebar.js?v=2"></script>
 <script>
+const API_BASE_URL = (window.location.protocol === 'http:' || window.location.protocol === 'https:')
+  ? `${window.location.protocol}//${window.location.hostname}:${window.location.port === '5002' ? window.location.port : '5002'}/api`
+  : 'http://localhost:5002/api';
+
 let allStudents = [];
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -253,7 +290,7 @@ async function fetchStudentsData() {
   if (loading) loading.classList.remove('hidden');
   
   try {
-    const res = await fetch('/api/ucc/students');
+    const res = await fetch(`${API_BASE_URL}/ucc/students`);
     const data = await res.json();
     
     if (data.success && data.students) {
@@ -268,6 +305,7 @@ async function fetchStudentsData() {
         totalFee: s.finalFee || s.courseFee || 15000,
         paid: s.totalPaid || 0,
         due: s.totalDue || 0,
+        status: s.status || 'Active',
         paymentStatus: s.paymentStatus || (s.totalDue > 0 ? 'Due' : 'Paid'),
         materials: s.distributionOverride ? 'Distributed' : (s.totalDue === 0 ? 'Distributed' : 'Pending')
       }));
@@ -321,11 +359,23 @@ function renderStudentTable(data) {
       ? `<strong style="color:var(--danger-color);">${fmt(s.due)}</strong>` 
       : `<span style="color:var(--success-color);font-weight:700;">Paid</span>`;
 
+    const statusBadge = s.status === 'Active'
+      ? `<span class="badge-status-active"><i class="fas fa-check-circle"></i> Active</span>`
+      : `<span class="badge-status-inactive"><i class="fas fa-ban"></i> Inactive</span>`;
+
+    const toggleBtnClass = s.status === 'Active' ? 'ucc-btn-status-active' : 'ucc-btn-status-inactive';
+    const toggleIcon = s.status === 'Active' ? 'fa-toggle-on' : 'fa-toggle-off';
+    const safeName = (s.name || '').replace(/'/g, "\\'");
+
     return `
       <tr style="border-bottom:1px solid var(--border-color);">
-        <td style="font-weight:700;color:var(--primary);">${s.roll}</td>
+        <td style="font-weight:700;color:var(--primary);">
+          <a href="student-profile.html?roll=${encodeURIComponent(s.roll)}" style="color:inherit;text-decoration:underline;">${s.roll}</a>
+        </td>
         <td>
-          <div style="font-weight:700;color:var(--text-main);">${s.name}</div>
+          <div style="font-weight:700;color:var(--text-main);display:flex;align-items:center;gap:6px;">
+            ${s.name} ${statusBadge}
+          </div>
           <div style="font-size:11.5px;color:var(--text-muted);">${s.phone}</div>
         </td>
         <td style="font-size:12.5px;color:var(--text-main);">${s.guardian}</td>
@@ -335,13 +385,26 @@ function renderStudentTable(data) {
         <td>${dueText}</td>
         <td>${matBadge}</td>
         <td>
-          <div style="display:flex;gap:6px;">
-            <a href="payment.html?roll=${s.roll}" class="ucc-btn ucc-btn-green ucc-btn-sm" title="Collect Payment">
-              <i class="fas fa-money-bill"></i> Payment
+          <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;">
+            <a href="student-profile.html?roll=${encodeURIComponent(s.roll)}" class="ucc-btn ucc-btn-blue ucc-btn-sm" title="View Student Profile">
+              <i class="fas fa-user"></i> Profile
             </a>
-            <a href="distribution.html?roll=${s.roll}" class="ucc-btn ucc-btn-purple ucc-btn-sm" title="Issue Materials">
-              <i class="fas fa-box"></i> Material
+            <a href="payment.html?roll=${encodeURIComponent(s.roll)}" class="ucc-btn ucc-btn-green ucc-btn-sm" title="Collect Payment">
+              <i class="fas fa-money-bill"></i> Pay
             </a>
+            <a href="distribution.html?roll=${encodeURIComponent(s.roll)}" class="ucc-btn ucc-btn-purple ucc-btn-sm" title="Issue Materials">
+              <i class="fas fa-box"></i> Book
+            </a>
+            <button type="button" class="ucc-btn ${toggleBtnClass} ucc-btn-sm" 
+                    onclick="toggleStudentStatus('${s._id}', '${s.status}', '${s.roll}', '${safeName}')" 
+                    title="${s.status === 'Active' ? 'Click to mark Inactive' : 'Click to mark Active'}">
+              <i class="fas ${toggleIcon}"></i> ${s.status === 'Active' ? 'Active' : 'Inactive'}
+            </button>
+            <button type="button" class="ucc-btn ucc-btn-icon-del ucc-btn-sm" 
+                    onclick="deleteStudent('${s._id}', '${s.roll}', '${safeName}')" 
+                    title="Delete Student">
+              <i class="fas fa-trash-alt"></i>
+            </button>
           </div>
         </td>
       </tr>`;
@@ -349,23 +412,85 @@ function renderStudentTable(data) {
 }
 
 function applyFilters() {
-  const batch = document.getElementById('filterBatch').value;
-  const pay   = document.getElementById('filterPayment').value;
-  const mat   = document.getElementById('filterDistribution').value;
-  const q     = document.getElementById('studentSearch').value.trim().toLowerCase();
+  const batch  = document.getElementById('filterBatch').value;
+  const pay    = document.getElementById('filterPayment').value;
+  const mat    = document.getElementById('filterDistribution').value;
+  const status = document.getElementById('filterStatus') ? document.getElementById('filterStatus').value : 'all';
+  const q      = document.getElementById('studentSearch').value.trim().toLowerCase();
 
   const filtered = allStudents.filter(s => {
-    const matchBatch = batch === 'all' || s.batch === batch;
-    const matchPay   = pay === 'all' || (pay === 'Paid' ? s.due === 0 : s.due > 0);
-    const matchMat   = mat === 'all' || s.materials === mat;
-    const matchQuery = !q || s.name.toLowerCase().includes(q) || s.roll.toLowerCase().includes(q) || s.phone.includes(q);
+    const matchBatch  = batch === 'all' || s.batch === batch;
+    const matchPay    = pay === 'all' || (pay === 'Paid' ? s.due === 0 : s.due > 0);
+    const matchMat    = mat === 'all' || s.materials === mat;
+    const matchStatus = status === 'all' || s.status === status;
+    const matchQuery  = !q || s.name.toLowerCase().includes(q) || s.roll.toLowerCase().includes(q) || s.phone.includes(q);
 
-    return matchBatch && matchPay && matchMat && matchQuery;
+    return matchBatch && matchPay && matchMat && matchStatus && matchQuery;
   });
 
   renderStudentTable(filtered);
   updateStats(filtered);
 }
+
+// 🟢 / 🔴 Toggle Student Status
+window.toggleStudentStatus = async function(id, currentStatus, roll, name) {
+  const targetStatus = currentStatus === 'Active' ? 'Inactive' : 'Active';
+  const promptMsg = targetStatus === 'Inactive'
+    ? `Are you sure you want to mark ${name} (Roll: ${roll}) as INACTIVE?\n\nInactive students will not appear in new exam mark entries.`
+    : `Activate student ${name} (Roll: ${roll})?`;
+
+  if (!confirm(promptMsg)) return;
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/ucc/students/${id}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: targetStatus })
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.message || 'Failed to update student status');
+    }
+
+    // Update local state
+    const st = allStudents.find(s => s._id === id || s.roll === roll);
+    if (st) {
+      st.status = targetStatus;
+    }
+
+    applyFilters();
+  } catch (err) {
+    console.error('Error toggling student status:', err);
+    alert('Error: ' + err.message);
+  }
+};
+
+// 🗑️ Delete Student Record
+window.deleteStudent = async function(id, roll, name) {
+  const confirmMsg = `⚠️ WARNING: Permanent Deletion\n\nAre you sure you want to delete student:\nName: ${name}\nRoll: ${roll}\n\nThis will remove the student profile, associated payment transactions, and exam results.`;
+  if (!confirm(confirmMsg)) return;
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/ucc/students/${id}`, {
+      method: 'DELETE'
+    });
+
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      throw new Error(data.message || 'Failed to delete student');
+    }
+
+    // Remove from in-memory array
+    allStudents = allStudents.filter(s => s._id !== id && s.roll !== roll);
+
+    applyFilters();
+    alert(`Student ${name} (Roll: ${roll}) has been deleted.`);
+  } catch (err) {
+    console.error('Error deleting student:', err);
+    alert('Error: ' + err.message);
+  }
+};
 </script>
 
 </body>

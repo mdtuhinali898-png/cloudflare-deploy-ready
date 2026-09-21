@@ -477,6 +477,68 @@ router.put('/students/:id', async (req, res) => {
   }
 });
 
+// Toggle UCC Student Status (Active / Inactive)
+router.patch('/students/:id/status', async (req, res) => {
+  try {
+    let query = { $or: [{ studentId: req.params.id }, { roll: req.params.id }] };
+    if (req.params.id && req.params.id.match(/^[0-9a-fA-F]{24}$/)) {
+      query = { $or: [{ _id: req.params.id }, { studentId: req.params.id }, { roll: req.params.id }] };
+    }
+
+    const student = await UccStudent.findOne(query);
+    if (!student) {
+      return res.status(404).json({ success: false, message: 'Student not found' });
+    }
+
+    const newStatus = req.body.status || (student.status === 'Active' ? 'Inactive' : 'Active');
+    student.status = newStatus;
+    await student.save();
+
+    res.json({
+      success: true,
+      message: `Student status changed to ${newStatus}`,
+      status: newStatus,
+      student
+    });
+  } catch (error) {
+    console.error('Error toggling student status:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Delete UCC Student (with records cleanup)
+router.delete('/students/:id', async (req, res) => {
+  try {
+    let query = { $or: [{ studentId: req.params.id }, { roll: req.params.id }] };
+    if (req.params.id && req.params.id.match(/^[0-9a-fA-F]{24}$/)) {
+      query = { $or: [{ _id: req.params.id }, { studentId: req.params.id }, { roll: req.params.id }] };
+    }
+
+    const student = await UccStudent.findOne(query);
+    if (!student) {
+      return res.status(404).json({ success: false, message: 'Student not found' });
+    }
+
+    const studentMongoId = student._id;
+
+    // Clean up related records
+    await UccPayment.deleteMany({ studentId: studentMongoId });
+    await UccDistribution.deleteMany({ studentId: studentMongoId });
+    await UccResult.deleteMany({ studentId: studentMongoId });
+
+    // Delete student record
+    await UccStudent.findByIdAndDelete(studentMongoId);
+
+    res.json({
+      success: true,
+      message: `Student ${student.name} (Roll: ${student.roll}) deleted successfully.`
+    });
+  } catch (error) {
+    console.error('Error deleting UCC student:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // =================================================================
 // 💰 3. PAYMENTS & DAILY STATEMENT
 // =================================================================
@@ -1175,7 +1237,7 @@ router.get('/exams/:id', async (req, res) => {
 // Create Exam
 router.post('/exams', async (req, res) => {
   try {
-    const { examCode, title, program, batchId, batchName, totalMarks, subjects, examDate, status } = req.body;
+    const { examCode, title, program, batchId, batchName, totalMarks, subjects, examDate, status, negativeMarking, negativeMarkPerWrong } = req.body;
     const exam = new UccExam({
       examCode: examCode || 'EX' + Date.now().toString().slice(-6),
       title,
@@ -1184,6 +1246,8 @@ router.post('/exams', async (req, res) => {
       batchName: batchName || '',
       examDate: examDate || Date.now(),
       totalMarks: Number(totalMarks) || 100,
+      negativeMarking: negativeMarking === true || negativeMarking === 'true',
+      negativeMarkPerWrong: negativeMarkPerWrong != null ? Number(negativeMarkPerWrong) : 0.25,
       subjects: subjects || [],
       status: status || 'Scheduled'
     });
@@ -1197,7 +1261,7 @@ router.post('/exams', async (req, res) => {
 // Update Exam
 router.put('/exams/:id', async (req, res) => {
   try {
-    const { examCode, title, program, batchId, batchName, totalMarks, subjects, examDate, status } = req.body;
+    const { examCode, title, program, batchId, batchName, totalMarks, subjects, examDate, status, negativeMarking, negativeMarkPerWrong } = req.body;
     const exam = await UccExam.findByIdAndUpdate(
       req.params.id,
       {
@@ -1206,6 +1270,8 @@ router.put('/exams/:id', async (req, res) => {
         batchName: batchName || '',
         examDate: examDate || Date.now(),
         totalMarks: Number(totalMarks) || 100,
+        negativeMarking: negativeMarking === true || negativeMarking === 'true',
+        negativeMarkPerWrong: negativeMarkPerWrong != null ? Number(negativeMarkPerWrong) : 0.25,
         subjects: (subjects && subjects.length) ? subjects : undefined,
         status: status || 'Scheduled'
       },
@@ -1294,11 +1360,12 @@ router.post('/results/mark-entry', async (req, res) => {
     for (let idx = 0; idx < present.length; idx++) {
       const resDoc = present[idx];
       if (idx > 0 && resDoc.totalObtained === present[idx - 1].totalObtained) {
-        resDoc.meritPosition = present[idx - 1].meritPosition; // same marks → same position
+        resDoc.meritPosition = present[idx - 1].meritPosition; // same marks → same position (dense ranking)
+        // rank does NOT increment on tie → next unique score gets consecutive rank (1,2,2,3 not 1,2,2,4)
       } else {
         resDoc.meritPosition = rank;
+        rank++;
       }
-      rank++;
       await resDoc.save();
     }
     for (let resDoc of absent) {
@@ -1320,7 +1387,9 @@ router.get('/results/merit-list/:examId', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Exam not found' });
     }
 
-    const meritList = await UccResult.find({ examId: exam._id }).sort({ meritPosition: 1 });
+    const meritList = await UccResult.find({ examId: exam._id })
+      .populate('studentId', 'phone guardianPhone')
+      .sort({ meritPosition: 1 });
     res.json({ success: true, exam, meritList });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

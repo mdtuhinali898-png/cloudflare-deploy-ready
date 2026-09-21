@@ -454,15 +454,16 @@ async function calculatePositions(examId) {
     
     let currentPos = 1;
     for (let i = 0; i < results.length; i++) {
-        // Same position for same percentage and marks
+        // Dense ranking: same score = same position, next gets consecutive rank (1,2,2,3 not 1,2,2,4)
         if (i > 0 && 
             results[i].percentage === results[i-1].percentage && 
             results[i].totalMarks === results[i-1].totalMarks) {
             results[i].position = results[i-1].position;
+            // currentPos does NOT increment on tie
         } else {
             results[i].position = currentPos;
+            currentPos++;
         }
-        currentPos++;
         await results[i].save();
     }
 }

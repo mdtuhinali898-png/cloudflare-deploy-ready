@@ -51,8 +51,22 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     batchSelect.addEventListener('change', () => {
-        const selected = batches.find(batch => batch.name === batchSelect.value);
+        const batchName = batchSelect.value;
+        const selected = batches.find(batch => batch.name === batchName);
         if (selected && selected.fee !== undefined) monthlyFee.value = selected.fee;
+
+        const rollInput = document.getElementById('rollNo');
+        const rollHelp = document.getElementById('rollHelp');
+        if (rollInput) {
+            if (batchName) {
+                const nextId = createStudentId(batchName);
+                rollInput.value = nextId;
+                if (rollHelp) rollHelp.textContent = `Auto-generated Next ID: ${nextId}`;
+            } else {
+                rollInput.value = '';
+                if (rollHelp) rollHelp.textContent = '';
+            }
+        }
     });
 
     photoInput.addEventListener('change', event => {
@@ -67,13 +81,41 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     function createStudentId(batchName) {
-        // Use the batch's stored prefix from the database
         const batch = batches.find(b => b.name === batchName);
-        const prefix = (batch && batch.prefix)
-            ? batch.prefix.toUpperCase()
-            : batchName.split(/\s+/).map(word => word[0]).join('').toUpperCase().slice(0, 4) || 'STU';
-        const count = students.filter(student => student.batch === batchName).length + 1;
-        return `${prefix}-${String(count).padStart(3, '0')}`;
+        const batchStudents = students.filter(student => student.batch === batchName);
+        
+        let prefix = (batch && batch.prefix) ? batch.prefix.toUpperCase().trim() : '';
+        let padLength = 1;
+        let hasHyphen = false;
+        let maxNum = 0;
+
+        if (batchStudents.length > 0) {
+            for (const s of batchStudents) {
+                const idStr = String(s.studentId || s.roll || '').trim();
+                const m = idStr.match(/^([A-Za-z]+)(-?)(\d+)$/);
+                if (m) {
+                    if (!prefix) prefix = m[1].toUpperCase();
+                    if (m[2] === '-') hasHyphen = true;
+                    if (m[3].length > 1 && m[3].startsWith('0')) {
+                        padLength = Math.max(padLength, m[3].length);
+                    }
+                    const num = parseInt(m[3], 10);
+                    if (!isNaN(num) && num > maxNum) maxNum = num;
+                }
+            }
+        }
+
+        if (!prefix) {
+            prefix = batchName.split(/\s+/).map(word => word[0]).join('').toUpperCase().slice(0, 4) || 'STU';
+        }
+
+        if (padLength <= 1 && (batch && batch.year >= 2028)) {
+            padLength = 3;
+        }
+
+        const nextNum = maxNum > 0 ? maxNum + 1 : (batchStudents.length + 1);
+        const numStr = padLength > 1 ? String(nextNum).padStart(padLength, '0') : String(nextNum);
+        return hasHyphen ? `${prefix}-${numStr}` : `${prefix}${numStr}`;
     }
 
     // Show processing overlay
@@ -261,13 +303,22 @@ document.addEventListener('DOMContentLoaded', () => {
     form.addEventListener('submit', async event => {
         event.preventDefault();
         const batchName = batchSelect.value;
-        if (!batchName) return alert('Please select an active batch first.');
+        const generatedId = createStudentId(batchName);
+        const enteredRoll = document.getElementById('rollNo').value.trim();
+        const finalId = enteredRoll || generatedId;
+
         const payload = {
-            studentId: createStudentId(batchName), name: document.getElementById('studentName').value.trim(),
-            phone: document.getElementById('phone').value.trim(), guardianPhone: document.getElementById('guardianPhone').value.trim(),
-            previousSchool: document.getElementById('institution').value.trim(), batch: batchName,
-            roll: document.getElementById('rollNo').value.trim(), fee: Number(monthlyFee.value),
-            admissionFee: Number(document.getElementById('admissionFee').value || 0), photo, status: 'Active',
+            studentId: finalId,
+            name: document.getElementById('studentName').value.trim(),
+            phone: document.getElementById('phone').value.trim(),
+            guardianPhone: document.getElementById('guardianPhone').value.trim(),
+            previousSchool: document.getElementById('institution').value.trim(),
+            batch: batchName,
+            roll: enteredRoll || finalId,
+            fee: Number(monthlyFee.value),
+            admissionFee: Number(document.getElementById('admissionFee').value || 0),
+            photo,
+            status: 'Active',
             reference: document.getElementById('reference').value.trim() || ''
         };
         if (!payload.name || !payload.phone || !payload.guardianPhone || !payload.fee) return alert('Please fill in all required fields.');

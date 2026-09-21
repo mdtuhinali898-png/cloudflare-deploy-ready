@@ -1,12 +1,19 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="bn">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Student Profile - Student ERP</title>
+    <title>Student Profile - EduSmart ERP</title>
+    <!-- Google Fonts & Font Awesome -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="assets/css/design-system.css">
     <link rel="stylesheet" href="assets/css/dashboard.css">
     <link rel="stylesheet" href="assets/css/student-profile.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
 
@@ -30,11 +37,11 @@
         </div>
         <nav class="sidebar-nav">
             <a href="dashboard.html" class="nav-item"><i class="fas fa-tachometer-alt"></i><span>Dashboard</span><span class="nav-tooltip">Dashboard</span></a>
-            <a href="students.html" class="nav-item"><i class="fas fa-users"></i><span>Students</span><span class="nav-tooltip">Students</span></a>
+            <a href="students.html" class="nav-item active"><i class="fas fa-users"></i><span>Students</span><span class="nav-tooltip">Students</span></a>
             <a href="add-student.html" class="nav-item"><i class="fas fa-user-plus"></i><span>Admission</span><span class="nav-tooltip">Admission</span></a>
             <a href="exams.html" class="nav-item"><i class="fas fa-pencil-alt"></i><span>Exams</span><span class="nav-tooltip">Exams</span></a>
             <a href="payments.html" class="nav-item"><i class="fas fa-money-bill-wave"></i><span>Payments</span><span class="nav-tooltip">Payments</span></a>
-            <a href="receipt.html" class="nav-item"><i class="fas fa-receipt"></i><span>Receipts</span><span class="nav-tooltip">Receipts</span></a>
+            <a href="receipt.html" class="nav-item" style="display:none"><i class="fas fa-receipt"></i><span>Receipts</span><span class="nav-tooltip">Receipts</span></a>
             <a href="reports.html" class="nav-item"><i class="fas fa-chart-bar"></i><span>Reports</span><span class="nav-tooltip">Reports</span></a>
             <a href="batches.html" class="nav-item"><i class="fas fa-layer-group"></i><span>Batches</span><span class="nav-tooltip">Batches</span></a>
             <a href="batch-transfer.html" class="nav-item"><i class="fas fa-exchange-alt"></i><span>Batch Transfer</span><span class="nav-tooltip">Batch Transfer</span></a>
@@ -48,11 +55,20 @@
 
     <!-- Main Content -->
     <main class="main-content">
-        <!-- Top Header -->
+        <!-- Top Header with Breadcrumb -->
         <header class="top-header">
-            <h1 class="page-title">Student Profile</h1>
+            <div class="header-title-block">
+                <div class="profile-breadcrumb">
+                    <a href="dashboard.html"><i class="fas fa-tachometer-alt"></i> Dashboard</a>
+                    <span class="bc-divider">/</span>
+                    <a href="students.html">Students</a>
+                    <span class="bc-divider">/</span>
+                    <span class="bc-active">Profile Overview</span>
+                </div>
+                <h1 class="page-title">Student Profile</h1>
+            </div>
             <div class="user-info">
-                <img src="https://i.pravatar.cc/45" alt="Admin" class="user-avatar">
+                <img src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=100" alt="Admin" class="user-avatar">
                 <div class="user-details">
                     <span class="user-name">Administrator</span>
                     <span class="user-role">Super Admin</span>
@@ -60,76 +76,334 @@
             </div>
         </header>
 
-        <!-- Profile Header Card -->
-        <section class="profile-header-card">
-            <div class="profile-cover" style="display: none;"></div>
+        <!-- Page Loading Overlay -->
+        <div class="profile-loading-overlay" id="profileLoadingOverlay">
+            <div class="profile-loading-box">
+                <div class="profile-loading-spinner"></div>
+                <p class="profile-loading-text">Loading student data...</p>
+            </div>
+        </div>
+
+        <!-- Modern Executive Profile Hero Card -->
+        <section class="profile-header-card" id="profileMainContent" style="visibility:hidden;">
+            <!-- Subtle Top Accent Line -->
+            <div class="profile-cover"></div>
+
             <div class="profile-main-info">
-                <div class="profile-photo-wrapper" id="profilePhotoContainer" style="display: none;">
-                    <img src="" alt="Student" class="profile-photo" id="profilePhoto">
-                    <span class="status-indicator status-active" id="statusBadge">Active</span>
+                <!-- Avatar -->
+                <div class="profile-avatar-wrapper">
+                    <div class="profile-photo-wrapper" id="profilePhotoContainer" style="display: none;">
+                        <img src="" alt="Student" class="profile-photo" id="profilePhoto">
+                    </div>
+                    <!-- Fallback avatar when photo is not uploaded -->
+                    <div class="profile-avatar-fallback" id="avatarFallback" style="display:none;">
+                        <span id="avatarInitial"></span>
+                    </div>
                 </div>
+
+                <!-- Details & Identification -->
                 <div class="profile-details">
                     <div class="profile-name-row">
-                        <h1 id="profileName">Student Name</h1>
-                        <span class="profile-id" id="profileId">STD1001</span>
+                        <h1 id="profileName"></h1>
+                        <span class="profile-id" id="profileId"></span>
+                        <span class="status-indicator status-active" id="statusBadge" style="display:none;"></span>
                     </div>
                     <div class="profile-meta">
-                        <span><i class="fas fa-layer-group"></i> <span id="profileBatch">HSC 2026</span></span>
-                        <span><i class="fas fa-phone"></i> <span id="profilePhone">017XXXXXXXX</span></span>
-                        <span><i class="fas fa-calendar-alt"></i> Admitted: <span id="profileAdmission">15 Jul 2026</span></span>
+                        <span class="meta-item"><i class="fas fa-layer-group"></i> <span class="meta-label">Batch:</span> <strong id="profileBatch"></strong></span>
+                        <span class="meta-dot">•</span>
+                        <span class="meta-item"><i class="fas fa-phone"></i> <span class="meta-label">Phone:</span> <strong id="profilePhone"></strong></span>
+                        <span class="meta-dot">•</span>
+                        <span class="meta-item"><i class="fas fa-calendar-alt"></i> <span class="meta-label">Admitted:</span> <strong id="profileAdmission"></strong></span>
                     </div>
                 </div>
+
+                <!-- Action Buttons -->
                 <div class="profile-actions">
-                    <button class="btn-action btn-edit" onclick="editStudent()">
-                        <i class="fas fa-edit"></i> Edit
+                    <button type="button" class="btn-action btn-payment" onclick="goToPayment()">
+                        <i class="fas fa-money-bill-wave"></i> <span>Collect Payment</span>
                     </button>
-                    <button class="btn-action btn-payment" onclick="goToPayment()">
-                        <i class="fas fa-money-bill"></i> Payment
+                    <button type="button" class="btn-action btn-edit" onclick="editStudent()">
+                        <i class="fas fa-edit"></i> <span>Edit Profile</span>
                     </button>
-                    <button class="btn-action btn-print" onclick="printProfile()">
-                        <i class="fas fa-print"></i> Print
+                    <button type="button" class="btn-action btn-print" onclick="printProfile()">
+                        <i class="fas fa-print"></i> <span>Print</span>
                     </button>
                     <a href="students.html" class="btn-action btn-back">
-                        <i class="fas fa-arrow-left"></i> Back
+                        <i class="fas fa-arrow-left"></i> <span>Back</span>
                     </a>
                 </div>
             </div>
         </section>
 
         <!-- Stats Cards -->
-        <section class="profile-stats">
+        <section class="profile-stats" id="profileStatsSection" style="visibility:hidden;">
             <div class="stat-card card-green">
                 <div class="stat-icon"><i class="fas fa-coins"></i></div>
                 <div class="stat-info">
-                    <h3 id="totalPaid">৳0</h3>
-                    <p>Total Paid</p>
+                    <span class="stat-label">Total Paid</span>
+                    <h3 id="totalPaid">--</h3>
+                    <span class="stat-subtext"><i class="fas fa-check-circle"></i> Collected</span>
                 </div>
             </div>
             <div class="stat-card card-red">
                 <div class="stat-icon"><i class="fas fa-exclamation-circle"></i></div>
                 <div class="stat-info">
-                    <h3 id="totalDue">৳0</h3>
-                    <p>Total Due</p>
+                    <span class="stat-label">Total Due</span>
+                    <h3 id="totalDue">--</h3>
+                    <span class="stat-subtext"><i class="fas fa-clock"></i> Outstanding</span>
                 </div>
             </div>
             <div class="stat-card card-blue">
                 <div class="stat-icon"><i class="fas fa-receipt"></i></div>
                 <div class="stat-info">
-                    <h3 id="totalPayments">0</h3>
-                    <p>Total Payments</p>
+                    <span class="stat-label">Total Payments</span>
+                    <h3 id="totalPayments">--</h3>
+                    <span class="stat-subtext"><i class="fas fa-file-invoice"></i> Invoices</span>
                 </div>
             </div>
             <div class="stat-card card-purple">
                 <div class="stat-icon"><i class="fas fa-calendar-check"></i></div>
                 <div class="stat-info">
+                    <span class="stat-label">Last Payment</span>
                     <h3 id="lastPayment">--</h3>
-                    <p>Last Payment</p>
+                    <span class="stat-subtext"><i class="fas fa-history"></i> Latest Date</span>
                 </div>
             </div>
         </section>
 
+        <!-- =============================================
+             STICKY TAB BAR
+             ============================================= -->
+        <div class="profile-tab-bar" id="profileTabBar" style="visibility:hidden;">
+            <div class="profile-tabs">
+                <button class="profile-tab active" data-target="sectionInfo">
+                    <i class="fas fa-user"></i>
+                    <span>Info</span>
+                </button>
+                <button class="profile-tab" data-target="sectionPayments">
+                    <i class="fas fa-money-bill-wave"></i>
+                    <span>Payments</span>
+                </button>
+                <button class="profile-tab" data-target="sectionAcademics">
+                    <i class="fas fa-graduation-cap"></i>
+                    <span>Academics</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- =============================================
+             SECTION 1: INFO
+             ============================================= -->
+        <section class="profile-section" id="sectionInfo" style="visibility:hidden;">
+            <div class="section-label">
+                <i class="fas fa-user"></i> Student Information
+            </div>
+            <div class="profile-two-col">
+
+                <!-- Personal Information -->
+                <div class="info-card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-user"></i> Personal Information</h3>
+                    </div>
+                    <div class="info-body">
+                        <div class="info-row">
+                            <span class="info-label"><i class="fas fa-user-tie"></i> Father's Name</span>
+                            <span class="info-value" id="fatherName">--</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label"><i class="fas fa-user-nurse"></i> Mother's Name</span>
+                            <span class="info-value" id="motherName">--</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label"><i class="fas fa-birthday-cake"></i> Date of Birth</span>
+                            <span class="info-value" id="dob">--</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label"><i class="fas fa-venus-mars"></i> Gender</span>
+                            <span class="info-value" id="gender">--</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label"><i class="fas fa-map-marker-alt"></i> Address</span>
+                            <span class="info-value" id="address">--</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label"><i class="fas fa-user-shield"></i> Guardian</span>
+                            <span class="info-value" id="guardian">--</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Academic Information -->
+                <div class="info-card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-book"></i> Academic Information</h3>
+                    </div>
+                    <div class="info-body">
+                        <div class="info-row">
+                            <span class="info-label"><i class="fas fa-layer-group"></i> Batch</span>
+                            <span class="info-value" id="batch">--</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label"><i class="fas fa-book-open"></i> Class/Group</span>
+                            <span class="info-value" id="classGroup">--</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label"><i class="fas fa-hashtag"></i> Roll Number</span>
+                            <span class="info-value" id="roll">--</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label"><i class="fas fa-school"></i> Previous School</span>
+                            <span class="info-value" id="previousSchool">--</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label"><i class="fas fa-money-bill-wave"></i> Monthly Fee</span>
+                            <span class="info-value fee-value" id="monthlyFee">৳0</span>
+                        </div>
+                        <div class="info-row">
+                            <span class="info-label"><i class="fas fa-calendar-day"></i> Start Month</span>
+                            <span class="info-value" id="startMonth">--</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Notes (full width, only shown if present) -->
+            <div class="info-card" id="notesCard" style="display:none; margin-top:0;">
+                <div class="card-header">
+                    <h3><i class="fas fa-sticky-note"></i> Special Notes</h3>
+                </div>
+                <div class="info-body">
+                    <p class="notes-text" id="notesText">--</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- =============================================
+             SECTION 2: PAYMENTS
+             ============================================= -->
+        <section class="profile-section" id="sectionPayments" style="visibility:hidden;">
+            <div class="section-label">
+                <i class="fas fa-money-bill-wave"></i> Payment Overview
+            </div>
+            <div class="profile-two-col">
+
+                <!-- Payment Trend Chart -->
+                <div class="info-card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-chart-bar"></i> Payment Trend</h3>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="paymentChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Payment History Table -->
+                <div class="info-card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-history"></i> Payment History</h3>
+                        <span class="result-count" id="paymentCount">0 Transactions</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="data-table payment-table">
+                            <thead>
+                                <tr>
+                                    <th>Receipt</th>
+                                    <th>Month</th>
+                                    <th>Paid</th>
+                                    <th>Method</th>
+                                    <th>Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="paymentHistoryBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- =============================================
+             SECTION 3: ACADEMICS
+             ============================================= -->
+        <section class="profile-section" id="sectionAcademics" style="visibility:hidden;">
+            <div class="section-label">
+                <i class="fas fa-graduation-cap"></i> Academic Performance
+            </div>
+
+            <!-- Result KPI Cards (full width) -->
+            <div class="result-summary-cards" id="resultSummaryCards" style="display:none;">
+                <div class="result-kpi-card result-kpi-indigo">
+                    <div class="result-kpi-icon"><i class="fas fa-file-alt"></i></div>
+                    <div class="result-kpi-info">
+                        <span class="result-kpi-label">Total Exams</span>
+                        <strong id="resultTotalExams">0</strong>
+                    </div>
+                </div>
+                <div class="result-kpi-card result-kpi-green">
+                    <div class="result-kpi-icon"><i class="fas fa-star"></i></div>
+                    <div class="result-kpi-info">
+                        <span class="result-kpi-label">Best Grade</span>
+                        <strong id="resultBestGrade">--</strong>
+                    </div>
+                </div>
+                <div class="result-kpi-card result-kpi-amber">
+                    <div class="result-kpi-icon"><i class="fas fa-percentage"></i></div>
+                    <div class="result-kpi-info">
+                        <span class="result-kpi-label">Avg Score</span>
+                        <strong id="resultAvgPct">--%</strong>
+                    </div>
+                </div>
+            </div>
+
+            <div class="profile-two-col">
+
+                <!-- Performance Trend Chart -->
+                <div class="info-card" id="resultChartCard" style="display:none;">
+                    <div class="card-header">
+                        <h3><i class="fas fa-chart-line"></i> Performance Trend</h3>
+                        <span class="result-chart-legend" id="resultChartLegend"></span>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="performanceChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Academic Performance Table -->
+                <div class="info-card" id="resultTableCard">
+                    <div class="card-header">
+                        <h3><i class="fas fa-graduation-cap"></i> Exam Results</h3>
+                        <span class="result-count" id="resultCount">0 Exams</span>
+                    </div>
+                    <div class="result-empty-state" id="resultEmptyState" style="display:none;">
+                        <i class="fas fa-clipboard-list"></i>
+                        <p>No published results found</p>
+                        <span>Results will appear here once the teacher publishes them.</span>
+                    </div>
+                    <div class="table-responsive" id="resultTableWrap" style="display:none;">
+                        <table class="data-table payment-table result-table">
+                            <thead>
+                                <tr>
+                                    <th>Exam</th>
+                                    <th>Type</th>
+                                    <th>Date</th>
+                                    <th>Score</th>
+                                    <th>Grade</th>
+                                    <th>Position</th>
+                                    <th>Detail</th>
+                                </tr>
+                            </thead>
+                            <tbody id="resultTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
         <!-- Two Column Layout -->
-        <section class="profile-content">
+        <section class="profile-content" id="profileContentSection" style="visibility:hidden;">
             
             <!-- Left Column: Info Sections -->
             <div class="profile-left">
@@ -248,9 +522,109 @@
                     </div>
                 </div>
 
+                <!-- ================================================
+                     ACADEMIC PERFORMANCE SECTION
+                     ================================================ -->
+
+                <!-- Result Summary KPI Cards -->
+                <div class="result-summary-cards" id="resultSummaryCards" style="display:none;">
+                    <div class="result-kpi-card result-kpi-indigo">
+                        <div class="result-kpi-icon"><i class="fas fa-file-alt"></i></div>
+                        <div class="result-kpi-info">
+                            <span class="result-kpi-label">Total Exams</span>
+                            <strong id="resultTotalExams">0</strong>
+                        </div>
+                    </div>
+                    <div class="result-kpi-card result-kpi-green">
+                        <div class="result-kpi-icon"><i class="fas fa-star"></i></div>
+                        <div class="result-kpi-info">
+                            <span class="result-kpi-label">Best Grade</span>
+                            <strong id="resultBestGrade">--</strong>
+                        </div>
+                    </div>
+                    <div class="result-kpi-card result-kpi-amber">
+                        <div class="result-kpi-icon"><i class="fas fa-percentage"></i></div>
+                        <div class="result-kpi-info">
+                            <span class="result-kpi-label">Avg Score</span>
+                            <strong id="resultAvgPct">--%</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Academic Performance Card (table) -->
+                <div class="info-card" id="resultTableCard">
+                    <div class="card-header">
+                        <h3><i class="fas fa-graduation-cap"></i> Academic Performance</h3>
+                        <span class="result-count" id="resultCount">0 Exams</span>
+                    </div>
+
+                    <!-- Empty State (shown until JS decides) -->
+                    <div class="result-empty-state" id="resultEmptyState" style="display:none;">
+                        <i class="fas fa-clipboard-list"></i>
+                        <p>No published results found</p>
+                        <span>Results will appear here once the teacher publishes them.</span>
+                    </div>
+
+                    <!-- Table -->
+                    <div class="table-responsive" id="resultTableWrap" style="display:none;">
+                        <table class="data-table payment-table result-table">
+                            <thead>
+                                <tr>
+                                    <th>Exam</th>
+                                    <th>Type</th>
+                                    <th>Date</th>
+                                    <th>Score</th>
+                                    <th>Grade</th>
+                                    <th>Position</th>
+                                    <th>Detail</th>
+                                </tr>
+                            </thead>
+                            <tbody id="resultTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Performance Trend Chart -->
+                <div class="info-card" id="resultChartCard" style="display:none;">
+                    <div class="card-header">
+                        <h3><i class="fas fa-chart-line"></i> Performance Trend</h3>
+                        <span class="result-chart-legend" id="resultChartLegend"></span>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="performanceChart"></canvas>
+                    </div>
+                </div>
+
             </div>
 
         </section>
+
+        <!-- Subject Detail Modal -->
+        <div class="subject-detail-overlay" id="subjectDetailModal" style="display:none;">
+            <div class="subject-detail-container">
+                <div class="subject-detail-header">
+                    <div>
+                        <h2 id="subjectDetailExamName">Exam Name</h2>
+                        <span id="subjectDetailMeta" class="subject-detail-meta"></span>
+                    </div>
+                    <button type="button" class="subject-detail-close" onclick="closeSubjectDetail()">&times;</button>
+                </div>
+                <div class="subject-detail-body">
+                    <table class="subject-detail-table">
+                        <thead>
+                            <tr>
+                                <th>Subject</th>
+                                <th>Obtained</th>
+                                <th>Full Mark</th>
+                                <th>%</th>
+                            </tr>
+                        </thead>
+                        <tbody id="subjectDetailBody"></tbody>
+                        <tfoot id="subjectDetailFoot"></tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
 
         <!-- Edit Student Modal -->
         <div class="edit-modal-overlay" id="editStudentModal" style="display: none;">

@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Book Store - EduSmart Admin</title>
+    <link rel="stylesheet" href="assets/css/dashboard.css">
+    <link rel="stylesheet" href="assets/css/book-store.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+<!-- ══════════════════ SIDEBAR ══════════════════ -->
+<aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+        <a href="/" class="sidebar-logo">
+            <div class="logo-icon"><i class="fas fa-graduation-cap"></i></div>
+            <span>Edu<span class="gradient-text">Smart</span> <small class="admin-badge">Admin</small></span>
+        </a>
+        <button class="sidebar-toggle" id="sidebarToggle" aria-label="Toggle sidebar">
+            <i class="fas fa-chevron-left"></i>
+        </button>
+    </div>
+    <div class="sidebar-search">
+        <div class="search-box sidebar-search-box">
+            <i class="fas fa-search"></i>
+            <input type="text" id="sidebarSearchInput" placeholder="Search student by ID, name or phone" autocomplete="off">
+        </div>
+        <div class="sidebar-search-results" id="sidebarSearchResults"></div>
+    </div>
+    <nav class="sidebar-nav">
+        <a href="dashboard.html"     class="nav-item"><i class="fas fa-tachometer-alt"></i><span>Dashboard</span><span class="nav-tooltip">Dashboard</span></a>
+        <a href="students.html"      class="nav-item"><i class="fas fa-users"></i><span>Students</span><span class="nav-tooltip">Students</span></a>
+        <a href="add-student.html"   class="nav-item"><i class="fas fa-user-plus"></i><span>Admission</span><span class="nav-tooltip">Admission</span></a>
+        <a href="exams.html"         class="nav-item"><i class="fas fa-pencil-alt"></i><span>Exams</span><span class="nav-tooltip">Exams</span></a>
+        <a href="payments.html"      class="nav-item"><i class="fas fa-money-bill-wave"></i><span>Payments</span><span class="nav-tooltip">Payments</span></a>
+        <a href="receipt.html"       class="nav-item" style="display:none"><i class="fas fa-receipt"></i><span>Receipts</span><span class="nav-tooltip">Receipts</span></a>
+        <a href="reports.html"       class="nav-item"><i class="fas fa-chart-bar"></i><span>Reports</span><span class="nav-tooltip">Reports</span></a>
+        <a href="finance.html"       class="nav-item"><i class="fas fa-chart-line"></i><span>Finance</span><span class="nav-tooltip">Finance</span></a>
+        <a href="expenses.html"      class="nav-item"><i class="fas fa-shopping-cart"></i><span>Expenses</span><span class="nav-tooltip">Expenses</span></a>
+        <a href="book-store.html"    class="nav-item active"><i class="fas fa-book"></i><span>Book Store</span><span class="nav-tooltip">Book Store</span></a>
+        <a href="batches.html"       class="nav-item"><i class="fas fa-layer-group"></i><span>Batches</span><span class="nav-tooltip">Batches</span></a>
+        <a href="batch-transfer.html" class="nav-item"><i class="fas fa-exchange-alt"></i><span>Batch Transfer</span><span class="nav-tooltip">Batch Transfer</span></a>
+        <a href="settings.html"      class="nav-item"><i class="fas fa-cog"></i><span>Settings</span><span class="nav-tooltip">Settings</span></a>
+    </nav>
+    <div class="sidebar-footer">
+        <a href="/" class="nav-item website-link"><i class="fas fa-globe"></i><span>View Website</span><span class="nav-tooltip">View Website</span></a>
+        <a href="login.html" class="nav-item logout"><i class="fas fa-sign-out-alt"></i><span>Logout</span><span class="nav-tooltip">Logout</span></a>
+    </div>
+</aside>
+
+<!-- ══════════════════ MAIN CONTENT ══════════════════ -->
+<main class="main-content">
+
+    <!-- Top Header -->
+    <header class="top-header">
+        <h1 class="page-title"><i class="fas fa-book" style="color:#f97316;margin-right:8px;"></i>Book Store</h1>
+        <div class="user-info">
+            <img src="https://i.pravatar.cc/45" alt="Admin" class="user-avatar">
+            <div class="user-details">
+                <span class="user-name">Administrator</span>
+                <span class="user-role">Super Admin</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Page Header -->
+    <div class="page-header-action">
+        <div>
+            <h2><i class="fas fa-book-open" style="color:#f97316;"></i> Book Store Management</h2>
+            <p>বই ইনভেন্টরি, বিক্রি, রিপোর্ট এবং রসিদ ব্যবস্থাপনা</p>
+        </div>
+        <div class="header-actions">
+            <button class="btn btn-book" onclick="openAddBookModal()">
+                <i class="fas fa-plus"></i> নতুন বই যোগ
+            </button>
+            <button class="btn btn-secondary" onclick="switchTab('sale')">
+                <i class="fas fa-shopping-cart"></i> নতুন বিক্রি
+            </button>
+        </div>
+    </div>
+
+    <!-- ── Summary Cards ── -->
+    <div class="bs-summary-cards">
+        <div class="bs-summary-card bs-card-orange">
+            <div class="bs-card-icon"><i class="fas fa-coins"></i></div>
+            <div class="bs-card-content">
+                <h3 id="sc-today-amt">৳0</h3>
+                <p>আজকের বিক্রি</p>
+                <small id="sc-today-pcs" style="color:#f97316;font-weight:600;">0 pcs</small>
+            </div>
+        </div>
+        <div class="bs-summary-card bs-card-green">
+            <div class="bs-card-icon"><i class="fas fa-calendar-alt"></i></div>
+            <div class="bs-card-content">
+                <h3 id="sc-month-amt">৳0</h3>
+                <p>এই মাসের বিক্রি</p>
+                <small id="sc-month-pcs" style="color:#1cc88a;font-weight:600;">0 pcs</small>
+            </div>
+        </div>
+        <div class="bs-summary-card bs-card-blue">
+            <div class="bs-card-icon"><i class="fas fa-chart-line"></i></div>
+            <div class="bs-card-content">
+                <h3 id="sc-total-amt">৳0</h3>
+                <p>মোট বিক্রি (সব সময়)</p>
+                <small id="sc-total-sales" style="color:#4e73df;font-weight:600;">0 sales</small>
+            </div>
+        </div>
+        <div class="bs-summary-card bs-card-purple">
+            <div class="bs-card-icon"><i class="fas fa-books"></i></div>
+            <div class="bs-card-content">
+                <h3 id="sc-total-books">0</h3>
+                <p>মোট বইয়ের ধরন</p>
+                <small id="sc-stock-cur" style="color:#8b5cf6;font-weight:600;">0 pcs in stock</small>
+            </div>
+        </div>
+        <div class="bs-summary-card bs-card-warning">
+            <div class="bs-card-icon"><i class="fas fa-exclamation-triangle"></i></div>
+            <div class="bs-card-content">
+                <h3 id="sc-low-stock">0</h3>
+                <p>Low Stock বই</p>
+                <small id="sc-out-stock" style="color:#f6c23e;font-weight:600;">0 out of stock</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Tabs ── -->
+    <div class="bs-tabs">
+        <button class="bs-tab-btn active" data-tab="inventory" onclick="switchTab('inventory')">
+            <i class="fas fa-boxes"></i> ইনভেন্টরি
+        </button>
+        <button class="bs-tab-btn" data-tab="sale" onclick="switchTab('sale')">
+            <i class="fas fa-shopping-cart"></i> নতুন বিক্রি
+        </button>
+        <button class="bs-tab-btn" data-tab="history" onclick="switchTab('history')">
+            <i class="fas fa-history"></i> বিক্রির ইতিহাস
+        </button>
+        <button class="bs-tab-btn" data-tab="reports" onclick="switchTab('reports')">
+            <i class="fas fa-chart-bar"></i> রিপোর্ট
+        </button>
+    </div>
+
+    <!-- ════════════════════════════════════════════════════
+         TAB 1: INVENTORY
+         ════════════════════════════════════════════════════ -->
+    <div class="bs-tab-content active" id="tab-inventory">
+
+        <!-- Filter Bar -->
+        <div class="bs-filter-bar">
+            <div class="bs-filter-item">
+                <label><i class="fas fa-search"></i> খুঁজুন</label>
+                <input type="text" id="invSearch" placeholder="বইয়ের নাম, লেখক, ID..." oninput="applyInventoryFilter()">
+            </div>
+            <div class="bs-filter-item">
+                <label><i class="fas fa-tag"></i> ক্যাটাগরি</label>
+                <select id="invCatFilter" onchange="applyInventoryFilter()">
+                    <option value="all">সব ক্যাটাগরি</option>
+                    <option value="SSC">SSC</option>
+                    <option value="HSC">HSC</option>
+                    <option value="Admission">Admission</option>
+                    <option value="General">General</option>
+                    <option value="Other">Other</option>
+                </select>
+            </div>
+            <div class="bs-filter-item">
+                <label><i class="fas fa-filter"></i> স্ট্যাটাস</label>
+                <select id="invStatusFilter" onchange="applyInventoryFilter()">
+                    <option value="all">সব স্ট্যাটাস</option>
+                    <option value="Available">Available</option>
+                    <option value="Low Stock">Low Stock</option>
+                    <option value="Out of Stock">Out of Stock</option>
+                </select>
+            </div>
+            <button class="btn btn-book" onclick="openAddBookModal()">
+                <i class="fas fa-plus"></i> নতুন বই
+            </button>
+        </div>
+
+        <!-- Inventory Table -->
+        <div class="bs-data-card">
+            <div class="bs-card-header">
+                <h3><i class="fas fa-boxes"></i> বইয়ের তালিকা</h3>
+                <span id="invCount" style="font-size:13px;color:#6c757d;"></span>
+            </div>
+            <div class="bs-table-wrap">
+                <table class="bs-table">
+                    <thead>
+                        <tr>
+                            <th>Book ID</th>
+                            <th>বইয়ের নাম</th>
+                            <th>ক্যাটাগরি</th>
+                            <th>MRP</th>
+                            <th>বিক্রয় মূল্য</th>
+                            <th>ছাড়</th>
+                            <th>স্টক</th>
+                            <th>স্ট্যাটাস</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="invTableBody">
+                        <tr><td colspan="9" style="text-align:center;padding:40px;">
+                            <div class="bs-loading"><div class="bs-spinner"></div> লোড হচ্ছে...</div>
+                        </td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div><!-- /tab-inventory -->
+
+    <!-- ════════════════════════════════════════════════════
+         TAB 2: NEW SALE — নতুন design
+         ════════════════════════════════════════════════════ -->
+    <div class="bs-tab-content" id="tab-sale">
+        <div class="ns-layout">
+
+            <!-- ══ বাম panel ══ -->
+            <div class="ns-left">
+
+                <!-- ক্রেতার তথ্য card -->
+                <div class="ns-card">
+                    <div class="ns-card-header">
+                        <span><i class="fas fa-user-circle"></i> ক্রেতার তথ্য</span>
+                        <!-- Buyer Type Toggle -->
+                        <div class="ns-buyer-toggle">
+                            <button class="ns-toggle-btn ns-toggle-active" data-value="External" onclick="nsSwitchBuyer(this)">
+                                <i class="fas fa-user-tie"></i> বাইরের ক্রেতা
+                            </button>
+                            <button class="ns-toggle-btn" data-value="Student" onclick="nsSwitchBuyer(this)">
+                                <i class="fas fa-user-graduate"></i> ছাত্র
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Student Fields -->
+                    <div id="studentFields" style="display:none;flex-direction:column;gap:8px;">
+                        <!-- Search box -->
+                        <div class="ns-search-row">
+                            <input type="text" id="saleStudentId" placeholder="Student ID দিয়ে খুঁজুন..."
+                                onkeyup="if(event.key==='Enter') lookupStudent()">
+                            <button class="ns-search-btn" onclick="lookupStudent()">
+                                <i class="fas fa-search"></i> খুঁজুন
+                            </button>
+                        </div>
+                        <!-- Student Result Card — search box এর নিচে -->
+                        <div id="studentCard" style="display:none;" class="ns-student-card">
+                            <div class="ns-student-card-top">
+                                <div class="ns-student-avatar">
+                                    <i class="fas fa-user-circle"></i>
+                                </div>
+                                <div class="ns-student-name">
+                                    <span id="saleStudentName"></span>
+                                    <span class="ns-badge-student">Student</span>
+                                </div>
+                            </div>
+                            <div class="ns-student-meta">
+                                <span><i class="fas fa-id-card"></i> ID: <strong id="saleStudentIdShow"></strong></span>
+                                <span><i class="fas fa-layer-group"></i> <span id="saleStudentBatch"></span></span>
+                                <span><i class="fas fa-phone"></i> <span id="saleStudentPhone"></span></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- External Fields -->
+                    <div id="externalFields">
+                        <div class="ns-field-row">
+                            <div class="ns-field">
+                                <label>ক্রেতার নাম <span style="color:#e74a3b">*</span></label>
+                                <input type="text" id="extBuyerName" placeholder="পুরো নাম লিখুন">
+                            </div>
+                        </div>
+                        <div class="ns-field-row">
+                            <div class="ns-field">
+                                <label>ফোন নম্বর</label>
+                                <input type="text" id="extBuyerPhone" placeholder="01XXXXXXXXX">
+                            </div>
+                            <div class="ns-field">
+                                <label>ঠিকানা</label>
+                                <input type="text" id="extBuyerAddress" placeholder="ঐচ্ছিক">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Date + Status -->
+                    <div class="ns-field-row" style="margin-top:10px;">
+                        <div class="ns-field">
+                            <label><i class="fas fa-calendar"></i> বিক্রির তারিখ</label>
+                            <input type="date" id="saleDateInput">
+                        </div>
+                        <div class="ns-field">
+                            <label><i class="fas fa-info-circle"></i> Payment Status</label>
+                            <select id="paymentStatusSel">
+                                <option value="Paid">Paid — পরিশোধ</option>
+                                <option value="Due">Due — বাকি</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Remarks -->
+                    <div class="ns-field-row">
+                        <div class="ns-field">
+                            <label>মন্তব্য</label>
+                            <textarea id="saleRemarks" rows="2" placeholder="বিক্রি সংক্রান্ত নোট..."></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- বই নির্বাচন card -->
+                <div class="ns-card">
+                    <div class="ns-card-header">
+                        <span><i class="fas fa-book-open"></i> বই নির্বাচন করুন</span>
+                    </div>
+
+                    <!-- Book Search Dropdown -->
+                    <select id="bookSelectDropdown" class="ns-book-select" onchange="onBookSelect()">
+                        <option value="">বই খুঁজুন বা নির্বাচন করুন...</option>
+                    </select>
+
+                    <!-- Selected Book Preview Card -->
+                    <div id="selectedBookCard" style="display:none;" class="ns-selected-book">
+                        <div id="selectedBookThumb" class="ns-book-thumb"></div>
+                        <div class="ns-book-details">
+                            <div id="selectedBookTitle" class="ns-book-title"></div>
+                            <div id="selectedBookMeta" class="ns-book-meta"></div>
+                        </div>
+                        <div class="ns-qty-disc">
+                            <div class="ns-qty-wrap">
+                                <label>পরিমাণ</label>
+                                <div class="ns-qty-counter">
+                                    <button type="button" onclick="nsChangeQty(-1)">−</button>
+                                    <input type="number" id="bookQtyInput" value="1" min="1" oninput="updateAddRowPreview()">
+                                    <button type="button" onclick="nsChangeQty(1)">+</button>
+                                </div>
+                            </div>
+                            <div class="ns-disc-wrap">
+                                <label>ছাড় (৳)</label>
+                                <input type="number" id="bookDiscInput" value="0" min="0" class="ns-disc-input" oninput="updateAddRowPreview()">
+                            </div>
+                        </div>
+                        <!-- hidden price field -->
+                        <input type="hidden" id="bookUnitPrice">
+                    </div>
+
+                    <!-- Live Preview -->
+                    <div id="addRowPreview" style="display:none;">
+                        <div class="ns-preview">
+                            <i class="fas fa-calculator" style="color:#f97316;"></i>
+                            <span id="previewText"></span>
+                        </div>
+                    </div>
+
+                    <!-- Add to Cart Button -->
+                    <button class="ns-add-btn" onclick="addToCart()">
+                        <i class="fas fa-cart-plus"></i> + কার্টে যোগ করুন
+                    </button>
+                </div>
+            </div>
+
+            <!-- ══ ডান panel ══ -->
+            <div class="ns-right">
+                <div class="ns-card" style="height:100%;">
+
+                    <!-- Cart Header -->
+                    <div class="ns-card-header">
+                        <span><i class="fas fa-shopping-cart"></i> কার্ট <span id="cartItemCount" class="ns-cart-count">0 টি আইটেম</span></span>
+                        <button class="ns-clear-btn" onclick="cart=[];renderCart();">
+                            <i class="fas fa-trash"></i> কার্ট ক্লিয়ার
+                        </button>
+                    </div>
+
+                    <!-- Cart Table -->
+                    <div class="ns-cart-wrap">
+                        <table class="ns-cart-table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>বইয়ের নাম</th>
+                                    <th>পরিমাণ</th>
+                                    <th>একক মূল্য</th>
+                                    <th>ছাড়</th>
+                                    <th>মোট</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="cartBody">
+                                <tr><td colspan="7" class="ns-empty-cart">
+                                    <i class="fas fa-shopping-basket"></i>
+                                    <p>কার্ট খালি। বাম দিক থেকে বই যোগ করুন।</p>
+                                </td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Totals -->
+                    <div class="ns-totals">
+                        <div class="ns-total-row">
+                            <span>Subtotal (ছাড়ের আগে)</span>
+                            <span id="cartGross">৳0</span>
+                        </div>
+                        <div class="ns-total-row ns-disc-row">
+                            <span>মোট ছাড়</span>
+                            <span id="cartDiscount">৳0</span>
+                        </div>
+                        <div class="ns-total-row ns-net-row">
+                            <span>মোট পরিশোধযোগ্য</span>
+                            <span id="cartNet">৳0</span>
+                        </div>
+                    </div>
+
+                    <!-- Payment Method -->
+                    <div class="ns-payment-section">
+                        <label><i class="fas fa-wallet"></i> পেমেন্ট মেথড</label>
+                        <div class="ns-pay-methods">
+                            <button class="ns-pay-btn ns-pay-active" data-method="Cash"><i class="fas fa-money-bill-wave"></i> Cash</button>
+                            <button class="ns-pay-btn" data-method="bKash"><i class="fas fa-mobile-alt"></i> bKash</button>
+                            <button class="ns-pay-btn" data-method="Nagad"><i class="fas fa-fire"></i> Nagad</button>
+                            <button class="ns-pay-btn" data-method="Bank"><i class="fas fa-university"></i> Bank</button>
+                            <button class="ns-pay-btn" data-method="Rocket"><i class="fas fa-rocket"></i> Rocket</button>
+                        </div>
+                    </div>
+
+                    <!-- Submit -->
+                    <button class="ns-submit-btn" id="btnSubmitSale" onclick="submitSale()" disabled>
+                        <i class="fas fa-check-circle"></i> বিক্রি সম্পন্ন করুন — <span id="btnNetAmount">৳0</span>
+                    </button>
+
+                </div>
+            </div>
+        </div>
+    </div><!-- /tab-sale -->
+
+    <!-- ════════════════════════════════════════════════════
+         TAB 3: SALES HISTORY
+         ════════════════════════════════════════════════════ -->
+    <div class="bs-tab-content" id="tab-history">
+
+        <!-- Filter Bar -->
+        <div class="bs-filter-bar">
+            <div class="bs-filter-item">
+                <label><i class="fas fa-calendar-alt"></i> শুরুর তারিখ</label>
+                <input type="date" id="histFromDate">
+            </div>
+            <div class="bs-filter-item">
+                <label><i class="fas fa-calendar-alt"></i> শেষ তারিখ</label>
+                <input type="date" id="histToDate">
+            </div>
+            <div class="bs-filter-item">
+                <label><i class="fas fa-user"></i> ক্রেতার ধরন</label>
+                <select id="histBuyerType">
+                    <option value="all">সব</option>
+                    <option value="Student">Student</option>
+                    <option value="External">External</option>
+                </select>
+            </div>
+            <div class="bs-filter-item">
+                <label><i class="fas fa-filter"></i> Payment</label>
+                <select id="histPayStatus">
+                    <option value="all">সব</option>
+                    <option value="Paid">Paid</option>
+                    <option value="Due">Due</option>
+                </select>
+            </div>
+            <button class="btn btn-book" onclick="applyHistoryFilter()">
+                <i class="fas fa-search"></i> খুঁজুন
+            </button>
+            <button class="btn btn-secondary" onclick="resetHistoryFilter()">
+                <i class="fas fa-redo"></i> Reset
+            </button>
+        </div>
+
+        <!-- History Summary -->
+        <div class="bs-summary-cards" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px;">
+            <div class="bs-summary-card bs-card-orange">
+                <div class="bs-card-icon"><i class="fas fa-coins"></i></div>
+                <div class="bs-card-content">
+                    <h3 id="histTotalAmt">৳0</h3>
+                    <p>মোট বিক্রি (ফিল্টার)</p>
+                </div>
+            </div>
+            <div class="bs-summary-card bs-card-green">
+                <div class="bs-card-icon"><i class="fas fa-book"></i></div>
+                <div class="bs-card-content">
+                    <h3 id="histTotalPcs">0</h3>
+                    <p>মোট বই (পিস)</p>
+                </div>
+            </div>
+            <div class="bs-summary-card bs-card-blue">
+                <div class="bs-card-icon"><i class="fas fa-receipt"></i></div>
+                <div class="bs-card-content">
+                    <h3 id="histTotalSales">0</h3>
+                    <p>মোট লেনদেন</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- History Table -->
+        <div class="bs-data-card">
+            <div class="bs-card-header">
+                <h3><i class="fas fa-history"></i> বিক্রির ইতিহাস</h3>
+            </div>
+            <div class="bs-table-wrap">
+                <table class="bs-table">
+                    <thead>
+                        <tr>
+                            <th>তারিখ</th>
+                            <th>রসিদ নং</th>
+                            <th>ক্রেতা</th>
+                            <th>ধরন</th>
+                            <th>বই (পিস)</th>
+                            <th>মোট টাকা</th>
+                            <th>Payment</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="histTableBody">
+                        <tr><td colspan="8" style="text-align:center;padding:40px;color:#6c757d;">
+                            ডেটা লোড হচ্ছে...
+                        </td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div><!-- /tab-history -->
+
+    <!-- ════════════════════════════════════════════════════
+         TAB 4: REPORTS
+         ════════════════════════════════════════════════════ -->
+    <div class="bs-tab-content" id="tab-reports">
+
+        <!-- Report Summary Cards -->
+        <div class="bs-summary-cards">
+            <div class="bs-summary-card bs-card-orange">
+                <div class="bs-card-icon"><i class="fas fa-sun"></i></div>
+                <div class="bs-card-content">
+                    <h3 id="rpt-today-amt">৳0</h3>
+                    <p>আজকের বিক্রি</p>
+                    <small id="rpt-today-pcs" style="color:#f97316;font-weight:600;"></small>
+                </div>
+            </div>
+            <div class="bs-summary-card bs-card-green">
+                <div class="bs-card-icon"><i class="fas fa-calendar-check"></i></div>
+                <div class="bs-card-content">
+                    <h3 id="rpt-month-amt">৳0</h3>
+                    <p>এই মাসের বিক্রি</p>
+                    <small id="rpt-month-pcs" style="color:#1cc88a;font-weight:600;"></small>
+                </div>
+            </div>
+            <div class="bs-summary-card bs-card-blue">
+                <div class="bs-card-icon"><i class="fas fa-chart-line"></i></div>
+                <div class="bs-card-content">
+                    <h3 id="rpt-total-amt">৳0</h3>
+                    <p>সর্বমোট বিক্রি</p>
+                    <small id="rpt-total-pcs" style="color:#4e73df;font-weight:600;"></small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts + Top Books -->
+        <div class="bs-report-grid">
+
+            <!-- Daily Trend Chart -->
+            <div class="bs-chart-card">
+                <h3><i class="fas fa-chart-line"></i> দৈনিক বিক্রির প্রবণতা (শেষ ১৪ দিন)</h3>
+                <canvas id="dailyTrendChart"></canvas>
+            </div>
+
+            <!-- Top Books -->
+            <div class="bs-chart-card">
+                <h3><i class="fas fa-trophy"></i> সবচেয়ে বেশি বিক্রি হওয়া বই (Top 5)</h3>
+                <div id="topBooksList">
+                    <p style="color:#6c757d;text-align:center;padding:30px;">ডেটা লোড হচ্ছে...</p>
+                </div>
+            </div>
+
+            <!-- Buyer Type Chart -->
+            <div class="bs-chart-card">
+                <h3><i class="fas fa-users"></i> ক্রেতার ধরন অনুযায়ী বিক্রি</h3>
+                <canvas id="buyerTypeChart"></canvas>
+            </div>
+
+            <!-- Payment Method Chart -->
+            <div class="bs-chart-card">
+                <h3><i class="fas fa-wallet"></i> Payment Method অনুযায়ী</h3>
+                <canvas id="methodChart"></canvas>
+            </div>
+
+        </div>
+    </div><!-- /tab-reports -->
+
+</main><!-- /main-content -->
+
+
+<!-- ══════════════════════════════════════════════
+     MODAL: ADD / EDIT BOOK
+     ══════════════════════════════════════════════ -->
+<div class="bs-modal-overlay" id="addBookModal">
+    <div class="bs-modal">
+        <h3><i class="fas fa-book"></i> <span id="bookModalTitle">নতুন বই যোগ করুন</span></h3>
+        <form id="bookForm" onsubmit="event.preventDefault(); saveBook();">
+            <div class="form-row">
+                <div class="form-group" style="flex:2;">
+                    <label>বইয়ের নাম <span style="color:#e74a3b;">*</span></label>
+                    <input type="text" id="bookTitle" placeholder="বইয়ের পুরো নাম">
+                </div>
+                <div class="form-group">
+                    <label>ক্যাটাগরি</label>
+                    <select id="bookCategory">
+                        <option value="General">General</option>
+                        <option value="SSC">SSC</option>
+                        <option value="HSC">HSC</option>
+                        <option value="Admission">Admission</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>লেখক</label>
+                    <input type="text" id="bookAuthor" placeholder="লেখকের নাম">
+                </div>
+                <div class="form-group">
+                    <label>প্রকাশনী</label>
+                    <input type="text" id="bookPublisher" placeholder="প্রকাশনীর নাম">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>MRP মূল্য (৳)</label>
+                    <input type="number" id="bookMrpPrice" placeholder="0" min="0">
+                </div>
+                <div class="form-group">
+                    <label>বিক্রয় মূল্য (৳) <span style="color:#e74a3b;">*</span></label>
+                    <input type="number" id="bookSellingPrice" placeholder="0" min="0">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>ছাড় (টাকায়)</label>
+                    <input type="number" id="bookDiscountAmt" placeholder="0" min="0">
+                </div>
+                <div class="form-group">
+                    <label>ছাড় (%)</label>
+                    <input type="number" id="bookDiscountPct" placeholder="0" min="0" max="100">
+                </div>
+                <div class="form-group">
+                    <label>Low Stock Alert</label>
+                    <input type="number" id="bookLowAlert" value="5" min="0">
+                </div>
+            </div>
+            <div class="form-row" id="initialStockRow">
+                <div class="form-group">
+                    <label>প্রাথমিক স্টক (পিস)</label>
+                    <input type="number" id="bookInitialStock" placeholder="0" min="0">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>বিবরণ</label>
+                    <textarea id="bookDescription" placeholder="বইয়ের সংক্ষিপ্ত বিবরণ (ঐচ্ছিক)"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('addBookModal')">
+                    <i class="fas fa-times"></i> বাতিল
+                </button>
+                <button type="submit" class="btn btn-book" id="saveBookBtn">
+                    <i class="fas fa-save"></i> সংরক্ষণ করুন
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     MODAL: ADD STOCK
+     ══════════════════════════════════════════════ -->
+<div class="bs-modal-overlay" id="addStockModal">
+    <div class="bs-modal" style="max-width:400px;">
+        <h3><i class="fas fa-plus-circle"></i> স্টক যোগ করুন</h3>
+        <input type="hidden" id="stockBookId">
+        <div class="form-group" style="margin-bottom:14px;">
+            <label>বইয়ের নাম</label>
+            <input type="text" id="stockBookTitle" readonly style="background:#f8f9fc;font-weight:600;">
+        </div>
+        <div class="form-group" style="margin-bottom:14px;">
+            <label>যোগ করার পরিমাণ <span style="color:#e74a3b;">*</span></label>
+            <input type="number" id="stockQty" placeholder="পিস সংখ্যা" min="1">
+        </div>
+        <div class="form-group" style="margin-bottom:14px;">
+            <label>নোট</label>
+            <input type="text" id="stockNote" placeholder="যেমন: নতুন শিপমেন্ট, ফেরত ইত্যাদি">
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal('addStockModal')">
+                <i class="fas fa-times"></i> বাতিল
+            </button>
+            <button class="btn btn-book" id="saveStockBtn" onclick="saveStock()">
+                <i class="fas fa-plus"></i> স্টক যোগ করুন
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+     MODAL: RECEIPT
+     ══════════════════════════════════════════════ -->
+<div class="bs-modal-overlay" id="receiptModal">
+    <div class="bs-modal" style="max-width:460px;">
+        <h3><i class="fas fa-receipt"></i> বিক্রির রসিদ</h3>
+        <div id="receiptModalBody"></div>
+        <div class="modal-footer">
+            <button class="btn btn-secondary" onclick="closeModal('receiptModal')">
+                <i class="fas fa-times"></i> বন্ধ করুন
+            </button>
+            <button class="btn btn-book" onclick="printReceipt()">
+                <i class="fas fa-print"></i> প্রিন্ট করুন
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Scripts -->
+<script src="assets/js/app.js"></script>
+<script src="assets/js/sidebar.js"></script>
+<script src="assets/js/book-store.js"></script>
+
+</body>
+</html>

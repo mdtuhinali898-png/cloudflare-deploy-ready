@@ -6,8 +6,8 @@ document.addEventListener('DOMContentLoaded', () => {
 // 1. CONFIG & STATE
 // ============================================
 // Use relative URL if accessed through server, otherwise use localhost
-const API_BASE_URL = window.location.protocol === 'http:' && window.location.hostname === 'localhost' 
-    ? 'http://localhost:5002/api' 
+const API_BASE_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? (window.location.port === '5002' ? '/api' : 'http://localhost:5002/api')
     : '/api';
     const STUDENTS_KEY = 'erp_students_data';
     const PAYMENTS_KEY = 'erp_payments_data';
@@ -106,13 +106,25 @@ const API_BASE_URL = window.location.protocol === 'http:' && window.location.hos
             document.getElementById('studentName').innerText = student.name;
             document.getElementById('fatherName').innerText = student.guardianName || student.father || 'N/A';
             document.getElementById('motherName').innerText = student.motherName || 'N/A';
-            document.getElementById('batch').innerText = student.batch;
-            document.getElementById('className').innerText = student.batch;
-            document.getElementById('phone').innerText = student.phone;
+            document.getElementById('batch').innerText = student.batch || 'N/A';
+            document.getElementById('className').innerText = student.batch || student.className || 'N/A';
+            document.getElementById('phone').innerText = student.phone || 'N/A';
             
             const statusEl = document.getElementById('studentStatus');
-            statusEl.innerText = student.status;
-            statusEl.className = `value status-badge status-${student.status.toLowerCase()}`;
+            statusEl.innerText = student.status || 'Active';
+            statusEl.className = `value status-badge status-${(student.status || 'active').toLowerCase()}`;
+        } else {
+            document.getElementById('studentId').innerText = payment.studentId || 'N/A';
+            document.getElementById('studentName').innerText = payment.studentName || payment.name || 'N/A';
+            document.getElementById('fatherName').innerText = 'N/A';
+            document.getElementById('motherName').innerText = 'N/A';
+            document.getElementById('batch').innerText = payment.batch || 'General';
+            document.getElementById('className').innerText = payment.className || 'General';
+            document.getElementById('phone').innerText = payment.phone || 'N/A';
+            
+            const statusEl = document.getElementById('studentStatus');
+            statusEl.innerText = 'Active';
+            statusEl.className = 'value status-badge status-active';
         }
 
         // Payment Information

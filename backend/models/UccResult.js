@@ -9,7 +9,11 @@ const uccResultSchema = new mongoose.Schema({
   
   subjectMarks: [{
     subjectName: String,
-    marksObtained: Number
+    marksObtained: Number,
+    fullMarks: Number,
+    passMarks: Number,
+    correct: { type: Number, default: null },
+    wrong: { type: Number, default: null }
   }],
   
   correctAnswer: { type: Number, default: null },

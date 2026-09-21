@@ -51,6 +51,34 @@
 .btn-view-results { background: var(--info); color: white; }
 .btn-view-results:hover { background: #2c9faf; }
 
+/* Result table — View button */
+.btn-result-view {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    background: #eff6ff;
+    color: #1d4ed8;
+    border: 1.5px solid #bfdbfe;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+.btn-result-view i {
+    font-size: 13px;
+}
+.btn-result-view:hover {
+    background: #1d4ed8;
+    color: #ffffff;
+    border-color: #1d4ed8;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(29, 78, 216, 0.3);
+}
+
 /* ============ Subject Tags ============ */
 .subject-tags {
     display: flex;

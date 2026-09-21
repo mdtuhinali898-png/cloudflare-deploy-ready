@@ -3,6 +3,8 @@ const router = express.Router();
 const Batch = require('../models/Batch');
 const Student = require('../models/Student');
 const Payment = require('../models/Payment');
+const Result = require('../models/Result');
+const Due = require('../models/Due');
 
 // @route   GET /api/batches
 // @desc    Get all batches
@@ -193,6 +195,10 @@ router.post('/transfer', async (req, res) => {
             return res.status(404).json({ success: false, message: 'Student not found' });
         }
 
+        if (student.batch === targetBatch) {
+            return res.status(400).json({ success: false, message: 'Student is already in this batch' });
+        }
+
         // Check if target batch exists
         const batch = await Batch.findOne({ name: targetBatch });
         if (!batch) {
@@ -240,6 +246,24 @@ router.post('/transfer', async (req, res) => {
 
         await student.save();
 
+        // Cascade update related records so history is never lost
+        try {
+            await Payment.updateMany(
+                { studentId: previousStudentId },
+                { $set: { studentId: newStudentId } }
+            );
+            await Result.updateMany(
+                { studentId: previousStudentId },
+                { $set: { studentId: newStudentId, batch: targetBatch } }
+            );
+            await Due.updateMany(
+                { studentId: previousStudentId },
+                { $set: { studentId: newStudentId, batch: targetBatch } }
+            );
+        } catch (cascadeErr) {
+            console.warn('Notice: Cascaded transfer update had a partial issue:', cascadeErr.message);
+        }
+
         res.json({
             success: true,
             message: `Student transferred successfully from "${previousBatch}" to "${targetBatch}"`,
@@ -255,6 +279,41 @@ router.post('/transfer', async (req, res) => {
     } catch (error) {
         console.error('Error transferring student:', error);
         res.status(500).json({ success: false, message: 'Error transferring student', error: error.message });
+    }
+});
+
+// @route   GET /api/batches/transfers/recent
+// @desc    Get recent student transfers
+// @access  Public
+router.get('/transfers/recent', async (req, res) => {
+    try {
+        const students = await Student.find({
+            notes: { $regex: '\\[Batch Transfer\\]' }
+        })
+        .select('name studentId batch phone notes updatedAt')
+        .sort({ updatedAt: -1 })
+        .limit(10)
+        .lean();
+
+        const transfers = [];
+        students.forEach(s => {
+            const lines = (s.notes || '').split('\n').filter(l => l.includes('[Batch Transfer]'));
+            lines.forEach(line => {
+                transfers.push({
+                    studentName: s.name,
+                    currentStudentId: s.studentId,
+                    currentBatch: s.batch,
+                    phone: s.phone,
+                    rawNote: line,
+                    updatedAt: s.updatedAt
+                });
+            });
+        });
+
+        res.json({ success: true, transfers: transfers.slice(0, 10) });
+    } catch (error) {
+        console.error('Error fetching recent transfers:', error);
+        res.status(500).json({ success: false, message: 'Error fetching recent transfers' });
     }
 });
 

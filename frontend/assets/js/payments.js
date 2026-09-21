@@ -9,8 +9,8 @@ document.addEventListener('DOMContentLoaded', () => {
 // 1. CONFIG & STATE
 // ============================================
 // Use relative URL if accessed through server, otherwise use localhost
-const API_BASE_URL = window.location.protocol === 'http:' && window.location.hostname === 'localhost' 
-    ? 'http://localhost:5002/api' 
+const API_BASE_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? (window.location.port === '5002' ? '/api' : 'http://localhost:5002/api')
     : '/api';
 const RECENT_KEY = 'erp_recent_searches';
     
@@ -467,8 +467,11 @@ window.searchStudent = async () => {
 
             const stored = savedPayment.payment;
             if (!savedPayment.success || !stored) throw new Error(savedPayment.message || 'Payment save failed');
+            
+            const receiptNo = stored.receiptNo || stored.receipt || savedPayment.receiptNo || '';
+
             const newPayment = {
-                receipt: stored.receiptNo,
+                receipt: receiptNo,
                 studentId: currentStudent.studentId || currentStudent.id,
                 name: currentStudent.name,
                 month: month,
@@ -481,38 +484,22 @@ window.searchStudent = async () => {
                 remarks: document.getElementById('remarks').value,
                 date: stored.date,
                 _id: stored._id,
-                receiptNo: stored.receiptNo
+                receiptNo: receiptNo
             };
             paymentsData.unshift(newPayment);
 
             // Hide overlay
             overlay.style.display = 'none';
             
-            // Reset button
-            submitBtn.disabled = false;
-            submitBtn.querySelector('.btn-text').style.display = 'inline';
-            submitBtn.querySelector('.btn-loading').style.display = 'none';
-
             // Show success notification
             showNotification(
-                `✅ Payment Successful!\n\nReceipt: ${savedPayment.receiptNo || receiptNumber}\nStudent: ${currentStudent.name}\nAmount: ৳${paid.toLocaleString()}\nMethod: ${method}`,
+                `✅ Payment Successful! Redirecting to receipt...`,
                 'success'
             );
 
-            // Update today's collection
-            updateTodayCollection();
-
-            // Refresh history
-            await loadPaymentsFromAPI();
-            renderHistory();
-
-            // Clear form for next payment
-            clearSearch();
-
-            // Redirect to receipt after short delay
-            setTimeout(() => {
-                window.location.href = `receipt.html?receipt=${savedPayment.receiptNo || receiptNumber}`;
-            }, 1500);
+            // Redirect to receipt immediately
+            window.location.href = `receipt.html?receipt=${encodeURIComponent(receiptNo)}`;
+            return;
         } catch (error) {
             console.error('Error saving payment:', error);
             showNotification('❌ Failed to save payment. Please try again.', 'error');
@@ -584,10 +571,10 @@ window.searchStudent = async () => {
             return;
         }
 
-        filtered.forEach((p, index) => {
+        tbody.innerHTML = filtered.map((p, index) => {
             const statusClass = p.status === 'Paid' ? 'status-paid' : (p.status === 'Partial' ? 'status-partial' : 'status-due');
             const statusIcon = p.status === 'Paid' ? '✅' : (p.status === 'Partial' ? '⚠️' : '❌');
-            const row = `
+            return `
                 <tr style="animation: fadeSlideIn 0.3s ease-out ${index * 0.05}s both;">
                     <td><strong>${p.receipt}</strong></td>
                     <td>${p.studentId}</td>
@@ -605,8 +592,7 @@ window.searchStudent = async () => {
                     </td>
                 </tr>
             `;
-            tbody.innerHTML += row;
-        });
+        }).join('');
     }
 
     // ============================================

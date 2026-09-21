@@ -54,7 +54,13 @@ router.get('/', async (req, res) => {
 // @access  Public
 router.get('/receipt/:receiptNo', async (req, res) => {
     try {
-        const payment = await Payment.findOne({ receiptNo: req.params.receiptNo });
+        let payment = await Payment.findOne({ 
+            receiptNo: { $regex: `^${req.params.receiptNo.trim()}$`, $options: 'i' } 
+        });
+        
+        if (!payment && req.params.receiptNo.match(/^[0-9a-fA-F]{24}$/)) {
+            payment = await Payment.findById(req.params.receiptNo);
+        }
         
         if (!payment) {
             return res.status(404).json({ success: false, message: 'Payment not found' });
@@ -120,7 +126,8 @@ router.post('/', async (req, res) => {
         res.status(201).json({ 
             success: true, 
             message: 'Payment added successfully',
-            payment 
+            payment,
+            receiptNo
         });
     } catch (error) {
         console.error('Error creating payment:', error);

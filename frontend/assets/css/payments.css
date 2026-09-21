@@ -1098,6 +1098,72 @@
 /* ============================================
    PAYMENT HISTORY
    ============================================ */
+.hist-card {
+    margin-bottom: 24px;
+    padding: 22px 24px;
+    background: var(--pay-card-bg);
+    border-radius: var(--pay-radius);
+    box-shadow: var(--pay-shadow);
+    border: 1px solid var(--pay-border);
+    overflow: hidden;
+}
+
+.hist-filters {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 18px;
+    padding: 14px;
+    background: #f8fafc;
+    border: 1px solid #e5eaf1;
+    border-radius: 12px;
+}
+
+.hist-filters select,
+.hist-filters input {
+    min-width: 170px;
+    height: 42px;
+    padding: 0 13px;
+    border: 1px solid var(--pay-border);
+    border-radius: 9px;
+    background: #ffffff;
+    color: var(--pay-text);
+    font: inherit;
+    outline: none;
+    transition: var(--pay-transition);
+}
+
+.hist-filters input {
+    flex: 1 1 auto;
+}
+
+.hist-filters select:focus,
+.hist-filters input:focus {
+    border-color: var(--pay-primary);
+    box-shadow: 0 0 0 3px rgba(78, 115, 223, 0.1);
+}
+
+.hist-card .table-responsive {
+    border: 1px solid #e8edf3;
+    border-radius: 12px;
+}
+
+.hist-card .data-table {
+    min-width: 980px;
+}
+
+.hist-card .data-table thead th {
+    background: #f8fafc;
+    color: #64748b;
+    font-size: 0.7rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.hist-card .data-table tbody tr:hover {
+    background: #f8fbff;
+}
+
 .history-card {
     margin-bottom: 24px;
     background: var(--pay-card-bg);
@@ -1295,6 +1361,21 @@
 }
 
 @media (max-width: 768px) {
+    .hist-card {
+        padding: 18px;
+    }
+
+    .hist-filters {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .hist-filters select,
+    .hist-filters input {
+        width: 100%;
+        min-width: 0;
+    }
+
     .page-header-action {
         flex-direction: column;
         align-items: flex-start;

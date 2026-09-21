@@ -1,7 +1,8 @@
 // Reports JavaScript - Complete functionality
 let currentTab = 'collection';
-let allPayments = [];
-let allStudents = [];
+let allPayments  = [];
+let allStudents  = [];
+let allBookSales = [];   // ← Book Sale data
 let charts = {};
 let multiMonthPaymentStatusReport = null;
 
@@ -130,7 +131,19 @@ async function loadAllData() {
         } else {
             console.warn('No students found, batch dropdown will be empty');
         }
-        
+
+        // Load book sales data
+        try {
+            const bsRes  = await fetch('/api/book-sales?limit=10000');
+            if (bsRes.ok) {
+                const bsData = await bsRes.json();
+                allBookSales = bsData.sales || [];
+            }
+        } catch (bsErr) {
+            console.warn('Could not load book sales:', bsErr.message);
+            allBookSales = [];
+        }
+
         // Load data for current tab
         refreshCurrentTab();
     } catch (error) {
@@ -159,6 +172,9 @@ function refreshCurrentTab() {
         case 'student':
             loadStudentReport();
             break;
+        case 'booksales':
+            loadBookSalesTab();
+            break;
     }
 }
 
@@ -175,8 +191,9 @@ function switchTab(tabName) {
     document.getElementById(`${tabName}Tab`).classList.add('active');
 
     // Toggle filter bars: due tab gets month/year filter, others get date range
-    const isDue = tabName === 'due';
-    document.getElementById('dateRangeFilter').style.display = isDue ? 'none' : 'flex';
+    const isDue      = tabName === 'due';
+    const isBookSale = tabName === 'booksales';
+    document.getElementById('dateRangeFilter').style.display = (isDue || isBookSale) ? 'none' : 'flex';
     document.getElementById('dueFilterBar').style.display    = isDue ? 'flex' : 'none';
 
     // Always update the 4 summary cards on every tab switch
@@ -305,21 +322,28 @@ function updateSummaryCards() {
 function loadDailyActivitySummary() {
     const filteredPayments = getFilteredPayments();
     const fromDate = document.getElementById('fromDate').value;
-    const toDate = document.getElementById('toDate').value;
-    
+    const toDate   = document.getElementById('toDate').value;
+
     const admissionPayments = filteredPayments.filter(p => p.type === 'Admission');
-    const admissionCount = admissionPayments.length;
+    const admissionCount  = admissionPayments.length;
     const admissionAmount = admissionPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
-    
+
     const generalPayments = filteredPayments.filter(p => p.type !== 'Admission');
-    const paymentCount = generalPayments.length;
+    const paymentCount  = generalPayments.length;
     const paymentAmount = generalPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
-    
-    const totalAmount = admissionAmount + paymentAmount;
-    
+
+    // ── Book Sale data (filtered by same date range) ──
+    let filteredBookSales = allBookSales;
+    if (fromDate) filteredBookSales = filteredBookSales.filter(s => s.saleDate >= fromDate);
+    if (toDate)   filteredBookSales = filteredBookSales.filter(s => s.saleDate <= toDate);
+    const bookSaleCount  = filteredBookSales.length;
+    const bookSaleAmount = filteredBookSales.reduce((sum, s) => sum + (Number(s.netAmount) || 0), 0);
+
+    const totalAmount = admissionAmount + paymentAmount + bookSaleAmount;
+
     const dateSubtitle = document.getElementById('dailyActivityDate');
-    const totalLabel = document.querySelector('.activity-total p');
-    
+    const totalLabel   = document.querySelector('.activity-total p');
+
     if (dateSubtitle) {
         if (fromDate && toDate) {
             dateSubtitle.textContent = `Overview (${fromDate} to ${toDate})`;
@@ -328,66 +352,90 @@ function loadDailyActivitySummary() {
         } else if (toDate) {
             dateSubtitle.textContent = `Overview (Up to ${toDate})`;
         } else {
-            dateSubtitle.textContent = "All Time Overview";
+            dateSubtitle.textContent = 'All Time Overview';
         }
     }
-    
+
     if (totalLabel) {
-        totalLabel.textContent = (fromDate || toDate) ? "Total Selected Range" : "Total Collection";
+        totalLabel.textContent = (fromDate || toDate) ? 'Total Selected Range' : 'Total Collection';
     }
-    
-    document.getElementById('dailyAdmissionCount').textContent = admissionCount;
+
+    document.getElementById('dailyAdmissionCount').textContent  = admissionCount;
     document.getElementById('dailyAdmissionAmount').textContent = `৳${admissionAmount.toLocaleString()}`;
-    document.getElementById('dailyPaymentCount').textContent = paymentCount;
-    document.getElementById('dailyPaymentAmount').textContent = `৳${paymentAmount.toLocaleString()}`;
-    document.getElementById('dailyTotalAmount').textContent = `৳${totalAmount.toLocaleString()}`;
-    document.getElementById('dailyTotalBreakdown').textContent = `Admission + Payment`;
+    document.getElementById('dailyPaymentCount').textContent    = paymentCount;
+    document.getElementById('dailyPaymentAmount').textContent   = `৳${paymentAmount.toLocaleString()}`;
+
+    const bsCountEl  = document.getElementById('dailyBookSaleCount');
+    const bsAmountEl = document.getElementById('dailyBookSaleAmount');
+    if (bsCountEl)  bsCountEl.textContent  = bookSaleCount;
+    if (bsAmountEl) bsAmountEl.textContent = `৳${bookSaleAmount.toLocaleString()}`;
+
+    document.getElementById('dailyTotalAmount').textContent    = `৳${totalAmount.toLocaleString()}`;
+    document.getElementById('dailyTotalBreakdown').textContent = `Admission + Payment + Book Sale`;
 }
 
 // Load daily collection summary
 function loadDailyCollectionSummary() {
-    const tbody = document.getElementById('dailySummaryBody');
+    const tbody    = document.getElementById('dailySummaryBody');
     tbody.innerHTML = '';
-    
+
     const fromDate = document.getElementById('fromDate').value;
-    const toDate = document.getElementById('toDate').value;
-    
+    const toDate   = document.getElementById('toDate').value;
+
     let filtered = getFilteredPayments();
-    
-    // Group by date
+
+    // ── Group payments by date (admission vs monthly) ──
     const grouped = {};
     filtered.forEach(p => {
-        if (!grouped[p.date]) {
-            grouped[p.date] = { count: 0, total: 0 };
-        }
-        grouped[p.date].count++;
-            grouped[p.date].total += p.amount || 0;
+        if (!grouped[p.date]) grouped[p.date] = { admission: 0, payment: 0, bookSale: 0 };
+        if (p.type === 'Admission') grouped[p.date].admission += p.amount || 0;
+        else                        grouped[p.date].payment   += p.amount || 0;
     });
-    
-    // Sort by date
+
+    // ── Merge book sales grouped by date ──
+    let filteredBS = allBookSales;
+    if (fromDate) filteredBS = filteredBS.filter(s => s.saleDate >= fromDate);
+    if (toDate)   filteredBS = filteredBS.filter(s => s.saleDate <= toDate);
+
+    filteredBS.forEach(s => {
+        if (!grouped[s.saleDate]) grouped[s.saleDate] = { admission: 0, payment: 0, bookSale: 0 };
+        grouped[s.saleDate].bookSale += s.netAmount || 0;
+    });
+
+    // Sort by date descending
     const sorted = Object.entries(grouped).sort((a, b) => b[0].localeCompare(a[0]));
-    
+
     sorted.forEach(([date, data]) => {
         const dateObj = new Date(date);
-        const day = dateObj.toLocaleDateString('en-US', { weekday: 'long' });
-        
+        const day     = dateObj.toLocaleDateString('en-US', { weekday: 'long' });
+        const total   = data.admission + data.payment + data.bookSale;
+
         const row = document.createElement('tr');
         row.innerHTML = `
             <td><span class="daily-date">${date}</span></td>
             <td><span class="daily-day">${day}</span></td>
-            <td>${data.count}</td>
-            <td>৳${data.total.toLocaleString()}</td>
+            <td>${data.admission > 0 ? '৳' + data.admission.toLocaleString() : '—'}</td>
+            <td>${data.payment   > 0 ? '৳' + data.payment.toLocaleString()   : '—'}</td>
+            <td>${data.bookSale  > 0 ? '<span style="color:#f97316;font-weight:600;">৳' + data.bookSale.toLocaleString() + '</span>' : '—'}</td>
+            <td>৳${total.toLocaleString()}</td>
         `;
         tbody.appendChild(row);
     });
-    
-    // Add total row
-    const total = sorted.reduce((sum, [, data]) => sum + data.total, 0);
+
+    // Total row
+    const totAdm  = sorted.reduce((s,[,d]) => s + d.admission, 0);
+    const totPay  = sorted.reduce((s,[,d]) => s + d.payment,   0);
+    const totBS   = sorted.reduce((s,[,d]) => s + d.bookSale,  0);
+    const totAll  = totAdm + totPay + totBS;
+
     const totalRow = document.createElement('tr');
     totalRow.className = 'daily-total-row';
     totalRow.innerHTML = `
-        <td colspan="3"><strong>Total</strong></td>
-        <td><strong>৳${total.toLocaleString()}</strong></td>
+        <td colspan="2"><strong>Total</strong></td>
+        <td><strong>৳${totAdm.toLocaleString()}</strong></td>
+        <td><strong>৳${totPay.toLocaleString()}</strong></td>
+        <td><strong style="color:#f97316;">৳${totBS.toLocaleString()}</strong></td>
+        <td><strong>৳${totAll.toLocaleString()}</strong></td>
     `;
     tbody.appendChild(totalRow);
 }
@@ -1287,6 +1335,31 @@ function handlePrintReport() {
 
         if (elDateRange) elDateRange.textContent = dateRangeText;
 
+        // ── Book sale summary line for print header ──
+        const fromDateVal = document.getElementById('fromDate').value;
+        const toDateVal   = document.getElementById('toDate').value;
+        let bsFiltered = allBookSales;
+        if (fromDateVal) bsFiltered = bsFiltered.filter(s => s.saleDate >= fromDateVal);
+        if (toDateVal)   bsFiltered = bsFiltered.filter(s => s.saleDate <= toDateVal);
+        const bsTotal = bsFiltered.reduce((s, x) => s + (x.netAmount || 0), 0);
+
+        const fp = getFilteredPayments();
+        const admTotal = fp.filter(p => p.type === 'Admission').reduce((s,p) => s+(p.amount||0), 0);
+        const payTotal = fp.filter(p => p.type !== 'Admission').reduce((s,p) => s+(p.amount||0), 0);
+        const grandTotal = admTotal + payTotal + bsTotal;
+
+        let summaryEl = document.getElementById('printSummaryLine');
+        if (!summaryEl) {
+            summaryEl = document.createElement('p');
+            summaryEl.id = 'printSummaryLine';
+            summaryEl.style.fontSize = '11px';
+            summaryEl.style.color    = '#333';
+            summaryEl.style.fontWeight = '600';
+            const header = document.querySelector('.print-report-header');
+            if (header) header.appendChild(summaryEl);
+        }
+        summaryEl.textContent = `Admission: ৳${admTotal.toLocaleString()}  |  Monthly Fee: ৳${payTotal.toLocaleString()}  |  Book Sale: ৳${bsTotal.toLocaleString()}  |  Total: ৳${grandTotal.toLocaleString()}`;
+
         window.print();
     }
 }
@@ -1439,4 +1512,157 @@ function sendSMSReminder() {
 // Collect due
 function collectDue(studentId) {
     window.location.href = `payments.html?studentId=${encodeURIComponent(studentId)}`;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// BOOK SALES TAB — Reports Page Integration
+// ══════════════════════════════════════════════════════════════════════════════
+
+function setBsToday() {
+    const today = new Date().toISOString().split('T')[0];
+    const f = document.getElementById('bsFromDate');
+    const t = document.getElementById('bsToDate');
+    if (f) f.value = today;
+    if (t) t.value = today;
+    loadBookSalesTab();
+}
+
+function resetBsFilter() {
+    const f = document.getElementById('bsFromDate');
+    const t = document.getElementById('bsToDate');
+    const b = document.getElementById('bsBuyerType');
+    if (f) f.value = '';
+    if (t) t.value = '';
+    if (b) b.value = 'all';
+    loadBookSalesTab();
+}
+
+function loadBookSalesTab() {
+    const fromDate  = document.getElementById('bsFromDate')?.value  || '';
+    const toDate    = document.getElementById('bsToDate')?.value    || '';
+    const buyerType = document.getElementById('bsBuyerType')?.value || 'all';
+
+    // Filter
+    let sales = allBookSales;
+    if (fromDate) sales = sales.filter(s => s.saleDate >= fromDate);
+    if (toDate)   sales = sales.filter(s => s.saleDate <= toDate);
+    if (buyerType !== 'all') sales = sales.filter(s => s.buyerType === buyerType);
+
+    // Summary cards
+    const totalAmt   = sales.reduce((s, x) => s + (x.netAmount   || 0), 0);
+    const totalItems = sales.reduce((s, x) => s + (x.totalItems  || 0), 0);
+
+    const today     = new Date().toISOString().split('T')[0];
+    const curMonth  = new Date().toLocaleString('default', { month: 'long' });
+    const curYear   = new Date().getFullYear();
+
+    const todaySales = allBookSales.filter(s => s.saleDate === today);
+    const todayAmt   = todaySales.reduce((s,x) => s+(x.netAmount||0), 0);
+    const todayItems = todaySales.reduce((s,x) => s+(x.totalItems||0), 0);
+
+    const monthSales = allBookSales.filter(s => s.month === curMonth && Number(s.year) === curYear);
+    const monthAmt   = monthSales.reduce((s,x) => s+(x.netAmount||0), 0);
+    const monthItems = monthSales.reduce((s,x) => s+(x.totalItems||0), 0);
+
+    const setEl = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+
+    setEl('bsrTodayAmt',   '৳' + todayAmt.toLocaleString());
+    setEl('bsrTodayPcs',   todayItems + ' pcs');
+    setEl('bsrMonthAmt',   '৳' + monthAmt.toLocaleString());
+    setEl('bsrMonthPcs',   monthItems + ' pcs');
+    setEl('bsrTotalAmt',   '৳' + totalAmt.toLocaleString());
+    setEl('bsrTotalPcs',   totalItems + ' pcs');
+    setEl('bsrTotalSales', sales.length + ' sales');
+
+    // Top books from filtered sales
+    const bookMap = {};
+    sales.forEach(sale => {
+        (sale.items || []).forEach(item => {
+            if (!bookMap[item.bookId]) bookMap[item.bookId] = { title: item.title, qty: 0, amt: 0 };
+            bookMap[item.bookId].qty += item.quantity || 0;
+            bookMap[item.bookId].amt += item.subtotal || 0;
+        });
+    });
+    const topBooks = Object.values(bookMap).sort((a,b) => b.qty - a.qty).slice(0, 5);
+
+    const topEl = document.getElementById('bsrTopBooks');
+    if (topEl) {
+        if (topBooks.length === 0) {
+            topEl.innerHTML = '<p style="text-align:center;color:#6c757d;padding:20px;">কোনো ডেটা নেই</p>';
+        } else {
+            topEl.innerHTML = topBooks.map((b, i) => `
+                <div style="display:flex;align-items:center;gap:12px;padding:10px 4px;border-bottom:1px solid #e3e6f0;">
+                    <div style="width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#f97316,#ea580c);color:#fff;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${i+1}</div>
+                    <div style="flex:1;">
+                        <div style="font-size:13px;font-weight:600;color:#2c3e50;">${b.title}</div>
+                        <div style="font-size:12px;color:#6c757d;">${b.qty} কপি বিক্রি</div>
+                    </div>
+                    <div style="font-size:14px;font-weight:700;color:#f97316;">৳${b.amt.toLocaleString()}</div>
+                </div>
+            `).join('');
+        }
+    }
+
+    // Sales table
+    const tbody = document.getElementById('bsrTableBody');
+    if (!tbody) return;
+
+    if (sales.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:30px;color:#6c757d;font-style:italic;">কোনো বিক্রির রেকর্ড পাওয়া যায়নি।</td></tr>`;
+        return;
+    }
+
+    const sorted = [...sales].sort((a, b) => b.saleDate.localeCompare(a.saleDate));
+
+    tbody.innerHTML = sorted.map(s => {
+        const btBadge = s.buyerType === 'Student'
+            ? `<span class="status-badge" style="background:#dbeafe;color:#1e40af;">Student</span>`
+            : `<span class="status-badge" style="background:#ede9fe;color:#5b21b6;">External</span>`;
+        const psBadge = s.paymentStatus === 'Paid'
+            ? `<span class="status-badge status-paid">Paid</span>`
+            : `<span class="status-badge status-due">Due</span>`;
+        return `<tr>
+            <td>${s.saleDate}</td>
+            <td><strong style="color:#f97316;">${s.receiptNo}</strong></td>
+            <td>${s.buyerName}<br><small style="color:#6c757d;">${s.studentId ? 'ID: '+s.studentId : s.buyerPhone || ''}</small></td>
+            <td>${btBadge}</td>
+            <td>${s.totalItems || 0} pcs</td>
+            <td style="font-weight:700;color:#1cc88a;">৳${(s.netAmount||0).toLocaleString()}</td>
+            <td>${s.paymentMethod || '—'}</td>
+            <td>${psBadge}</td>
+        </tr>`;
+    }).join('');
+}
+
+// Print book sales report
+function printBookSalesReport() {
+    const instituteName    = window._instituteName    || 'EduSmart';
+    const instituteDetails = window._instituteDetails || '';
+
+    const fromDate = document.getElementById('bsFromDate')?.value || '';
+    const toDate   = document.getElementById('bsToDate')?.value   || '';
+
+    let dateText = fromDate && toDate ? `${fromDate} to ${toDate}` :
+                   fromDate ? `From ${fromDate}` :
+                   toDate   ? `Up to ${toDate}`  : 'All Dates';
+
+    const elN  = document.getElementById('bsPrintInstituteName');
+    const elD  = document.getElementById('bsPrintInstituteDetails');
+    const elDR = document.getElementById('bsPrintDateRange');
+
+    if (elN)  elN.textContent  = instituteName;
+    if (elD)  elD.textContent  = instituteDetails;
+    if (elDR) elDR.textContent = `Date Range: ${dateText}`;
+
+    // Show print header
+    const ph = document.getElementById('booksalePrintHeader');
+    if (ph) ph.style.display = 'block';
+
+    document.body.classList.add('printing-booksale');
+    window.print();
+
+    setTimeout(() => {
+        document.body.classList.remove('printing-booksale');
+        if (ph) ph.style.display = 'none';
+    }, 500);
 }

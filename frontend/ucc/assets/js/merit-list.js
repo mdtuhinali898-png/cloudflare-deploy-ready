@@ -66,16 +66,19 @@ async function loadMeritList() {
       if (data.success && data.meritList) {
         results = data.meritList.map(r => ({
           examId,
-          roll:       r.studentRoll,
-          name:       r.studentName,
-          obtained:   r.totalObtained || 0,
-          correct:    r.correctAnswer != null ? r.correctAnswer : null,
-          wrong:      r.wrongAnswer   != null ? r.wrongAnswer   : null,
-          isAbsent:   r.status === 'Absent',
-          percentage: r.percentage || 0,
+          roll:          r.studentRoll,
+          name:          r.studentName,
+          obtained:      r.totalObtained || 0,
+          correct:       r.correctAnswer != null ? r.correctAnswer : null,
+          wrong:         r.wrongAnswer   != null ? r.wrongAnswer   : null,
+          subjectMarks:  r.subjectMarks || [],
+          studentPhone:  (r.studentId && r.studentId.phone) ? r.studentId.phone : '',
+          guardianPhone: (r.studentId && r.studentId.guardianPhone) ? r.studentId.guardianPhone : '',
+          isAbsent:      r.status === 'Absent',
+          percentage:    r.percentage || 0,
           /* Fix 3: backend এর meritPosition ব্যবহার করো, frontend recalculate নয় */
-          position:   r.meritPosition || null,
-          grade:      window.getGrade ? window.getGrade(r.percentage || 0) : 'F'
+          position:      r.meritPosition || null,
+          grade:         window.getGrade ? window.getGrade(r.percentage || 0) : 'F'
         }));
       }
     }
@@ -113,13 +116,19 @@ async function loadMeritList() {
 
 /* ── Exam Info Card ── */
 function renderExamInfo(e) {
+  const subCount = (e.subjects && e.subjects.length) ? e.subjects.length : 1;
+  const subNames = (e.subjects && e.subjects.length)
+    ? e.subjects.map(s => `${s.subjectName} (${s.fullMarks})`).join(' + ')
+    : (e.subject || '—');
+
   $('mlExamInfo').innerHTML = `
     <div>
       <h2>${e.name}</h2>
-      <p>${e.batch} · ${e.subject||'—'} · ${e.date}</p>
+      <p>${e.batch} · Subjects: ${subNames} · ${e.date}</p>
     </div>
     <div class="ml-info-chips">
       <span class="ml-info-chip"><i class="fas fa-tag"></i> ${e.type}</span>
+      <span class="ml-info-chip"><i class="fas fa-layer-group"></i> ${subCount} Subjects</span>
       <span class="ml-info-chip"><i class="fas fa-star"></i> Total: ${e.total}</span>
       ${e.pass ? `<span class="ml-info-chip"><i class="fas fa-check"></i> Pass: ${e.pass}</span>` : ''}
       ${e.duration ? `<span class="ml-info-chip"><i class="fas fa-clock"></i> ${e.duration} min</span>` : ''}
@@ -161,6 +170,33 @@ function mlPctClass(pct) {
 function renderTable(sorted, exam) {
   const active = sorted.filter(r => !r.isAbsent);
   const highest = active.length ? Math.max(...active.map(r => r.obtained)) : 0;
+  const subjects = exam.subjects || [];
+  const hasMultiSubs = subjects.length > 1;
+
+  // Render Table Header
+  const thead = $('mlTableHead');
+  if (thead) {
+    let headerHtml = `
+      <tr>
+        <th class="ml-th-pos">Rank</th>
+        <th>Student</th>`;
+
+    if (hasMultiSubs) {
+      subjects.forEach(s => {
+        headerHtml += `<th class="tc" style="background:#f5f3ff;color:#6d28d9;font-size:11px;">${s.subjectName} <small>(${s.fullMarks})</small></th>`;
+      });
+    }
+
+    headerHtml += `
+        <th class="ml-th-marks">Total Marks</th>
+        <th class="ml-th-correct">Correct</th>
+        <th class="ml-th-wrong">Wrong</th>
+        <th class="ml-th-pct">Percentage</th>
+        <th class="ml-th-grade">Grade</th>
+        <th class="ml-th-status">Status</th>
+      </tr>`;
+    thead.innerHTML = headerHtml;
+  }
 
   $('mlTableBody').innerHTML = sorted.map((r, i) => {
     const rowCls = r.isAbsent ? 'ml-row-absent' : r.position===1?'ml-row-top1':r.position===2?'ml-row-top2':r.position===3?'ml-row-top3':'';
@@ -182,6 +218,21 @@ function renderTable(sorted, exam) {
     const correctVal = r.isAbsent ? '—' : (r.correct != null && r.correct !== '' ? r.correct : '—');
     const wrongVal   = r.isAbsent ? '—' : (r.wrong   != null && r.wrong   !== '' ? r.wrong   : '—');
 
+    let subMarksCells = '';
+    if (hasMultiSubs) {
+      subjects.forEach((sub, sIdx) => {
+        if (r.isAbsent) {
+          subMarksCells += `<td class="tc" style="color:#94a3b8;font-size:12px;">ABS</td>`;
+        } else {
+          const sm = (r.subjectMarks && r.subjectMarks.length)
+            ? r.subjectMarks.find(item => item.subjectName === sub.subjectName || (sIdx === 0 && !item.subjectName))
+            : null;
+          const score = (sm && sm.marksObtained != null) ? sm.marksObtained : '—';
+          subMarksCells += `<td class="tc" style="font-weight:700;color:#1e1b4b;">${score}</td>`;
+        }
+      });
+    }
+
     return `<tr class="${rowCls}">
       <td class="tc"><span class="ml-rank ${rankCls}">${rankLabel}</span></td>
       <td>
@@ -190,6 +241,7 @@ function renderTable(sorted, exam) {
           <span class="ml-student-roll">Roll ${r.roll}</span>
         </div>
       </td>
+      ${subMarksCells}
       <td class="tc">
         <span class="${marksCls}">${r.isAbsent ? '—' : r.obtained}</span>
         <span class="ml-marks-total"> / ${exam.total}</span>
@@ -210,12 +262,14 @@ function renderTable(sorted, exam) {
   /* tfoot */
   const avg = active.length ? (active.reduce((s,r)=>s+r.obtained,0)/active.length).toFixed(1) : '—';
   const avgPct = active.length && exam.total ? Math.round(Number(avg)/exam.total*100) : 0;
+  const subColsSpan = hasMultiSubs ? subjects.length : 0;
+
   $('mlTableFoot').innerHTML = `
     <tr>
-      <td colspan="2" style="text-align:right;color:#374151;font-size:12px;">
+      <td colspan="${2 + subColsSpan}" style="text-align:right;color:#374151;font-size:12px;">
         <i class="fas fa-chart-line" style="color:#4f46e5;margin-right:4px;"></i> Class Average
       </td>
-      <td class="tc" style="color:#4f46e5;font-size:15px;">${avg}</td>
+      <td class="tc" style="color:#4f46e5;font-size:15px;font-weight:800;">${avg}</td>
       <td></td>
       <td></td>
       <td class="tc">
@@ -241,6 +295,7 @@ async function exportMeritCSV() {
   const examId = $('mlExamSelect').value;
   if (!examId) return;
   const exam = ((window.EXAM_DEMO||{}).exams||[]).find(e => e.id===examId);
+  if (!exam) return;
   let results = [];
 
   try {
@@ -249,15 +304,19 @@ async function exportMeritCSV() {
       const data = await res.json();
       if (data.success && data.meritList) {
         results = data.meritList.map(r => ({
-          roll:      r.studentRoll,
-          name:      r.studentName,
-          obtained:  r.totalObtained || 0,
-          correct:   r.correctAnswer != null ? r.correctAnswer : '',
-          wrong:     r.wrongAnswer   != null ? r.wrongAnswer   : '',
-          isAbsent:  r.status === 'Absent',
-          percentage: r.percentage || 0,
-          position:  r.meritPosition || null,
-          grade:     window.getGrade ? window.getGrade(r.percentage || 0) : 'F'
+          roll:          r.studentRoll,
+          name:          r.studentName,
+          studentPhone:  (r.studentId && r.studentId.phone) ? r.studentId.phone : '',
+          guardianPhone: (r.studentId && r.studentId.guardianPhone) ? r.studentId.guardianPhone : '',
+          obtained:      r.totalObtained || 0,
+          correct:       r.correctAnswer != null ? r.correctAnswer : '',
+          wrong:         r.wrongAnswer   != null ? r.wrongAnswer   : '',
+          subjectMarks:  r.subjectMarks || [],
+          isAbsent:      r.status === 'Absent',
+          percentage:    r.percentage || 0,
+          position:      r.meritPosition || null,
+          grade:         window.getGrade ? window.getGrade(r.percentage || 0) : 'F',
+          status:        r.status || (r.status === 'Absent' ? 'Absent' : 'Pass')
         }));
       }
     }
@@ -271,19 +330,50 @@ async function exportMeritCSV() {
     return (a.position || 999) - (b.position || 999);
   });
 
-  const header = ['Position','Roll','Name','Obtained','Total Marks','Correct','Wrong','%','Grade','Status'];
-  const rows   = sorted.map(r => [
-    r.isAbsent ? '—' : r.position,
-    r.roll,
-    r.name,
-    r.isAbsent ? 'ABS' : r.obtained,
-    exam.total,
-    r.isAbsent ? '—' : (r.correct !== '' ? r.correct : '—'),
-    r.isAbsent ? '—' : (r.wrong   !== '' ? r.wrong   : '—'),
-    r.isAbsent ? '—' : r.percentage + '%',
-    r.grade,
-    r.isAbsent ? 'Absent' : (exam.pass ? (r.obtained >= exam.pass ? 'Pass' : 'Fail') : '—')
-  ]);
+  const hasMultiSubjects = exam.subjects && exam.subjects.length > 1;
+  const subHeaders = hasMultiSubjects ? exam.subjects.map(s => `${s.subjectName} (${s.fullMarks})`) : [];
+
+  const header = [
+    'Roll',
+    'Name',
+    'Student Phone',
+    'Guardian Phone',
+    ...subHeaders,
+    'Total Marks',
+    'Correct',
+    'Wrong',
+    'Rank',
+    'Percentage',
+    'Grade',
+    'Status'
+  ];
+
+  const rows = sorted.map(r => {
+    const subMarks = hasMultiSubjects
+      ? exam.subjects.map((sub, sIdx) => {
+          if (r.isAbsent) return 'ABS';
+          const sm = (r.subjectMarks && r.subjectMarks.length)
+            ? r.subjectMarks.find(item => item.subjectName === sub.subjectName || (sIdx === 0 && !item.subjectName))
+            : null;
+          return sm && sm.marksObtained != null ? sm.marksObtained : '—';
+        })
+      : [];
+
+    return [
+      r.roll,
+      r.name,
+      r.studentPhone,
+      r.guardianPhone,
+      ...subMarks,
+      r.isAbsent ? 'ABS' : r.obtained,
+      r.isAbsent ? '—' : (r.correct !== '' ? r.correct : '—'),
+      r.isAbsent ? '—' : (r.wrong   !== '' ? r.wrong   : '—'),
+      r.isAbsent ? '—' : (r.position || '—'),
+      r.isAbsent ? '0%' : r.percentage + '%',
+      r.grade,
+      r.status
+    ];
+  });
 
   const csv = [header, ...rows]
     .map(row => row.map(v => `"${String(v).replace(/"/g, '""')}"`).join(','))

@@ -102,31 +102,50 @@
 .me-toolbar-right { display: flex; gap: 8px; flex-wrap: wrap; }
 
 /* ── Mark Entry Table ── */
-.me-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.me-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 1200px; }
 .me-table th {
-  background: #f9fafb; padding: 11px 14px;
+  background: #f9fafb; padding: 10px 6px;
   font-size: 11px; font-weight: 700; text-transform: uppercase;
   letter-spacing: .05em; color: #6b7280;
-  border-bottom: 2px solid var(--border-color); text-align: left;
+  border-bottom: 2px solid var(--border-color); text-align: center;
 }
-.me-table td { padding: 8px 14px; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
+.me-table td { padding: 6px 3px; border-bottom: 1px solid #f3f4f6; vertical-align: middle; text-align: center; }
 .me-table tr:hover td { background: #fafafe; }
 .me-table tr.me-row-absent td { background: #fff9f9; color: #94a3b8; }
-.me-table tr.me-row-absent .me-mark-input { background: #f8fafc !important; }
+.me-table tr.me-row-absent .me-mark-input,
+.me-table tr.me-row-absent .me-neg-input,
+.me-table tr.me-row-absent .me-submark-input { background: #f8fafc !important; color: #94a3b8 !important; }
+
+/* ── Remove number spinners from all mark entry inputs ── */
+.me-neg-input::-webkit-outer-spin-button,
+.me-neg-input::-webkit-inner-spin-button,
+.me-submark-input::-webkit-outer-spin-button,
+.me-submark-input::-webkit-inner-spin-button,
+.me-mark-input::-webkit-outer-spin-button,
+.me-mark-input::-webkit-inner-spin-button {
+  -webkit-appearance: none !important;
+  margin: 0 !important;
+}
+.me-neg-input,
+.me-submark-input,
+.me-mark-input {
+  -moz-appearance: textfield !important;
+}
 
 /* ── Mark input ── */
 .me-mark-input {
-  width: 90px; padding: 8px 10px; text-align: center;
+  width: 90px; padding: 7px 8px; text-align: center;
   border: 2px solid var(--border-color); border-radius: 10px;
   font-size: 15px; font-weight: 700; font-family: inherit;
   outline: none; transition: .2s; background: #fff;
+  color: #0f172a;
 }
 .me-mark-input:focus  { border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(99,102,241,.12); }
 .me-mark-input.over   { border-color: #ef4444 !important; background: #fef2f2 !important; color: #dc2626 !important; }
-.me-mark-input.filled { border-color: #10b981; background: #f0fdf4; }
+.me-mark-input.filled { border-color: #10b981; background: #f0fdf4; color: #065f46; font-weight: 800; }
 
 /* ── Absent checkbox ── */
-.me-absent-wrap { display: flex; align-items: center; gap: 7px; cursor: pointer; user-select: none; }
+.me-absent-wrap { display: flex; align-items: center; justify-content: center; gap: 7px; cursor: pointer; user-select: none; }
 .me-absent-wrap input[type=checkbox] {
   width: 17px; height: 17px; cursor: pointer; accent-color: #ef4444;
 }
@@ -139,6 +158,45 @@
   font-size: 12px; font-family: inherit; outline: none;
 }
 .me-remarks-input:focus { border-color: #4f46e5; }
+
+/* ── Multi-Subject Table & Inputs ── */
+.me-sub-hdr {
+  background: #f5f3ff !important; color: #6d28d9 !important;
+  text-align: center !important; border-left: 1px solid #e9d5ff; border-right: 1px solid #e9d5ff;
+  font-size: 11.5px !important; font-weight: 800 !important;
+}
+.me-sub-subhdr {
+  background: #faf5ff !important; font-size: 10px !important;
+  padding: 5px 2px !important; text-align: center !important;
+  color: #7c3aed !important; border-bottom: 2px solid #e9d5ff !important;
+}
+.me-submark-input {
+  width: 76px; min-width: 70px; padding: 6px 4px; text-align: center;
+  border: 1.5px solid var(--border-color); border-radius: 8px;
+  font-size: 14px; font-weight: 700; font-family: inherit;
+  outline: none; transition: .2s; background: #fff;
+  color: #0f172a;
+  box-sizing: border-box;
+}
+.me-submark-input:focus  { border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(99,102,241,.12); }
+.me-submark-input.over   { border-color: #ef4444 !important; background: #fef2f2 !important; color: #dc2626 !important; }
+.me-submark-input.filled { border-color: #10b981; background: #f0fdf4; color: #065f46; font-weight: 800; }
+
+.me-sub-score-badge {
+  display: inline-block; min-width: 44px; padding: 4px 4px;
+  background: #f1f5f9; border-radius: 6px; font-weight: 800;
+  font-size: 12.5px; color: #1e1b4b; text-align: center;
+  border: 1px solid #e2e8f0;
+  box-sizing: border-box;
+}
+.me-total-badge {
+  font-size: 14px; font-weight: 800; color: #4f46e5;
+  background: #eef2ff; padding: 5px 8px; border-radius: 8px;
+  display: inline-block; min-width: 52px; text-align: center;
+  border: 1px solid #c7d2fe;
+  box-sizing: border-box;
+}
+.me-total-badge.over { background: #fee2e2; color: #dc2626; border-color: #fca5a5; }
 
 /* ── Bottom bar ── */
 .me-bottom-bar {
@@ -315,26 +373,34 @@
 
 /* Negative answer inputs */
 .me-neg-input {
-  width: 70px;
-  padding: 8px 10px;
+  width: 64px;
+  min-width: 60px;
+  max-width: 100%;
+  padding: 5px 2px;
   text-align: center;
-  border: 2px solid var(--border-color);
-  border-radius: 10px;
-  font-size: 13px;
-  font-weight: 600;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-weight: 800;
   font-family: inherit;
   outline: none;
-  transition: .2s;
-  background: #fff;
-  color: #475569;
+  transition: .15s;
+  background: #ffffff;
+  color: #0f172a;
+  box-sizing: border-box;
+  letter-spacing: -0.3px;
 }
 .me-neg-input:focus {
   border-color: #7c3aed;
-  box-shadow: 0 0 0 3px rgba(124,58,237,.12);
+  background: #ffffff;
+  color: #0f172a;
+  box-shadow: 0 0 0 3px rgba(124,58,237,.15);
 }
 .me-neg-input.filled {
-  border-color: #a78bfa;
+  border-color: #8b5cf6;
   background: #f5f3ff;
+  color: #4c1d95;
+  font-weight: 800;
 }
 .me-neg-input:disabled {
   background: #f8fafc;
