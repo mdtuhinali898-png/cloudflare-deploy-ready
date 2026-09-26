@@ -6,6 +6,8 @@ let allBookSales = [];   // ← Book Sale data
 let charts = {};
 let multiMonthPaymentStatusReport = null;
 let tabRenderToken = 0;
+let reportTabLoaderShownAt = 0;
+let reportTabLoaderHideTimer = null;
 
 const reportTabLabels = {
     collection: 'Collection report',
@@ -247,6 +249,11 @@ function switchTab(tabName) {
 function showReportTabLoader() {
     const loader = document.getElementById('reportTabLoader');
     if (!loader) return;
+    if (reportTabLoaderHideTimer) {
+        clearTimeout(reportTabLoaderHideTimer);
+        reportTabLoaderHideTimer = null;
+    }
+    reportTabLoaderShownAt = Date.now();
     loader.classList.add('is-visible');
     loader.setAttribute('aria-hidden', 'false');
 }
@@ -254,6 +261,16 @@ function showReportTabLoader() {
 function hideReportTabLoader() {
     const loader = document.getElementById('reportTabLoader');
     if (!loader) return;
+    const minimumVisibleMs = 500;
+    const remainingMs = minimumVisibleMs - (Date.now() - reportTabLoaderShownAt);
+    if (remainingMs > 0) {
+        if (reportTabLoaderHideTimer) clearTimeout(reportTabLoaderHideTimer);
+        reportTabLoaderHideTimer = setTimeout(() => {
+            reportTabLoaderHideTimer = null;
+            hideReportTabLoader();
+        }, remainingMs);
+        return;
+    }
     loader.classList.remove('is-visible');
     loader.setAttribute('aria-hidden', 'true');
 }
