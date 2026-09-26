@@ -81,6 +81,9 @@
             <p>Add, edit, view and manage all institutional expenses.</p>
         </div>
         <div class="exp-header-actions">
+            <button class="btn btn-secondary" id="expenseReportPrintBtn" onclick="printFilteredExpenseReport()">
+                <i class="fas fa-print"></i> Print Expense Report
+            </button>
             <button class="btn btn-secondary" onclick="openCategoryModal()">
                 <i class="fas fa-tags"></i> Manage Categories
             </button>
@@ -128,87 +131,69 @@
 
     <!-- ── Filter Panel ────────────────────────────────────────────────────── -->
     <div class="exp-filter-panel open" id="expFilterPanel">
-        <div class="exp-filter-header" onclick="toggleFilterPanel()">
+        <div class="exp-filter-header">
             <div class="exp-filter-header-left">
                 <i class="fas fa-sliders-h"></i>
                 Filters &amp; Search
                 <span class="exp-filter-badge" id="filterBadge">0 active</span>
             </div>
-            <button class="exp-filter-toggle-btn" type="button" tabindex="-1">
-                <i class="fas fa-chevron-down"></i>
+            <button class="exp-filter-toggle-btn" id="filterPanelToggle" type="button" aria-expanded="true" aria-controls="expFilterBody" onclick="toggleFilterPanel()" aria-label="Collapse filters">
+                <i class="fas fa-chevron-up"></i>
             </button>
         </div>
-        <div class="exp-filter-body">
-            <!-- Row 1 -->
-            <div class="exp-filter-row">
-                <div class="exp-filter-item" style="flex:2;min-width:0;">
-                    <label><i class="fas fa-search" style="margin-right:4px;"></i>Search</label>
-                    <input type="text" id="searchInput" placeholder="Expense ID, vendor, description…">
+        <div class="exp-filter-body" id="expFilterBody">
+            <div class="exp-filter-primary">
+                <div class="exp-filter-item exp-search-item">
+                    <label for="searchInput">Search expenses</label>
+                    <div class="exp-search-control"><i class="fas fa-search"></i><input type="text" id="searchInput" placeholder="Expense ID, vendor or description"></div>
                 </div>
-                <div class="exp-filter-item">
-                    <label>Category</label>
-                    <select id="categoryFilter">
-                        <option value="all">All Categories</option>
-                    </select>
-                </div>
-                <div class="exp-filter-item">
-                    <label>Payment Method</label>
-                    <select id="methodFilter">
-                        <option value="all">All Methods</option>
-                        <option value="Cash">💵 Cash</option>
-                        <option value="Bank">🏦 Bank</option>
-                        <option value="bKash">📱 bKash</option>
-                        <option value="Nagad">📱 Nagad</option>
-                        <option value="Rocket">🚀 Rocket</option>
-                        <option value="Card">💳 Card</option>
-                        <option value="Cheque">📄 Cheque</option>
-                    </select>
-                </div>
-                <div class="exp-filter-item">
-                    <label>Status</label>
-                    <select id="statusFilter">
-                        <option value="all">All Status</option>
-                        <option value="Draft">Draft</option>
-                        <option value="Pending Approval">Pending Approval</option>
-                        <option value="Approved">Approved</option>
-                        <option value="Rejected">Rejected</option>
-                        <option value="Voided">Voided</option>
-                    </select>
-                </div>
-                <div class="exp-filter-item">
-                    <label>Vendor</label>
-                    <select id="vendorFilter">
-                        <option value="all">All Vendors</option>
-                    </select>
-                </div>
-            </div>
-            <!-- Divider -->
-            <div class="exp-filter-divider"></div>
-            <!-- Row 2 -->
-            <div class="exp-filter-row-2">
-                <div class="exp-filter-item">
-                    <label>From Date</label>
+                <div class="exp-filter-item exp-date-item">
+                    <label for="fromDateFilter">From date</label>
                     <input type="date" id="fromDateFilter">
                 </div>
-                <div class="exp-filter-item">
-                    <label>To Date</label>
+                <div class="exp-filter-item exp-date-item">
+                    <label for="toDateFilter">To date</label>
                     <input type="date" id="toDateFilter">
                 </div>
-                <div class="exp-filter-item">
-                    <label>Min Amount (৳)</label>
-                    <input type="number" id="amountMinFilter" min="0" placeholder="0">
+                <div class="exp-filter-main-actions">
+                    <button class="btn btn-primary" onclick="loadExpenses(1)"><i class="fas fa-search"></i> Search</button>
+                    <button class="btn btn-secondary" id="moreFiltersToggle" type="button" aria-expanded="false" aria-controls="moreExpenseFilters" onclick="toggleMoreExpenseFilters()"><i class="fas fa-sliders-h"></i> More filters</button>
                 </div>
-                <div class="exp-filter-item">
-                    <label>Max Amount (৳)</label>
-                    <input type="number" id="amountMaxFilter" min="0" placeholder="∞">
-                </div>
-                <div class="exp-filter-actions">
-                    <button class="btn btn-primary" onclick="loadExpenses()">
-                        <i class="fas fa-search"></i> Search
-                    </button>
-                    <button class="btn btn-secondary" onclick="clearFilters()">
-                        <i class="fas fa-times"></i> Clear
-                    </button>
+            </div>
+            <div class="exp-date-presets" role="group" aria-label="Quick date filters">
+                <span>Date shortcuts:</span>
+                <button type="button" class="exp-date-preset" data-preset="today" onclick="applyExpenseDatePreset('today')">Today</button>
+                <button type="button" class="exp-date-preset" data-preset="thisMonth" onclick="applyExpenseDatePreset('thisMonth')">This month</button>
+                <button type="button" class="exp-date-preset" data-preset="lastMonth" onclick="applyExpenseDatePreset('lastMonth')">Last month</button>
+            </div>
+            <div class="exp-active-filters" id="activeFilterSummary" aria-live="polite"></div>
+            <div class="exp-more-filters" id="moreExpenseFilters">
+                <div class="exp-filter-divider"></div>
+                <div class="exp-filter-advanced-grid">
+                    <div class="exp-filter-item">
+                        <label for="categoryFilter">Category</label>
+                        <select id="categoryFilter"><option value="all">All Categories</option></select>
+                    </div>
+                    <div class="exp-filter-item">
+                        <label for="methodFilter">Payment method</label>
+                        <select id="methodFilter"><option value="all">All Methods</option><option value="Cash">Cash</option><option value="Bank">Bank</option><option value="bKash">bKash</option><option value="Nagad">Nagad</option><option value="Rocket">Rocket</option><option value="Card">Card</option><option value="Cheque">Cheque</option></select>
+                    </div>
+                    <div class="exp-filter-item">
+                        <label for="statusFilter">Status</label>
+                        <select id="statusFilter"><option value="all">All Status</option><option value="Draft">Draft</option><option value="Pending Approval">Pending Approval</option><option value="Approved">Approved</option><option value="Rejected">Rejected</option><option value="Voided">Voided</option></select>
+                    </div>
+                    <div class="exp-filter-item">
+                        <label for="vendorFilter">Vendor</label>
+                        <select id="vendorFilter"><option value="all">All Vendors</option></select>
+                    </div>
+                    <div class="exp-filter-item">
+                        <label for="amountMinFilter">Minimum amount (৳)</label>
+                        <input type="number" id="amountMinFilter" min="0" placeholder="No minimum">
+                    </div>
+                    <div class="exp-filter-item">
+                        <label for="amountMaxFilter">Maximum amount (৳)</label>
+                        <input type="number" id="amountMaxFilter" min="0" placeholder="No maximum">
+                    </div>
                 </div>
             </div>
         </div>
@@ -787,7 +772,13 @@
 
 /* ── Filter panel toggle ─────────────────────────────────────────────────── */
 function toggleFilterPanel() {
-    document.getElementById('expFilterPanel').classList.toggle('open');
+    const panel = document.getElementById('expFilterPanel');
+    const button = document.getElementById('filterPanelToggle');
+    if (!panel || !button) return;
+    const isOpen = panel.classList.toggle('open');
+    button.setAttribute('aria-expanded', String(isOpen));
+    button.setAttribute('aria-label', isOpen ? 'Collapse filters' : 'Expand filters');
+    button.innerHTML = `<i class="fas ${isOpen ? 'fa-chevron-up' : 'fa-chevron-down'}"></i>`;
 }
 
 /* ── Step navigation — Add Expense modal ─────────────────────────────────── */
@@ -1071,6 +1062,8 @@ window.renderExpenseTable = function(expenses) {
                         ${approveItem}${rejectItem}
                         ${voidItem ? '<div class="exp-dropdown-divider"></div>' : ''}
                         ${voidItem}
+                        <div class="exp-dropdown-divider"></div>
+                        <button class="exp-dropdown-item delete" onclick="deleteExpense('${e._id}');closeAllDropdowns()"><i class="fas fa-trash-alt"></i> Delete</button>
                     </div>
                 </div>
             </td>

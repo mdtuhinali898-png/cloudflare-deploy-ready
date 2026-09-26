@@ -14,6 +14,7 @@ let currentStudent = null;
 let batchesData = [];
 let allStudentsData = [];
 let debounceTimer = null;
+let targetPreviewRequest = 0;
 
 // DOM elements
 const searchInput = document.getElementById('searchInput');
@@ -323,17 +324,33 @@ function populateTargetBatches(currentBatch) {
 // ============================================
 // 8. ON TARGET BATCH CHANGE
 // ============================================
-window.onTargetBatchChange = function() {
+window.onTargetBatchChange = async function() {
     const targetBatch = targetBatchSelect.value;
     if (!targetBatch || !currentStudent) {
+        targetPreviewRequest++;
         resetTargetPreview();
         return;
     }
 
-    // Calculate new ID
-    const newId = generateNewStudentId(targetBatch);
-    newStudentIdDisplay.textContent = newId;
-    if (copyNewIdBtn) copyNewIdBtn.style.display = 'inline-flex';
+    const requestId = ++targetPreviewRequest;
+    transferBtn.disabled = true;
+    newStudentIdDisplay.textContent = 'Calculating…';
+    if (copyNewIdBtn) copyNewIdBtn.style.display = 'none';
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/batches/${encodeURIComponent(targetBatch)}/next-student-id`);
+        const result = await response.json();
+        if (!response.ok || !result.success) throw new Error(result.message || 'Could not calculate the next ID.');
+        if (requestId !== targetPreviewRequest || targetBatchSelect.value !== targetBatch) return;
+        newStudentIdDisplay.textContent = result.studentId;
+        if (copyNewIdBtn) copyNewIdBtn.style.display = 'inline-flex';
+        transferBtn.disabled = false;
+    } catch (error) {
+        if (requestId !== targetPreviewRequest) return;
+        newStudentIdDisplay.textContent = 'Could not load';
+        transferBtn.disabled = true;
+        console.error('Could not preview next student ID:', error);
+    }
 
     // Calculate new fee and difference
     const targetBatchObj = batchesData.find(b => b.name === targetBatch);
@@ -358,8 +375,6 @@ window.onTargetBatchChange = function() {
         }
     }
 
-    // Enable transfer action
-    transferBtn.disabled = false;
 };
 
 function resetTargetPreview() {
@@ -371,32 +386,6 @@ function resetTargetPreview() {
         feeDifferenceBadge.textContent = 'No change';
     }
     transferBtn.disabled = true;
-}
-
-// ============================================
-// 9. GENERATE NEW STUDENT ID
-// ============================================
-function generateNewStudentId(targetBatch) {
-    const targetBatchObj = batchesData.find(b => b.name === targetBatch);
-    
-    // Count existing students in target batch
-    const batchStudents = allStudentsData.filter(s => s.batch === targetBatch && s.studentId !== currentStudent.studentId);
-    const nextNumber = batchStudents.length + 1;
-
-    // Use stored prefix or fallback
-    let prefix = (targetBatchObj && targetBatchObj.prefix) ? targetBatchObj.prefix : '';
-    if (!prefix) {
-        const words = targetBatch.split(' ');
-        if (words.length >= 2) {
-            const firstPart = words[0].substring(0, Math.min(2, words[0].length)).toUpperCase();
-            const lastPart = words[words.length - 1].substring(2);
-            prefix = firstPart + lastPart;
-        } else {
-            prefix = targetBatch.substring(0, 3).toUpperCase();
-        }
-    }
-
-    return `${prefix}-${String(nextNumber).padStart(3, '0')}`;
 }
 
 // ============================================
@@ -541,15 +530,8 @@ window.executeTransfer = async function() {
 
             transferSuccess.classList.add('active');
 
-            // Save to local recent history & refresh table
-            recordRecentTransfer({
-                studentName: data.student.name,
-                currentStudentId: data.newStudentId,
-                previousBatch: data.previousBatch,
-                currentBatch: data.targetBatch,
-                transferFee: transferFee,
-                date: new Date().toISOString()
-            });
+            // Refresh the cache before another transfer is started on this page.
+            await Promise.all([loadAllStudents(), loadRecentTransfers()]);
 
         } else {
             alert('❌ Transfer Failed: ' + result.message);
@@ -606,37 +588,16 @@ window.loadRecentTransfers = async function() {
     try {
         const response = await fetch(`${API_BASE_URL}/batches/transfers/recent`);
         const data = await response.json();
-
-        if (data.success && Array.isArray(data.transfers) && data.transfers.length > 0) {
-            renderRecentTransfers(data.transfers);
-        } else {
-            // Fallback to localStorage records
-            const localRecords = getLocalRecentTransfers();
-            if (localRecords.length > 0) {
-                renderRecentTransfers(localRecords);
-            } else {
-                recentTransfersBody.innerHTML = `
-                    <tr>
-                        <td colspan="7" class="bt-table-empty">
-                            <i class="fas fa-inbox"></i> No recent batch transfers recorded yet.
-                        </td>
-                    </tr>
-                `;
-            }
-        }
+        if (!response.ok || !data.success) throw new Error(data.message || 'Unable to load recent transfers.');
+        renderRecentTransfers(Array.isArray(data.transfers) ? data.transfers : []);
     } catch (error) {
-        const localRecords = getLocalRecentTransfers();
-        if (localRecords.length > 0) {
-            renderRecentTransfers(localRecords);
-        } else {
-            recentTransfersBody.innerHTML = `
-                <tr>
-                    <td colspan="7" class="bt-table-empty">
-                        <i class="fas fa-info-circle"></i> Unable to load recent transfers from server.
-                    </td>
-                </tr>
-            `;
-        }
+        recentTransfersBody.innerHTML = `
+            <tr>
+                <td colspan="7" class="bt-table-empty">
+                    <i class="fas fa-info-circle"></i> Unable to load recent transfers. Please refresh and try again.
+                </td>
+            </tr>
+        `;
     } finally {
         if (refreshIcon) setTimeout(() => refreshIcon.classList.remove('fa-spin'), 400);
     }
@@ -644,6 +605,17 @@ window.loadRecentTransfers = async function() {
 
 function renderRecentTransfers(list) {
     if (!recentTransfersBody) return;
+
+    if (!list.length) {
+        recentTransfersBody.innerHTML = `
+            <tr>
+                <td colspan="7" class="bt-table-empty">
+                    <i class="fas fa-inbox"></i> No recent batch transfers recorded yet.
+                </td>
+            </tr>
+        `;
+        return;
+    }
 
     recentTransfersBody.innerHTML = list.map(item => {
         // Parse from rawNote if available
@@ -682,26 +654,6 @@ function renderRecentTransfers(list) {
             </tr>
         `;
     }).join('');
-}
-
-function recordRecentTransfer(record) {
-    try {
-        const history = getLocalRecentTransfers();
-        history.unshift(record);
-        localStorage.setItem('edusmart_recent_transfers', JSON.stringify(history.slice(0, 15)));
-        loadRecentTransfers();
-    } catch (e) {
-        console.warn('LocalStorage unavailable:', e);
-    }
-}
-
-function getLocalRecentTransfers() {
-    try {
-        const data = localStorage.getItem('edusmart_recent_transfers');
-        return data ? JSON.parse(data) : [];
-    } catch (e) {
-        return [];
-    }
 }
 
 // ============================================

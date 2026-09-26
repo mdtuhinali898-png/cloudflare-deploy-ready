@@ -14,11 +14,70 @@ const API_BASE_URL = (window.location.hostname === 'localhost' || window.locatio
     
     let studentsData = [];
     let paymentsData = [];
+    let instituteInfo = {
+        name: 'EduSmart Coaching Center',
+        phone: '',
+        email: '',
+        address: '',
+        about: '',
+        logo: ''
+    };
 
     // ============================================
     // 2. DATA LOADING
     // ============================================
+    async function loadInstituteInfo() {
+        try {
+            const response = await fetch(`${API_BASE_URL}/institute/public`);
+            if (response.ok) {
+                const result = await response.json();
+                if (result.success && result.data) {
+                    instituteInfo = { ...instituteInfo, ...result.data };
+                    populateInstituteInfo(instituteInfo);
+                }
+            }
+        } catch (error) {
+            console.warn('Could not load institute info, using defaults:', error);
+        }
+    }
+
+    function populateInstituteInfo(inst) {
+        if (!inst) return;
+        const nameEl = document.getElementById('receiptInstituteName');
+        const addrEl = document.getElementById('receiptInstituteAddressText');
+        const phoneEl = document.getElementById('receiptInstitutePhone');
+        const emailEl = document.getElementById('receiptInstituteEmail');
+        const footerNameEl = document.getElementById('receiptFooterInstituteName');
+        const footerDetailsEl = document.getElementById('receiptFooterDetails');
+        const logoIconEl = document.getElementById('receiptLogoIcon');
+        const taglineEl = document.getElementById('receiptTagline');
+
+        if (nameEl && inst.name) nameEl.textContent = inst.name;
+        if (footerNameEl && inst.name) footerNameEl.textContent = inst.name;
+        if (addrEl && inst.address) addrEl.textContent = inst.address;
+        if (phoneEl) phoneEl.textContent = inst.phone || 'N/A';
+        if (emailEl) emailEl.textContent = inst.email || 'N/A';
+
+        if (footerDetailsEl) {
+            const parts = [];
+            if (inst.address) parts.push(inst.address);
+            if (inst.phone) parts.push(`Phone: ${inst.phone}`);
+            if (inst.email) parts.push(`Email: ${inst.email}`);
+            footerDetailsEl.textContent = parts.join(' | ') || (inst.address || '');
+        }
+
+        if (taglineEl && inst.about) {
+            taglineEl.textContent = `"${inst.about}"`;
+        }
+
+        if (logoIconEl && inst.logo) {
+            logoIconEl.innerHTML = `<img src="${inst.logo}" alt="Logo" style="width:100%;height:100%;object-fit:contain;border-radius:inherit;">`;
+        }
+    }
+
     async function loadData() {
+        await loadInstituteInfo();
+
         try {
             const studentsResponse = await fetch(`${API_BASE_URL}/students?limit=1000`);
             const studentsResult = await studentsResponse.json();
@@ -98,7 +157,7 @@ const API_BASE_URL = (window.location.hostname === 'localhost' || window.locatio
         document.getElementById('receiptDate').innerText = formatDate(payment.date);
 
         document.querySelector('.receipt-title h2').innerText = receiptTitle;
-        document.title = isAdmission ? 'Admission Receipt - Student ERP' : 'Payment Receipt - Student ERP';
+        document.title = isAdmission ? `Admission Receipt - ${instituteInfo.name || 'Student ERP'}` : `Payment Receipt - ${instituteInfo.name || 'Student ERP'}`;
 
         // Student Information
         if (student) {

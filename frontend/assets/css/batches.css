@@ -517,3 +517,186 @@
         grid-template-columns: 1fr;
     }
 }
+
+/* Refined Add/Edit Batch form styling; keeps the existing fields and behavior. */
+#batchModal {
+    background: rgba(15, 23, 42, 0.58);
+    backdrop-filter: blur(4px);
+    padding: 20px;
+}
+
+#batchModal .modal-content {
+    width: min(100%, 660px);
+    max-width: 660px;
+    max-height: min(92vh, 820px);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid rgba(226, 232, 240, 0.9);
+    border-radius: 18px;
+    box-shadow: 0 24px 70px rgba(15, 23, 42, 0.28);
+}
+
+#batchModal .modal-header {
+    flex: 0 0 auto;
+    padding: 22px 26px;
+    background: linear-gradient(135deg, #f8fafc 0%, #eef2ff 100%);
+    border-bottom: 1px solid #e5eaf2;
+}
+
+#batchModal .modal-header h3 {
+    font-size: 19px;
+    font-weight: 750;
+    color: #172033;
+    letter-spacing: -0.02em;
+}
+
+#batchModal .modal-header h3 i {
+    width: 38px;
+    height: 38px;
+    display: inline-grid;
+    place-items: center;
+    border-radius: 12px;
+    background: #e0e7ff;
+    color: #4f46e5;
+    font-size: 15px;
+}
+
+#batchModal .modal-close {
+    width: 36px;
+    height: 36px;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    font-size: 25px;
+    transition: background 0.18s ease, color 0.18s ease;
+}
+
+#batchModal .modal-close:hover {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+#batchModal .modal-body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px 18px;
+    padding: 26px;
+}
+
+#batchModal .form-group {
+    min-width: 0;
+    margin: 0;
+}
+
+#batchModal .form-group:nth-child(5) {
+    grid-column: 1 / -1;
+}
+
+#batchModal .form-group label {
+    margin-bottom: 8px;
+    color: #344054;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+#batchModal .form-group input,
+#batchModal .form-group select,
+#batchModal .form-group textarea {
+    min-height: 44px;
+    padding: 11px 13px;
+    border: 1px solid #d8e0eb;
+    border-radius: 10px;
+    background: #fff;
+    color: #172033;
+    font-size: 14px;
+    transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+#batchModal .form-group textarea {
+    min-height: 90px;
+}
+
+#batchModal .form-group input::placeholder,
+#batchModal .form-group textarea::placeholder {
+    color: #98a2b3;
+}
+
+#batchModal .form-group input:focus,
+#batchModal .form-group select:focus,
+#batchModal .form-group textarea:focus {
+    border-color: #818cf8;
+    background: #fff;
+    box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.13);
+}
+
+#batchModal .form-group small {
+    color: #667085 !important;
+    line-height: 1.5;
+}
+
+#batchModal .modal-footer {
+    flex: 0 0 auto;
+    padding: 16px 26px;
+    background: #f8fafc;
+    border-top: 1px solid #e8edf3;
+}
+
+#batchModal .btn-cancel,
+#batchModal .btn-save {
+    min-height: 42px;
+    padding: 10px 18px;
+    border-radius: 10px;
+}
+
+#batchModal .btn-cancel {
+    background: #fff;
+    border-color: #d8e0eb;
+    color: #475467;
+}
+
+#batchModal .btn-save {
+    background: linear-gradient(135deg, #4f46e5, #4338ca);
+    box-shadow: 0 5px 12px rgba(79, 70, 229, 0.2);
+}
+
+#batchModal .btn-save:hover {
+    background: linear-gradient(135deg, #4338ca, #3730a3);
+    transform: translateY(-1px);
+}
+
+@media (max-width: 600px) {
+    #batchModal {
+        padding: 12px;
+    }
+
+    #batchModal .modal-content {
+        width: 100%;
+        max-height: 94vh;
+        border-radius: 15px;
+    }
+
+    #batchModal .modal-header {
+        padding: 18px;
+    }
+
+    #batchModal .modal-header h3 {
+        font-size: 17px;
+    }
+
+    #batchModal .modal-body {
+        grid-template-columns: 1fr;
+        gap: 16px;
+        padding: 20px 18px;
+    }
+
+    #batchModal .form-group:nth-child(5) {
+        grid-column: auto;
+    }
+
+    #batchModal .modal-footer {
+        padding: 14px 18px;
+    }
+}

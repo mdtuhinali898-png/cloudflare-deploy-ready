@@ -494,11 +494,9 @@
                                 <div class="form-group"><label>Header / Brand Name</label><input type="text" id="landingBrandName" placeholder="Your institute name"></div>
                                 <div class="form-group"><label>Banner Title</label><input type="text" id="landingHeroTitle" placeholder="Banner heading"></div>
                                 <div class="form-group full-width"><label>Banner Description</label><textarea id="landingHeroDescription" rows="3" placeholder="Short banner description"></textarea></div>
-                                <div class="form-group"><label>Footer Description</label><textarea id="landingFooterDescription" rows="3" placeholder="About your institute"></textarea></div>
-                                <div class="form-group"><label>Office Hours</label><input type="text" id="landingOfficeHours" placeholder="Sat - Thu: 8:00 AM - 8:00 PM"></div>
                                 <div class="form-group full-width">
                                     <label>Banner Image (max 2MB)</label>
-                                    <div class="landing-image-control"><img id="heroImagePreview" alt="Banner preview"><input type="file" id="heroImageInput" accept="image/*"><button type="button" class="btn-upload" onclick="document.getElementById('heroImageInput').click()"><i class="fas fa-upload"></i> Choose Banner Image</button></div>
+                                    <div class="landing-image-control"><img id="heroImagePreview" alt="Banner preview"><input type="file" id="heroImageInput" accept="image/jpeg,image/png,image/webp"><button type="button" class="btn-upload" onclick="document.getElementById('heroImageInput').click()"><i class="fas fa-upload"></i> Choose Banner Image</button><button type="button" class="btn-upload btn-remove-image" id="removeHeroImageBtn"><i class="fas fa-trash-alt"></i> Remove Banner Image</button><small id="heroImageUploadStatus" class="content-help" aria-live="polite"></small></div>
                                 </div>
                             </div>
                             <div class="form-actions"><button class="btn-save" type="submit"><i class="fas fa-save"></i> Save Landing Content</button></div>
@@ -519,6 +517,67 @@
                         </form>
                     </div>
                 </div>
+                <div class="settings-card">
+                    <div class="card-header"><h3><i class="fas fa-address-card"></i> Footer Details & Links</h3></div>
+                    <div class="card-body">
+                        <form id="landingFooterForm">
+                            <div class="form-grid">
+                                <div class="form-group full-width"><label>Footer Description</label><textarea id="landingFooterDescription" rows="3" placeholder="About your institute"></textarea></div>
+                                <div class="form-group"><label>Office Hours</label><input type="text" id="landingOfficeHours" placeholder="Sat - Thu: 8:00 AM - 8:00 PM"></div>
+                                <div class="form-group"><label>Social: Facebook URL</label><input id="footerFacebook" type="url"></div>
+                                <div class="form-group"><label>Social: YouTube URL</label><input id="footerYoutube" type="url"></div>
+                                <div class="form-group"><label>Social: LinkedIn URL</label><input id="footerLinkedin" type="url"></div>
+                                <div class="form-group"><label>Social: Instagram URL</label><input id="footerInstagram" type="url"></div>
+                                <div class="form-group"><label>Contact: Address</label><input id="footerAddress"></div>
+                                <div class="form-group"><label>Contact: Phone</label><input id="footerPhone"></div>
+                                <div class="form-group"><label>Contact: Email</label><input id="footerEmail" type="email"></div>
+                                <div class="form-group"><label>Column heading: Quick Links</label><input id="footerQuickHeading"></div>
+                                <div class="form-group"><label>Column heading: Programs</label><input id="footerProgramsHeading"></div>
+                                <div class="form-group"><label>Column heading: Contact</label><input id="footerContactHeading"></div>
+                                <div class="form-group"><label>Column heading: Social links</label><input id="footerSocialHeading"></div>
+                                <div class="form-group full-width"><label>Quick links (one per line: Label | URL)</label><textarea id="footerQuickLinks" rows="5"></textarea></div>
+                                <div class="form-group full-width"><label>Program links (one per line: Label | URL)</label><textarea id="footerProgramLinks" rows="5"></textarea></div>
+                                <div class="form-group full-width"><label>Bottom links (one per line: Label | URL)</label><textarea id="footerBottomLinks" rows="3"></textarea></div>
+                            </div>
+                            <div class="form-actions"><button class="btn-save" type="submit"><i class="fas fa-save"></i> Save Footer Details</button></div>
+                        </form>
+                    </div>
+                </div>
+                <div class="settings-card">
+                    <div class="card-header"><h3><i class="fas fa-star"></i> Why Us Section</h3></div>
+                    <div class="card-body">
+                        <form id="whyUsForm">
+                            <div class="form-grid">
+                                <div class="form-group"><label>Small Heading</label><input id="whyUsEyebrowInput" placeholder="Our Distinction"></div>
+                                <div class="form-group"><label>Section Title</label><input id="whyUsTitleInput" placeholder="Why choose us?"></div>
+                                <div class="form-group full-width"><label>Section Description</label><textarea id="whyUsDescriptionInput" rows="3" placeholder="Short introduction for this section"></textarea></div>
+                            </div>
+                            <div class="form-actions"><button class="btn-save" type="submit"><i class="fas fa-save"></i> Save Why Us Heading</button></div>
+                        </form>
+                        <div class="card-header card-header-with-action"><h3>Feature Cards</h3><button class="btn-save" type="button" onclick="openWhyUsEditor()"><i class="fas fa-plus"></i> Add Card</button></div>
+                        <p class="content-help">Edit, add, or delete the cards shown in the Why Us section.</p>
+                        <div id="whyUsCardsList" class="landing-programs-list"></div>
+                    </div>
+                </div>
+                <div class="landing-editor-modal" id="whyUsEditorModal" aria-hidden="true">
+                    <div class="landing-editor-dialog">
+                        <button type="button" class="landing-modal-close" onclick="closeWhyUsEditor()">&times;</button>
+                        <h3 id="whyUsEditorTitle">Add Why Us Card</h3>
+                        <form id="whyUsEditorForm"><input type="hidden" id="whyUsEditIndex">
+                            <div class="form-grid"><div class="form-group"><label>Card Title</label><input id="whyUsCardTitle" required></div><div class="form-group"><label>Icon (Font Awesome class)</label><input id="whyUsIcon" value="fas fa-star"></div><div class="form-group full-width"><label>Description</label><textarea id="whyUsCardDescription" rows="3" required></textarea></div></div>
+                            <div class="form-actions"><button class="btn-save" type="submit">Save Card</button></div>
+                        </form>
+                    </div>
+                </div>
+                <div class="settings-card">
+                    <div class="card-header"><h3><i class="fas fa-chalkboard-teacher"></i> Teachers Section</h3></div>
+                    <div class="card-body">
+                        <form id="teachersForm"><div class="form-grid"><div class="form-group"><label>Small Heading</label><input id="teachersEyebrowInput" placeholder="Expert Faculty"></div><div class="form-group"><label>Section Title</label><input id="teachersTitleInput" placeholder="Meet our teachers"></div><div class="form-group full-width"><label>Section Description</label><textarea id="teachersDescriptionInput" rows="3" placeholder="Short introduction for your faculty"></textarea></div></div><div class="form-actions"><button class="btn-save" type="submit"><i class="fas fa-save"></i> Save Teachers Heading</button></div></form>
+                        <div class="card-header card-header-with-action"><h3>Teacher Cards</h3><button class="btn-save" type="button" onclick="openTeacherEditor()"><i class="fas fa-plus"></i> Add Teacher</button></div>
+                        <p class="content-help">Add a photo URL, teacher details, and optional social links for each teacher.</p><div id="teachersCardsList" class="landing-programs-list"></div>
+                    </div>
+                </div>
+                <div class="landing-editor-modal" id="teacherEditorModal" aria-hidden="true"><div class="landing-editor-dialog"><button type="button" class="landing-modal-close" onclick="closeTeacherEditor()">&times;</button><h3 id="teacherEditorTitle">Add Teacher</h3><form id="teacherEditorForm"><input type="hidden" id="teacherEditIndex"><div class="form-grid"><div class="form-group"><label>Name</label><input id="teacherName" required></div><div class="form-group"><label>Subject</label><input id="teacherSubject" required></div><div class="form-group full-width"><label>Qualification</label><input id="teacherQualification" required></div><div class="form-group full-width"><label>Short Description</label><textarea id="teacherDescription" rows="3" required></textarea></div><div class="form-group full-width"><label>Photo URL</label><input id="teacherPhoto" type="url" placeholder="https://example.com/teacher-photo.jpg"></div><div class="form-group"><label>LinkedIn URL (optional)</label><input id="teacherLinkedin" type="url"></div><div class="form-group"><label>YouTube URL (optional)</label><input id="teacherYoutube" type="url"></div><div class="form-group full-width"><label>Facebook URL (optional)</label><input id="teacherFacebook" type="url"></div></div><div class="form-actions"><button class="btn-save" type="submit">Save Teacher</button></div></form></div></div>
             </div>
 
             <!-- Notices Tab -->

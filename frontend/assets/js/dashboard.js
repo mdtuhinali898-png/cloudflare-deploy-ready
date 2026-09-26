@@ -29,37 +29,20 @@ let dashboardData = {
 // ============================================
 async function loadDashboardData() {
     try {
-        // Fire ALL API calls simultaneously
-        const [
-            statsRes,
-            paymentsRes,
-            admissionsRes,
-            dueRes,
-            monthlyRes,
-            batchRes
-        ] = await Promise.allSettled([
-            fetch(`${API_BASE_URL}/dashboard/stats`).then(r => r.json()).catch(() => ({})),
-            fetch(`${API_BASE_URL}/dashboard/recent-payments`).then(r => r.json()).catch(() => []),
-            fetch(`${API_BASE_URL}/dashboard/recent-admissions`).then(r => r.json()).catch(() => []),
-            fetch(`${API_BASE_URL}/dashboard/due-students`).then(r => r.json()).catch(() => []),
-            fetch(`${API_BASE_URL}/dashboard/monthly-collection`).then(r => r.json()).catch(() => ({ labels: [], data: [] })),
-            fetch(`${API_BASE_URL}/dashboard/batch-wise`).then(r => r.json()).catch(() => ({ labels: [], data: [] }))
-        ]);
-
-        // Process results
-        dashboardData.stats = statsRes.status === 'fulfilled' ? statsRes.value : {};
-        dashboardData.recentPayments = paymentsRes.status === 'fulfilled' ? paymentsRes.value : [];
-        dashboardData.latestAdmissions = admissionsRes.status === 'fulfilled' ? admissionsRes.value : [];
-        dashboardData.dueStudents = dueRes.status === 'fulfilled' ? dueRes.value : [];
-        dashboardData.monthlyCollection = monthlyRes.status === 'fulfilled' ? monthlyRes.value : { labels: [], data: [] };
-        dashboardData.batchWise = batchRes.status === 'fulfilled' ? batchRes.value : { labels: [], data: [] };
-
-        // Update UI immediately
-        loadStats();
-        loadRecentPayments();
-        loadLatestAdmissions();
-        loadDueStudents();
-        loadCharts();
+        // Render each section as its own request finishes instead of making
+        // the whole dashboard wait for the slowest endpoint.
+        const requests = [
+            fetch(`${API_BASE_URL}/dashboard/stats`).then(r => r.ok ? r.json() : Promise.reject(r.status)).then(value => { dashboardData.stats = value; loadStats(); }),
+            fetch(`${API_BASE_URL}/dashboard/recent-payments`).then(r => r.ok ? r.json() : Promise.reject(r.status)).then(value => { dashboardData.recentPayments = value; loadRecentPayments(); }),
+            fetch(`${API_BASE_URL}/dashboard/recent-admissions`).then(r => r.ok ? r.json() : Promise.reject(r.status)).then(value => { dashboardData.latestAdmissions = value; loadLatestAdmissions(); }),
+            fetch(`${API_BASE_URL}/dashboard/due-students`).then(r => r.ok ? r.json() : Promise.reject(r.status)).then(value => { dashboardData.dueStudents = value; loadDueStudents(); }),
+            fetch(`${API_BASE_URL}/dashboard/monthly-collection`).then(r => r.ok ? r.json() : Promise.reject(r.status)).then(value => { dashboardData.monthlyCollection = value; loadCharts(); }),
+            fetch(`${API_BASE_URL}/dashboard/batch-wise`).then(r => r.ok ? r.json() : Promise.reject(r.status)).then(value => { dashboardData.batchWise = value; loadCharts(); })
+        ];
+        const results = await Promise.allSettled(requests);
+        results.forEach((result, index) => {
+            if (result.status === 'rejected') console.error(`Dashboard section ${index + 1} failed:`, result.reason);
+        });
     } catch (error) {
         console.error('Error loading dashboard:', error);
     }
@@ -147,7 +130,9 @@ function loadStats() {
     function loadCharts() {
         // Monthly Collection Line Chart
         const monthlyCtx = document.getElementById('monthlyChart');
-        if (!monthlyCtx) return;
+        if (monthlyCtx && dashboardData.monthlyCollection.labels.length) {
+        const existingMonthlyChart = Chart.getChart(monthlyCtx);
+        if (existingMonthlyChart) existingMonthlyChart.destroy();
         new Chart(monthlyCtx.getContext('2d'), {
             type: 'line',
             data: {
@@ -174,9 +159,13 @@ function loadStats() {
             }
         });
 
+        }
+
         // Batch Wise Doughnut Chart
         const batchCtx = document.getElementById('batchChart');
-        if (!batchCtx) return;
+        if (!batchCtx || !dashboardData.batchWise.labels.length) return;
+        const existingBatchChart = Chart.getChart(batchCtx);
+        if (existingBatchChart) existingBatchChart.destroy();
         new Chart(batchCtx.getContext('2d'), {
             type: 'doughnut',
             data: {

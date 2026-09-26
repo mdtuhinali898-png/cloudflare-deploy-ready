@@ -28,6 +28,18 @@ document.addEventListener('DOMContentLoaded', function () {
     // Search on enter
     const searchEl = document.getElementById('searchInput');
     if (searchEl) searchEl.addEventListener('keypress', e => { if (e.key === 'Enter') loadExpenses(); });
+
+    ['searchInput', 'categoryFilter', 'methodFilter', 'statusFilter', 'vendorFilter', 'fromDateFilter', 'toDateFilter', 'amountMinFilter', 'amountMaxFilter']
+        .forEach(id => {
+            const input = document.getElementById(id);
+            input?.addEventListener('input', updateExpenseFilterSummary);
+            input?.addEventListener('change', updateExpenseFilterSummary);
+        });
+    ['fromDateFilter', 'toDateFilter'].forEach(id => {
+        document.getElementById(id)?.addEventListener('input', clearActiveExpenseDatePreset);
+        document.getElementById(id)?.addEventListener('change', clearActiveExpenseDatePreset);
+    });
+    updateExpenseFilterSummary();
 });
 
 // ==========================================================================
@@ -174,6 +186,7 @@ function renderExpenseTable(expenses) {
                 ${e.status !== 'Voided'
                     ? `<button class="btn btn-sm btn-secondary" onclick="openVoidModal('${e._id}')" title="Void"><i class="fas fa-ban"></i></button>`
                     : ''}
+                <button class="btn btn-sm btn-danger" onclick="deleteExpense('${e._id}')" title="Delete"><i class="fas fa-trash-alt"></i></button>
             </td>
         </tr>`;
     }).join('');
@@ -307,7 +320,7 @@ async function editExpense(id) {
 }
 
 async function deleteExpense(id) {
-    if (!confirm('Are you sure you want to delete this expense? Consider using Void instead.')) return;
+    if (!confirm('Permanently delete this expense? It will be removed from expense reports and dashboard totals. If it is a Payroll expense, its linked salary payment will also be removed and the payroll balance recalculated.')) return;
     try {
         const res = await fetch(`/api/expenses/${id}`, { method: 'DELETE' });
         const data = await res.json();
@@ -517,7 +530,151 @@ async function bulkPrint() {
     } catch (err) { showToast('Error preparing print.', 'error'); }
 }
 
-// ==========================================================================
+// Print every expense matching the current Filter & Search selections.
+async function printFilteredExpenseReport() {
+    const button = document.getElementById('expenseReportPrintBtn');
+    if (button?.disabled) return;
+    const originalLabel = button?.innerHTML;
+    if (button) {
+        button.disabled = true;
+        button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Preparing report…';
+    }
+
+    try {
+        const params = buildFilterParams();
+        const pageSize = 1000;
+        params.set('page', '1');
+        params.set('limit', String(pageSize));
+
+        const firstResponse = await fetch('/api/expenses?' + params.toString());
+        const firstData = await firstResponse.json();
+        if (!firstResponse.ok || !firstData.success) {
+            throw new Error(firstData.message || 'Could not load expenses for the report.');
+        }
+
+        let expenses = firstData.expenses || [];
+        const totalPages = Math.max(1, Number(firstData.totalPages) || 1);
+        for (let page = 2; page <= totalPages; page++) {
+            params.set('page', String(page));
+            const response = await fetch('/api/expenses?' + params.toString());
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                throw new Error(data.message || 'Could not load all matching expenses.');
+            }
+            expenses = expenses.concat(data.expenses || []);
+        }
+
+        if (!expenses.length) {
+            showToast('No expenses found for the selected filters.', 'info');
+            return;
+        }
+
+        let institute = {};
+        try {
+            const response = await fetch('/api/institute/public');
+            const data = await response.json();
+            if (data.success && data.data) institute = data.data;
+        } catch (_) {}
+
+        printExpenseReport(expenses, firstData.total, institute);
+    } catch (error) {
+        console.error('Error preparing expense report:', error);
+        showToast(error.message || 'Error preparing expense report.', 'error');
+    } finally {
+        if (button) {
+            button.disabled = false;
+            button.innerHTML = originalLabel;
+        }
+    }
+}
+
+function printExpenseReport(expenses, totalRecords, institute = {}) {
+    const esc = value => escHtml(value || '');
+    const totalAmount = expenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
+    const filters = [];
+    const search = document.getElementById('searchInput')?.value?.trim();
+    const category = document.getElementById('categoryFilter');
+    const method = document.getElementById('methodFilter');
+    const status = document.getElementById('statusFilter');
+    const vendor = document.getElementById('vendorFilter');
+    const fromDate = document.getElementById('fromDateFilter')?.value;
+    const toDate = document.getElementById('toDateFilter')?.value;
+    const minAmount = document.getElementById('amountMinFilter')?.value;
+    const maxAmount = document.getElementById('amountMaxFilter')?.value;
+    if (search) filters.push(`Search: ${search}`);
+    if (category?.value && category.value !== 'all') filters.push(`Category: ${category.selectedOptions[0]?.textContent || category.value}`);
+    if (method?.value && method.value !== 'all') filters.push(`Method: ${method.selectedOptions[0]?.textContent || method.value}`);
+    if (status?.value && status.value !== 'all') filters.push(`Status: ${status.value}`);
+    if (vendor?.value && vendor.value !== 'all') filters.push(`Vendor: ${vendor.value}`);
+    if (fromDate || toDate) filters.push(`Date: ${fromDate || 'Any'} to ${toDate || 'Any'}`);
+    if (minAmount || maxAmount) filters.push(`Amount: ${minAmount || '0'} to ${maxAmount || 'Any'}`);
+
+    const generatedAt = new Date().toLocaleString('en-BD', { dateStyle: 'medium', timeStyle: 'short' });
+    const instituteName = institute.name || 'EduSmart Coaching Center';
+    const logo = institute.logo ? `<img class="brand-logo" src="${esc(institute.logo)}" alt="Institute logo">` : '';
+    const contact = [institute.address, institute.phone, institute.email].filter(Boolean).map(esc).join(' <span>•</span> ');
+    const rows = expenses.map(expense => `<tr>
+        <td class="date">${esc(expense.date || '-')}</td>
+        <td class="id">${esc(expense.expenseId || '-')}</td>
+        <td>${esc(expense.category || '-')}</td>
+        <td>${esc(expense.description || expense.subCategory || '-')}</td>
+        <td>${esc(expense.vendor || '-')}</td>
+        <td>${esc(expense.paymentMethod || '-')}</td>
+        <td>${esc(expense.status || '-')}</td>
+        <td class="amount">${formatCurrency(expense.amount)}</td>
+    </tr>`).join('');
+    let printFrame = document.getElementById('expenseReportPrintFrame');
+    if (printFrame) printFrame.remove();
+    printFrame = document.createElement('iframe');
+    printFrame.id = 'expenseReportPrintFrame';
+    printFrame.style.cssText = 'position:fixed;left:0;top:0;width:0;height:0;border:0;opacity:0;pointer-events:none;';
+    document.body.appendChild(printFrame);
+    const printWindow = printFrame.contentWindow;
+    const printDocument = printWindow.document;
+
+    printDocument.open();
+    printDocument.write(`<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Expense Report - ${esc(instituteName)}</title>
+    <style>
+        *{box-sizing:border-box} @page{size:A4 portrait;margin:12mm}
+        body{font:10px/1.45 'Segoe UI',Arial,sans-serif;color:#1e293b;margin:0;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+        .header{background:linear-gradient(120deg,#1e1b4b,#4f46e5);color:#fff;padding:18px 22px;border-radius:8px;display:flex;justify-content:space-between;align-items:center;gap:18px}
+        .brand{display:flex;align-items:center;gap:12px;min-width:0}.brand-logo{width:52px;height:52px;object-fit:contain;background:#fff;border-radius:7px;padding:4px}
+        .brand h1{font-size:19px;margin:0 0 3px;font-weight:800}.contact{font-size:9px;color:#e0e7ff}.title{text-align:right;flex-shrink:0}.title small{display:block;text-transform:uppercase;letter-spacing:1px;color:#c7d2fe;font-weight:700}.title strong{font-size:16px}
+        .meta{display:flex;justify-content:space-between;gap:10px;margin:12px 0;padding:9px 12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;color:#475569}.filters{margin:-4px 0 12px;color:#64748b;font-size:9px}
+        .summary{display:flex;gap:10px;margin:12px 0 16px}.summary-card{flex:1;padding:10px 13px;border:1px solid #e2e8f0;border-radius:7px;background:#f8fafc}.summary-card.total{background:#fef2f2;border-color:#fecaca}.label{font-size:8px;color:#64748b;text-transform:uppercase;font-weight:700;letter-spacing:.5px}.value{font-size:15px;font-weight:800;margin-top:3px;color:#0f172a}.total .value{color:#b91c1c}
+        table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:8.5px}thead{display:table-header-group}tr{page-break-inside:avoid}th{background:#4f46e5;color:#fff;text-align:left;padding:7px 6px;text-transform:uppercase;font-size:7.5px;letter-spacing:.25px}td{padding:6px;border:1px solid #e2e8f0;vertical-align:top;overflow-wrap:anywhere}tbody tr:nth-child(even){background:#f8fafc}.date,.id{white-space:nowrap}.id{font-family:Consolas,monospace;color:#4338ca}.amount{text-align:right;white-space:nowrap;font-weight:700}.foot{margin-top:18px;display:flex;justify-content:space-between;color:#64748b;font-size:8px}.signatures{display:flex;justify-content:space-between;gap:60px;margin:38px 24px 0}.signature{width:220px;border-top:1px solid #64748b;text-align:center;padding-top:5px;font-weight:700;color:#334155}
+        @media print{.header,.summary-card.total,th{-webkit-print-color-adjust:exact;print-color-adjust:exact}.header{break-inside:avoid}.summary{break-inside:avoid}}
+    </style></head><body>
+      <header class="header"><div class="brand">${logo}<div><h1>${esc(instituteName)}</h1>${contact ? `<div class="contact">${contact}</div>` : ''}</div></div><div class="title"><small>Financial Management</small><strong>Expense Report</strong></div></header>
+      <div class="meta"><span><b>Report period:</b> ${fromDate || toDate ? `${esc(fromDate || 'All dates')} – ${esc(toDate || 'All dates')}` : 'All dates'}</span><span><b>Generated:</b> ${esc(generatedAt)}</span></div>
+      ${filters.length ? `<div class="filters"><b>Applied filters:</b> ${filters.map(esc).join(' &nbsp;|&nbsp; ')}</div>` : ''}
+      <section class="summary"><div class="summary-card"><div class="label">Expense Records</div><div class="value">${Number(totalRecords ?? expenses.length).toLocaleString('en-BD')}</div></div><div class="summary-card total"><div class="label">Total Expenses</div><div class="value">${formatCurrency(totalAmount)}</div></div></section>
+      <table><thead><tr><th style="width:9%">Date</th><th style="width:12%">Expense ID</th><th style="width:12%">Category</th><th style="width:23%">Description</th><th style="width:14%">Vendor</th><th style="width:10%">Method</th><th style="width:10%">Status</th><th style="width:10%;text-align:right">Amount</th></tr></thead><tbody>${rows}<tr><td colspan="7" style="text-align:right;font-weight:800;background:#fef2f2">TOTAL (${expenses.length} records)</td><td class="amount" style="background:#fef2f2;color:#991b1b">${formatCurrency(totalAmount)}</td></tr></tbody></table>
+      <div class="signatures"><div class="signature">Prepared By</div><div class="signature">Approved By</div></div><footer class="foot"><span>${esc(instituteName)} · Expense Report</span><span>Printed on ${esc(generatedAt)}</span></footer>
+    </body></html>`);
+    printDocument.close();
+    let printTriggered = false;
+    const triggerPrint = () => {
+        if (printTriggered) return;
+        printTriggered = true;
+        try {
+            printWindow.focus();
+            printWindow.print();
+        } catch (error) {
+            console.error('Expense report print error:', error);
+            showToast('Could not open the print dialog.', 'error');
+            printFrame.remove();
+        }
+    };
+    printFrame.onload = () => setTimeout(triggerPrint, 250);
+    // about:blank iframes can finish loading before the onload handler is attached.
+    setTimeout(() => {
+        if (document.getElementById('expenseReportPrintFrame') && printFrame.contentDocument?.readyState === 'complete') triggerPrint();
+    }, 300);
+    printWindow.addEventListener('afterprint', () => printFrame?.remove(), { once: true });
+}
+
+// ===========================================================================
 // Voucher
 // ==========================================================================
 async function viewVoucher(id) {
@@ -555,7 +712,7 @@ function generateVoucherHTML(e, instituteName) {
         <!-- Header -->
         <div class="voucher-header" style="background:linear-gradient(135deg, #4f46e5, #7c3aed); color:#fff; padding:16px 20px; border-radius:8px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center;">
             <div>
-                <h2 style="margin:0; font-size:1.25rem; font-weight:800; color:#fff;"><i class="fas fa-graduation-cap"></i> ${escHtml(instituteName || 'UCC Pabna Main')}</h2>
+                <h2 style="margin:0; font-size:1.25rem; font-weight:800; color:#fff;"><i class="fas fa-graduation-cap"></i> ${escHtml(instituteName || 'EduSmart')}</h2>
                 <div style="font-size:0.85rem; opacity:0.9; margin-top:4px;">ব্যয় ভাউচার / Expense Voucher</div>
             </div>
             <div style="text-align:right;">
@@ -592,7 +749,7 @@ function generateVoucherHTML(e, instituteName) {
                     </tr>
                     <tr style="background:#ffffff;">
                         <td style="padding:8px 12px; border-bottom:1px solid #e2e8f0; font-weight:700; color:#475569;">শাখা / Branch</td>
-                        <td style="padding:8px 12px; border-bottom:1px solid #e2e8f0; color:#1e293b;">${escHtml(e.branch || 'UCC Pabna Main')}</td>
+                        <td style="padding:8px 12px; border-bottom:1px solid #e2e8f0; color:#1e293b;">${escHtml(e.branch || instituteName || 'EduSmart')}</td>
                     </tr>
                     <tr style="background:#f8fafc;">
                         <td style="padding:8px 12px; border-bottom:1px solid #e2e8f0; font-weight:700; color:#475569;">প্রদানকারী / Vendor</td>
@@ -637,6 +794,24 @@ function generateVoucherHTML(e, instituteName) {
 }
 
 function printVoucher() {
+    const source = document.getElementById('voucherContent');
+    const printArea = document.getElementById('voucherPrintArea');
+    if (!source || !printArea || !source.innerHTML.trim()) {
+        showToast('Voucher is not ready to print.', 'error');
+        return;
+    }
+
+    printArea.innerHTML = source.innerHTML;
+    const printOnlyControls = printArea.querySelectorAll('.no-print');
+    printOnlyControls.forEach(element => element.remove());
+    printArea.style.display = 'block';
+
+    const cleanup = () => {
+        printArea.innerHTML = '';
+        printArea.style.display = 'none';
+        window.removeEventListener('afterprint', cleanup);
+    };
+    window.addEventListener('afterprint', cleanup);
     window.print();
 }
 
@@ -803,7 +978,78 @@ function clearFilters() {
     ['categoryFilter', 'methodFilter', 'statusFilter', 'vendorFilter'].forEach(id => {
         const el = document.getElementById(id); if (el) el.value = 'all';
     });
+    clearActiveExpenseDatePreset();
+    updateExpenseFilterSummary();
     loadExpenses(1);
+}
+
+function applyExpenseDatePreset(preset) {
+    const now = new Date();
+    const asInputDate = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    let from;
+    let to;
+    if (preset === 'today') {
+        from = to = asInputDate(now);
+    } else if (preset === 'thisMonth') {
+        from = asInputDate(new Date(now.getFullYear(), now.getMonth(), 1));
+        to = asInputDate(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+    } else if (preset === 'lastMonth') {
+        from = asInputDate(new Date(now.getFullYear(), now.getMonth() - 1, 1));
+        to = asInputDate(new Date(now.getFullYear(), now.getMonth(), 0));
+    } else return;
+
+    document.getElementById('fromDateFilter').value = from;
+    document.getElementById('toDateFilter').value = to;
+    document.querySelectorAll('.exp-date-preset').forEach(button => {
+        button.classList.toggle('active', button.dataset.preset === preset);
+    });
+    updateExpenseFilterSummary();
+    loadExpenses(1);
+}
+
+function clearActiveExpenseDatePreset() {
+    document.querySelectorAll('.exp-date-preset.active').forEach(button => button.classList.remove('active'));
+}
+
+function toggleMoreExpenseFilters() {
+    const panel = document.getElementById('moreExpenseFilters');
+    const button = document.getElementById('moreFiltersToggle');
+    if (!panel || !button) return;
+    const isOpen = panel.classList.toggle('show');
+    button.setAttribute('aria-expanded', String(isOpen));
+    button.innerHTML = `<i class="fas fa-sliders-h"></i> ${isOpen ? 'Fewer filters' : 'More filters'}`;
+}
+
+function updateExpenseFilterSummary() {
+    const active = [];
+    const search = document.getElementById('searchInput')?.value?.trim();
+    const category = document.getElementById('categoryFilter');
+    const method = document.getElementById('methodFilter');
+    const status = document.getElementById('statusFilter');
+    const vendor = document.getElementById('vendorFilter');
+    const fromDate = document.getElementById('fromDateFilter')?.value;
+    const toDate = document.getElementById('toDateFilter')?.value;
+    const minAmount = document.getElementById('amountMinFilter')?.value;
+    const maxAmount = document.getElementById('amountMaxFilter')?.value;
+
+    if (search) active.push(`Search: ${search}`);
+    if (fromDate || toDate) active.push(`Date: ${fromDate || 'Any'} – ${toDate || 'Any'}`);
+    if (category?.value && category.value !== 'all') active.push(`Category: ${category.selectedOptions[0]?.textContent || category.value}`);
+    if (method?.value && method.value !== 'all') active.push(`Method: ${method.selectedOptions[0]?.textContent || method.value}`);
+    if (status?.value && status.value !== 'all') active.push(`Status: ${status.value}`);
+    if (vendor?.value && vendor.value !== 'all') active.push(`Vendor: ${vendor.selectedOptions[0]?.textContent || vendor.value}`);
+    if (minAmount || maxAmount) active.push(`Amount: ${minAmount || '0'} – ${maxAmount || 'Any'}`);
+
+    const badge = document.getElementById('filterBadge');
+    if (badge) {
+        badge.textContent = `${active.length} active`;
+        badge.classList.toggle('visible', active.length > 0);
+    }
+    const summary = document.getElementById('activeFilterSummary');
+    if (summary) {
+        summary.innerHTML = active.map(item => `<span class="exp-filter-chip">${escHtml(item)}</span>`).join('')
+            + (active.length ? '<button type="button" class="exp-filter-clear-link" onclick="clearFilters()">Clear all</button>' : '');
+    }
 }
 
 // ==========================================================================

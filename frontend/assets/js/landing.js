@@ -3,6 +3,8 @@
    ========================================================================== */
 
 document.addEventListener('DOMContentLoaded', () => {
+  const copyrightYear = document.getElementById('landingCopyrightYear');
+  if (copyrightYear) copyrightYear.textContent = new Date().getFullYear();
   applyLandingSettings();
   loadSharedLandingSettings();
   initNavbar();
@@ -37,19 +39,82 @@ async function loadSharedLandingSettings() {
 function applyLandingData(landing) {
   if (!landing) return;
 
-  setText('landingBrandName', landing.brandName);
+  setBrandName(landing.brandName);
   setText('landingHeroTitle', landing.heroTitle);
   setText('landingHeroDescription', landing.heroDescription);
   setText('landingFooterDescription', landing.footerDescription);
   setText('landingOfficeHours', landing.officeHours);
-  if (landing.heroImage) {
+  renderLandingFooter(landing);
+  if (Object.prototype.hasOwnProperty.call(landing, 'heroImage')) {
     const heroImage = document.getElementById('landingHeroImage');
-    if (heroImage) heroImage.src = landing.heroImage;
+    if (heroImage) heroImage.src = landing.heroImage || 'assets/images/hero-student.jpg';
   }
   if (Array.isArray(landing.programs) && landing.programs.length) renderCustomPrograms(landing.programs);
+  if (landing.whyUs) renderWhyUs(landing.whyUs);
+  if (landing.teachers) renderTeachers(landing.teachers);
   
   // Load dynamic notices
   loadNotices();
+}
+
+function renderLandingFooter(landing) {
+  const footer = landing.footer || {};
+  const footerRoot = document.querySelector('.footer');
+  if (!footerRoot) return;
+  const brand = footerRoot.querySelector('.footer-col-brand h3');
+  if (brand && landing.brandName) brand.lastChild.textContent = ` ${landing.brandName}`;
+  const socialHeading = footerRoot.querySelector('#landingFooterSocialHeading');
+  if (socialHeading) {
+    socialHeading.textContent = footer.socialHeading || '';
+    socialHeading.hidden = !footer.socialHeading;
+  }
+  const columns = footerRoot.querySelectorAll('.footer-grid > .footer-col');
+  [footer.quickHeading, footer.programsHeading, footer.contactHeading].forEach((heading, index) => {
+    if (heading && columns[index]?.querySelector('h4')) columns[index].querySelector('h4').textContent = heading;
+  });
+  const contactItems = footerRoot.querySelectorAll('.footer-grid > .footer-col:nth-child(4) .footer-contact-item span');
+  const address = contactItems[0];
+  const phone = contactItems[1];
+  const email = contactItems[2];
+  if (address && footer.address) address.textContent = footer.address;
+  if (phone && footer.phone) phone.textContent = footer.phone;
+  if (email && footer.email) email.textContent = footer.email;
+  const social = footerRoot.querySelector('.social-links');
+  if (social) {
+    const socials = [['facebook','Facebook','fab fa-facebook-f'],['youtube','YouTube','fab fa-youtube'],['linkedin','LinkedIn','fab fa-linkedin-in'],['instagram','Instagram','fab fa-instagram']];
+    social.innerHTML = socials.filter(([key]) => footer[key]).map(([key,label,icon]) => `<a href="${safeLandingHref(footer[key])}" class="social-btn" aria-label="${label}" target="_blank" rel="noopener noreferrer"><i class="${icon}"></i></a>`).join('');
+  }
+  const linkGroups = [footer.quickLinks, footer.programLinks, footer.bottomLinks];
+  const containers = [columns[0]?.querySelector('.footer-links'), columns[1]?.querySelector('.footer-links'), footerRoot.querySelector('.footer-bottom-links')];
+  linkGroups.forEach((links, index) => {
+    if (!Array.isArray(links) || !containers[index]) return;
+    containers[index].innerHTML = links.map(link => `<a href="${safeLandingHref(link.url)}">${escapeLandingHtml(link.label)}</a>`).join('');
+  });
+}
+
+function safeLandingHref(value) {
+  const href = String(value || '').trim();
+  return /^(https?:\/\/|#|\/|[a-z0-9][a-z0-9._/-]*$)/i.test(href) ? escapeLandingHtml(href) : '#';
+}
+
+function setBrandName(name) {
+  if (!name) return;
+  const brandName = document.getElementById('landingBrandName');
+  if (!brandName) return;
+
+  brandName.textContent = name;
+  brandName.dataset.shortName = createInstituteAcronym(name);
+  brandName.title = name;
+}
+
+function createInstituteAcronym(name) {
+  const words = String(name)
+    .replace(/[’']/g, '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  return words.slice(0, 3).map(word => word.charAt(0).toUpperCase()).join('') || 'EDU';
 }
 
 function setText(id, value) {
@@ -74,6 +139,48 @@ function renderCustomPrograms(programs) {
       <div class="card-footer-action"><div class="price-tag">${price}</div><button class="btn btn-outline btn-sm btn-view-details" data-program-key="custom-${index}">View Details <i class="fas fa-chevron-right"></i></button></div>
     </div>`;
   }).join('');
+}
+
+function renderWhyUs(whyUs) {
+  setText('whyUsEyebrow', whyUs.eyebrow);
+  setText('whyUsTitle', whyUs.title);
+  setText('whyUsDescription', whyUs.description);
+
+  if (!Array.isArray(whyUs.cards) || !whyUs.cards.length) return;
+  const grid = document.getElementById('whyUsGrid');
+  if (!grid) return;
+
+  grid.innerHTML = whyUs.cards.map(card => {
+    const icon = /^[a-zA-Z0-9 -]+$/.test(card.icon || '') ? card.icon : 'fas fa-star';
+    return `<div class="why-card"><div class="why-icon-wrapper"><i class="${icon}"></i></div><h3>${escapeLandingHtml(card.title)}</h3><p>${escapeLandingHtml(card.description)}</p></div>`;
+  }).join('');
+}
+
+function renderTeachers(teachers) {
+  setText('teachersEyebrow', teachers.eyebrow);
+  setText('teachersTitle', teachers.title);
+  setText('teachersDescription', teachers.description);
+  if (!Array.isArray(teachers.cards) || !teachers.cards.length) return;
+
+  const grid = document.getElementById('teachersGrid');
+  if (!grid) return;
+  grid.innerHTML = teachers.cards.map(card => {
+    const photo = safeLandingUrl(card.photo, 'assets/images/hero-student.jpg');
+    const linkedin = safeLandingUrl(card.linkedin, '');
+    const youtube = safeLandingUrl(card.youtube, '');
+    const facebook = safeLandingUrl(card.facebook, '');
+    const socialLinks = [
+      linkedin && `<a href="${linkedin}" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn"><i class="fab fa-linkedin-in"></i></a>`,
+      youtube && `<a href="${youtube}" target="_blank" rel="noopener noreferrer" aria-label="YouTube"><i class="fab fa-youtube"></i></a>`,
+      facebook && `<a href="${facebook}" target="_blank" rel="noopener noreferrer" aria-label="Facebook"><i class="fab fa-facebook-f"></i></a>`
+    ].filter(Boolean).join('');
+    return `<div class="teacher-card"><div class="teacher-img-wrapper"><img src="${photo}" alt="${escapeLandingHtml(card.name)}"></div><div class="teacher-info"><span class="teacher-subject-tag">${escapeLandingHtml(card.subject)}</span><h3>${escapeLandingHtml(card.name)}</h3><div class="teacher-deg">${escapeLandingHtml(card.qualification)}</div><p class="teacher-description">${escapeLandingHtml(card.description)}</p>${socialLinks ? `<div class="teacher-socials">${socialLinks}</div>` : ''}</div></div>`;
+  }).join('');
+}
+
+function safeLandingUrl(value, fallback) {
+  const url = String(value || '').trim();
+  return /^(https?:\/\/|\/|assets\/)/i.test(url) ? escapeLandingHtml(url) : fallback;
 }
 
 function escapeLandingHtml(value) {

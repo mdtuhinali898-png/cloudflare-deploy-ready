@@ -2,7 +2,7 @@
    UCC পাবনা — Merit List JS (Backend Connected)
    ========================================================================== */
 
-const API_BASE_ML = 'http://localhost:5002/api';
+const API_BASE_ML = window.API_BASE_URL || (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:5002/api' : '/api');
 
 /* $ is provided by exams.js (loaded before this file) */
 

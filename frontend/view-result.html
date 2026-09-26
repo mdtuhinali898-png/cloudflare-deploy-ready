@@ -69,7 +69,7 @@
             <div style="display:flex; gap:10px; flex-wrap:wrap;">
                 <button class="btn-secondary" onclick="window.location.href='exams.html'"><i class="fas fa-arrow-left"></i> Back</button>
                 <button class="btn-secondary" onclick="window.location.href='mark-entry.html?examId=' + getExamId()"><i class="fas fa-edit"></i> Edit Marks</button>
-                <button class="btn-primary" onclick="window.print()"><i class="fas fa-print"></i> Print</button>
+                <button class="btn-primary" onclick="printExamResults()"><i class="fas fa-print"></i> Print</button>
             </div>
         </div>
 
@@ -115,11 +115,12 @@
             </section>
 
             <!-- Student Selector / Results Table -->
-            <section class="data-card">
+            <section class="data-card results-table-card">
                 <div class="card-header">
                     <h3><i class="fas fa-list"></i> All Results</h3>
-                    <div style="display:flex; gap:10px; align-items:center;">
-                        <input type="text" id="resultSearch" placeholder="Search student..." style="padding:6px 12px; border:1px solid var(--border); border-radius:6px; font-size:13px;">
+                    <div class="results-search-controls">
+                        <label class="sr-only" for="resultSearch">Search students in results</label>
+                        <input type="text" id="resultSearch" class="results-search-input" placeholder="Search student..." autocomplete="off">
                         <span class="result-count" id="resultCount">0 students</span>
                     </div>
                 </div>

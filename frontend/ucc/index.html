@@ -19,14 +19,14 @@
        ========================================================================== -->
   <div class="navbar-wrapper">
     <nav class="navbar">
-      <div style="display:flex; align-items:center; gap:0.5rem;">
+      <div class="navbar-brand-group">
         <a href="#" class="logo">
           <div class="logo-icon">
             <i class="fas fa-graduation-cap"></i>
           </div>
           <span>UCC <span class="gradient-text">পাবনা</span></span>
         </a>
-        <a href="/index.html" class="logo branch-switcher-btn" title="EduSmart-এ ফিরে যান" style="
+        <a href="/index.html" class="logo branch-switcher-btn" title="মূল ইনস্টিটিউট পেজে ফিরে যান" style="
           font-size:0.85rem;
           padding:0.35rem 0.85rem;
           border-radius:9999px;
@@ -42,7 +42,7 @@
           align-items:center;
           gap:0.4rem;
         ">
-          <i class="fas fa-arrow-left" style="font-size:0.8rem;"></i> EduSmart
+          <i class="fas fa-arrow-left" style="font-size:0.8rem;"></i> <span id="mainInstituteAcronym" class="ucc-main-institute-name">EDU</span>
         </a>
       </div>
 
@@ -53,6 +53,10 @@
         <li><a href="#teachers" class="nav-link"><i class="fas fa-chalkboard-user"></i> Teachers</a></li>
         <li><a href="#notice" class="nav-link"><i class="fas fa-bullhorn"></i> Notice</a></li>
         <li><a href="#faq" class="nav-link"><i class="fas fa-circle-question"></i> FAQ</a></li>
+        <li class="mobile-login-actions">
+          <button class="btn btn-outline btn-sm btn-student-login"><i class="fas fa-user"></i> Student Login</button>
+          <button class="btn btn-primary btn-sm btn-admin-login"><i class="fas fa-shield-alt"></i> Admin Login</button>
+        </li>
       </ul>
 
       <div class="nav-actions">

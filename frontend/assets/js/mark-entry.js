@@ -150,9 +150,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 <input type="text" 
                        class="remarks-input" 
                        data-student="${student.studentId}"
+                       data-row="${index}"
                        value="${remarks}" 
                        placeholder="Remarks..."
-                       style="width:120px; padding:4px 6px; border:1px solid var(--border); border-radius:4px; font-size:12px;">
+                       onkeydown="handleRemarksNavigation(event, ${index})">
             </td>`;
             
             rowHtml += `</tr>`;
@@ -253,42 +254,112 @@ document.addEventListener('DOMContentLoaded', () => {
     // 5. KEYBOARD NAVIGATION (Tab-like)
     // ============================================
     window.handleKeyNavigation = (event, rowIndex, colIndex) => {
-        if (event.key === 'Enter') {
+        const inputs = document.querySelectorAll('.mark-input');
+        const currentIndex = rowIndex * exam.subjects.length + colIndex;
+
+        if (event.key === 'ArrowDown') {
             event.preventDefault();
-            // Move to next cell
-            const inputs = document.querySelectorAll('.mark-input');
-            const currentIndex = rowIndex * exam.subjects.length + colIndex;
+            const nextIndex = currentIndex + exam.subjects.length;
+            if (nextIndex < inputs.length) {
+                inputs[nextIndex].focus();
+                inputs[nextIndex].select();
+            }
+        } else if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            const prevIndex = currentIndex - exam.subjects.length;
+            if (prevIndex >= 0) {
+                inputs[prevIndex].focus();
+                inputs[prevIndex].select();
+            }
+        } else if (event.key === 'ArrowRight') {
+            event.preventDefault();
+            if (colIndex < exam.subjects.length - 1) {
+                const nextIndex = currentIndex + 1;
+                if (nextIndex < inputs.length) {
+                    inputs[nextIndex].focus();
+                    inputs[nextIndex].select();
+                }
+            } else {
+                const remarksInput = document.querySelector(`.remarks-input[data-row="${rowIndex}"]`);
+                if (remarksInput) {
+                    remarksInput.focus();
+                    const end = remarksInput.value.length;
+                    remarksInput.setSelectionRange(end, end);
+                }
+            }
+        } else if (event.key === 'ArrowLeft') {
+            event.preventDefault();
+            const prevIndex = currentIndex - 1;
+            if (prevIndex >= 0) {
+                inputs[prevIndex].focus();
+                inputs[prevIndex].select();
+            }
+        } else if (event.key === 'Enter') {
+            event.preventDefault();
             const nextIndex = currentIndex + 1;
-            
             if (nextIndex < inputs.length) {
                 inputs[nextIndex].focus();
                 inputs[nextIndex].select();
             }
         } else if (event.key === 'Tab' && !event.shiftKey) {
             event.preventDefault();
-            const inputs = document.querySelectorAll('.mark-input');
-            const currentIndex = rowIndex * exam.subjects.length + colIndex;
             const nextIndex = currentIndex + 1;
-            
             if (nextIndex < inputs.length) {
                 inputs[nextIndex].focus();
                 inputs[nextIndex].select();
             }
         } else if (event.key === 'Tab' && event.shiftKey) {
-            const inputs = document.querySelectorAll('.mark-input');
-            const currentIndex = rowIndex * exam.subjects.length + colIndex;
+            event.preventDefault();
             const prevIndex = currentIndex - 1;
-            
             if (prevIndex >= 0) {
-                event.preventDefault();
                 inputs[prevIndex].focus();
                 inputs[prevIndex].select();
             }
         }
     };
     
-    // ============================================
-    // 6. SAVE ALL MARKS
+    window.handleRemarksNavigation = (event, rowIndex) => {
+        const remarksInputs = document.querySelectorAll('.remarks-input');
+        const markInputs = document.querySelectorAll('.mark-input');
+
+        if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            const prevIndex = rowIndex - 1;
+            if (prevIndex >= 0) {
+                remarksInputs[prevIndex].focus();
+                remarksInputs[prevIndex].select();
+            }
+        } else if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            const nextIndex = rowIndex + 1;
+            if (nextIndex < remarksInputs.length) {
+                remarksInputs[nextIndex].focus();
+                remarksInputs[nextIndex].select();
+            }
+        } else if (event.key === 'ArrowLeft' && event.target.selectionStart === 0 && event.target.selectionEnd === 0) {
+            event.preventDefault();
+            // last subject of same row
+            const lastMarkIndex = (rowIndex + 1) * exam.subjects.length - 1;
+            if (lastMarkIndex >= 0 && lastMarkIndex < markInputs.length) {
+                markInputs[lastMarkIndex].focus();
+                markInputs[lastMarkIndex].select();
+            }
+        } else if (event.key === 'Tab' && event.shiftKey) {
+            event.preventDefault();
+            const lastMarkIndex = (rowIndex + 1) * exam.subjects.length - 1;
+            if (lastMarkIndex >= 0 && lastMarkIndex < markInputs.length) {
+                markInputs[lastMarkIndex].focus();
+                markInputs[lastMarkIndex].select();
+            }
+        } else if (event.key === 'Enter' || (event.key === 'Tab' && !event.shiftKey)) {
+            event.preventDefault();
+            const nextIndex = rowIndex + 1;
+            if (nextIndex < remarksInputs.length) {
+                remarksInputs[nextIndex].focus();
+                remarksInputs[nextIndex].select();
+            }
+        }
+    };
     // ============================================
     window.saveAllMarks = async () => {
         const params = new URLSearchParams(window.location.search);

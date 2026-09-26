@@ -6,6 +6,7 @@ const API = window.API_BASE || '';
 
 // ── State ──────────────────────────────────────────────────
 let allBooks       = [];
+let inactiveBooks  = [];
 let allSales       = [];
 let cart           = [];           // [{book, qty, unitPrice, discount}]
 let selectedMethod = 'Cash';
@@ -132,9 +133,13 @@ function setText(id, val) {
 // ══════════════════════════════════════════════════════════════
 async function loadBooks() {
     try {
-        const res  = await fetch(`${API}/api/books?isActive=true`);
-        const data = await res.json();
-        if (data.success) allBooks = data.books || [];
+        const [activeRes, inactiveRes] = await Promise.all([
+            fetch(`${API}/api/books?isActive=true`, { cache: 'no-store' }),
+            fetch(`${API}/api/books?isActive=false`, { cache: 'no-store' })
+        ]);
+        const [activeData, inactiveData] = await Promise.all([activeRes.json(), inactiveRes.json()]);
+        if (activeData.success) allBooks = activeData.books || [];
+        if (inactiveData.success) inactiveBooks = inactiveData.books || [];
     } catch (e) { console.error('loadBooks error:', e); }
 }
 
@@ -143,9 +148,11 @@ function renderInventoryTable() {
     const status = document.getElementById('invStatusFilter')?.value || 'all';
     const search = (document.getElementById('invSearch')?.value || '').toLowerCase();
 
-    let books = allBooks.filter(b => {
+    const showInactive = status === 'inactive';
+    const inventoryBooks = showInactive ? inactiveBooks : allBooks;
+    let books = inventoryBooks.filter(b => {
         if (cat    !== 'all' && b.category !== cat)    return false;
-        if (status !== 'all' && b.status   !== status) return false;
+        if (!showInactive && status !== 'all' && b.status !== status) return false;
         if (search && !`${b.title} ${b.author} ${b.bookId}`.toLowerCase().includes(search)) return false;
         return true;
     });
@@ -179,18 +186,51 @@ function renderInventoryTable() {
                 <span style="font-weight:700;color:${b.stockCurrent <= b.lowStockAlert ? '#e74a3b' : '#2c3e50'}">${b.stockCurrent}</span>
                 <span style="font-size:11px;color:#6c757d"> / ${b.stockIn} in</span>
             </td>
-            <td>${statusBadge}</td>
+            <td>${showInactive ? '<span class="bs-badge bs-badge-out">Inactive</span>' : statusBadge}</td>
             <td>
-                <button class="btn btn-warning btn-sm" onclick="openAddStockModal('${b.bookId}','${b.title.replace(/'/g,"\\'")}')">
+                ${showInactive ? '' : `<button class="btn btn-warning btn-sm" onclick="openAddStockModal('${b.bookId}','${b.title.replace(/'/g,"\\'")}')">
                     <i class="fas fa-plus"></i> Stock
                 </button>
                 <button class="btn btn-secondary btn-sm" onclick="openEditModal('${b.bookId}')">
                     <i class="fas fa-edit"></i>
+                </button>`}
+                <button class="btn btn-danger btn-sm" onclick="deleteBook('${b.bookId}')" title="বই ও সম্পর্কিত বিক্রির রেকর্ড মুছুন" aria-label="${b.title} বই মুছুন">
+                    <i class="fas fa-trash"></i>
                 </button>
             </td>
         </tr>`;
     }).join('');
 }
+
+async function deleteBook(bookId) {
+    const book = [...allBooks, ...inactiveBooks].find(item => item.bookId === bookId);
+    if (!book) return;
+
+    const confirmed = window.confirm(
+        `“${book.title}” বইটি স্থায়ীভাবে মুছে ফেলবেন?\n\n` +
+        'এই বইয়ের বিক্রির রেকর্ড ও রিপোর্ট থেকে বইয়ের আইটেম সরানো হবে। অন্য বই থাকা একই বিক্রির রসিদে শুধু এই বইটি বাদ যাবে। এই কাজটি ফিরিয়ে আনা যাবে না।'
+    );
+    if (!confirmed) return;
+
+    try {
+        const response = await fetch(`${API}/api/books/${encodeURIComponent(bookId)}`, { method: 'DELETE', cache: 'no-store' });
+        const result = await response.json();
+        if (!response.ok || !result.success) throw new Error(result.message || 'বই মুছতে পারেনি');
+        if (typeof result.removedSaleItems !== 'number') {
+            throw new Error('Delete API-র নতুন সংস্করণ চালু নেই। Backend restart/deploy করে আবার চেষ্টা করুন।');
+        }
+
+        showToast('বই ও তার সম্পর্কিত বিক্রির তথ্য মুছে ফেলা হয়েছে');
+        await Promise.all([loadBooks(), loadSales()]);
+        renderInventoryTable();
+        loadSummaryCards();
+    } catch (error) {
+        console.error('deleteBook error:', error);
+        showToast(error.message || 'বই মুছতে সমস্যা হয়েছে', 'error');
+    }
+}
+
+window.deleteBook = deleteBook;
 
 function applyInventoryFilter() {
     renderInventoryTable();
@@ -860,7 +900,7 @@ function printReceipt() {
 // ══════════════════════════════════════════════════════════════
 async function loadSales() {
     try {
-        const res  = await fetch(`${API}/api/book-sales?limit=1000`);
+        const res  = await fetch(`${API}/api/book-sales?limit=1000&_=${Date.now()}`, { cache: 'no-store' });
         const data = await res.json();
         if (data.success) allSales = data.sales || [];
     } catch (e) { console.error('loadSales error:', e); }

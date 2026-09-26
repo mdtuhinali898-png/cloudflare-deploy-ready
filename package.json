@@ -1,11 +1,13 @@
 {
-  "name": "edusmart-backend",
+  "name": "cloudflare-deploy-ready",
   "version": "1.0.0",
-  "description": "EduSmart Student Management System Backend",
+  "description": "EduSmart SMS deployed on Cloudflare Workers",
   "main": "backend/server.js",
   "scripts": {
     "start": "node backend/server.js",
     "dev": "nodemon backend/server.js",
+    "dev:worker": "npx --yes wrangler@4.135.0 dev --config wrangler.toml",
+    "deploy": "npx --yes wrangler@4.135.0 deploy --config wrangler.toml",
     "seed": "node backend/seed-expense-categories.js"
   },
   "dependencies": {

@@ -50,7 +50,7 @@ function getDueData() {
         let expected = 0, paid = 0, dueMonths = 0;
         for (let offset = 0; offset < 12; offset++) {
             const date = new Date(now.getFullYear(), now.getMonth() - offset, 1);
-            const monthlyPaid = allPayments.filter(payment => payment.studentId === studentKey(student) && payment.month === months[date.getMonth()] && Number(payment.year) === date.getFullYear()).reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+            const monthlyPaid = allPayments.filter(payment => payment.studentId === studentKey(student) && payment.type !== 'Admission' && payment.month === months[date.getMonth()] && Number(payment.year) === date.getFullYear()).reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
             expected += fee; paid += monthlyPaid;
             if (monthlyPaid < fee) dueMonths++;
         }

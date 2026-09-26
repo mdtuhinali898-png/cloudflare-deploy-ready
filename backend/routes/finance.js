@@ -1,10 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const Expense = require('../models/Expense');
-const Payment = require('../models/Payment');
-const Student = require('../models/Student');
+const supabase = require('../config/supabase');
 
-// ─── Helper: Date Range ───────────────────────────────────────────────────────
 function getDateRange(query) {
     const { period, startDate, endDate } = query;
     const now  = new Date();
@@ -29,6 +26,56 @@ function getDateRange(query) {
     return { fromDate, toDate };
 }
 
+async function getActiveBookIncomes({ fromDate, toDate, month, year } = {}) {
+    let query = supabase
+        .from('incomes')
+        .select('income_id, source, amount, date, month, year, payment_method, description, received_from, created_at')
+        .eq('source', 'Books')
+        .eq('status', 'Active');
+    if (fromDate) query = query.gte('date', fromDate);
+    if (toDate) query = query.lte('date', toDate);
+    if (month) query = query.eq('month', month);
+    if (year) query = query.eq('year', year);
+    const { data, error } = await query;
+    if (error) throw error;
+    return data || [];
+}
+
+function formatBookIncomeForPrint(income) {
+    return {
+        receiptNo: (income.description || '').replace(/^Book Sale:\s*/i, '') || income.income_id,
+        date: income.date,
+        studentName: income.received_from || 'Book Sale',
+        month: income.month,
+        year: income.year,
+        paymentMethod: income.payment_method || 'Cash',
+        payment_method: income.payment_method || 'Cash',
+        amount: Number(income.amount || 0),
+        source: 'Books'
+    };
+}
+
+let paymentsCache = { data: null, expiry: 0 };
+async function getAllPayments(selectCols = 'student_id, student_name, amount, date, month, year, payment_method, type, created_at') {
+    if (paymentsCache.data && Date.now() < paymentsCache.expiry) {
+        return paymentsCache.data;
+    }
+    const { count, error: countErr } = await supabase.from('payments').select('*', { count: 'exact', head: true });
+    if (countErr) throw countErr;
+    const numPages = Math.ceil((count || 0) / 1000) || 1;
+    const res = await Promise.all(
+        Array.from({ length: numPages }, (_, i) =>
+            supabase.from('payments')
+                .select(selectCols)
+                .order('created_at', { ascending: false })
+                .range(i * 1000, (i + 1) * 1000 - 1)
+        )
+    );
+    const data = res.flatMap(r => r.data || []);
+    paymentsCache = { data, expiry: Date.now() + 15000 };
+    return data;
+}
+
 // ─── GET /api/finance/overview ────────────────────────────────────────────────
 router.get('/overview', async (req, res) => {
     try {
@@ -38,40 +85,56 @@ router.get('/overview', async (req, res) => {
         const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate()-7);
         const weekAgoStr = weekAgo.toISOString().split('T')[0];
 
-        const [payAgg, expAgg] = await Promise.all([
-            Payment.aggregate([{ $facet: {
-                today:   [{ $match: { date: today } },                                              { $group: { _id: null, t: { $sum: '$amount' } } }],
-                month:   [{ $match: { month: currentMonthName, year: currentYear } },               { $group: { _id: null, t: { $sum: '$amount' } } }],
-                week:    [{ $match: { date: { $gte: weekAgoStr, $lte: today } } },                  { $group: { _id: null, t: { $sum: '$amount' } } }],
-                year:    [{ $match: { year: currentYear } },                                        { $group: { _id: null, t: { $sum: '$amount' } } }],
-                allTime: [{ $group: { _id: null, t: { $sum: '$amount' } } }],
-                byType:  [{ $group: { _id: '$type', t: { $sum: '$amount' } } }]
-            }}]),
-            Expense.aggregate([{ $facet: {
-                today:   [{ $match: { date: today, status: 'Approved' } },                                            { $group: { _id: null, t: { $sum: '$amount' } } }],
-                month:   [{ $match: { month: currentMonthName, year: currentYear, status: 'Approved' } },             { $group: { _id: null, t: { $sum: '$amount' } } }],
-                week:    [{ $match: { date: { $gte: weekAgoStr, $lte: today }, status: 'Approved' } },                { $group: { _id: null, t: { $sum: '$amount' } } }],
-                year:    [{ $match: { year: currentYear, status: 'Approved' } },                                      { $group: { _id: null, t: { $sum: '$amount' } } }],
-                allTime: [{ $match: { status: 'Approved' } },                                                         { $group: { _id: null, t: { $sum: '$amount' } } }]
-            }}])
+        const [
+            allPayments,
+            { data: allExpenses },
+            allBookIncomes
+        ] = await Promise.all([
+            getAllPayments('student_id, student_name, amount, date, month, year, payment_method, type, created_at'),
+            supabase.from('expenses').select('amount, date, month, year, status').eq('status', 'Approved'),
+            getActiveBookIncomes()
         ]);
 
-        const pa = payAgg[0], ea = expAgg[0];
-        const g = (facet) => facet[0]?.t || 0;
-
-        const todayC = g(pa.today), todayE = g(ea.today);
-        const monthC = g(pa.month), monthE = g(ea.month);
-        const weekC  = g(pa.week),  weekE  = g(ea.week);
-        const yearC  = g(pa.year),  yearE  = g(ea.year);
-        const totC   = g(pa.allTime), totE = g(ea.allTime);
-
+        let todayC = 0, todayE = 0;
+        let monthC = 0, monthE = 0;
+        let weekC = 0, weekE = 0;
+        let yearC = 0, yearE = 0;
+        let totC = 0, totE = 0;
         const incomeBySource = {};
-        (pa.byType||[]).forEach(s => {
-            const lbl = s._id === 'Admission' ? 'Admission Fee' : 'Monthly Student Fee';
-            incomeBySource[lbl] = (incomeBySource[lbl]||0) + s.t;
+
+        (allPayments || []).forEach(p => {
+            const amt = Number(p.amount || 0);
+            totC += amt;
+            if (p.date === today) todayC += amt;
+            if (p.date >= weekAgoStr && p.date <= today) weekC += amt;
+            if (p.month === currentMonthName && Number(p.year) === currentYear) monthC += amt;
+            if (Number(p.year) === currentYear) yearC += amt;
+
+            const lbl = p.type === 'Admission' ? 'Admission Fee' : 'Monthly Student Fee';
+            incomeBySource[lbl] = (incomeBySource[lbl] || 0) + amt;
         });
 
-        res.json({ success: true,
+        allBookIncomes.forEach(income => {
+            const amt = Number(income.amount || 0);
+            totC += amt;
+            if (income.date === today) todayC += amt;
+            if (income.date >= weekAgoStr && income.date <= today) weekC += amt;
+            if (income.month === currentMonthName && Number(income.year) === currentYear) monthC += amt;
+            if (Number(income.year) === currentYear) yearC += amt;
+            incomeBySource[income.source] = (incomeBySource[income.source] || 0) + amt;
+        });
+
+        (allExpenses || []).forEach(e => {
+            const amt = Number(e.amount || 0);
+            totE += amt;
+            if (e.date === today) todayE += amt;
+            if (e.date >= weekAgoStr && e.date <= today) weekE += amt;
+            if (e.month === currentMonthName && Number(e.year) === currentYear) monthE += amt;
+            if (Number(e.year) === currentYear) yearE += amt;
+        });
+
+        res.json({
+            success: true,
             today:   { collection: todayC, expense: todayE, net: todayC-todayE, netType: todayC-todayE>=0?'Profit':'Loss' },
             weekly:  { collection: weekC,  expense: weekE,  net: weekC-weekE,   netType: weekC-weekE>=0?'Profit':'Loss'  },
             monthly: { collection: monthC, expense: monthE, net: monthC-monthE, netType: monthC-monthE>=0?'Profit':'Loss'},
@@ -86,7 +149,6 @@ router.get('/overview', async (req, res) => {
 });
 
 // ─── GET /api/finance/dashboard ──────────────────────────────────────────────
-// Optimized: 18 separate queries → 3 aggregations
 router.get('/dashboard', async (req, res) => {
     try {
         const { period, startDate, endDate, month } = req.query;
@@ -97,142 +159,189 @@ router.get('/dashboard', async (req, res) => {
         const today = new Date().toISOString().split('T')[0];
         const selectedMonth = month || '';
 
-        // ── 1. Single $facet aggregation for all payment stats ────────────────
-        const [payAgg, expAgg] = await Promise.all([
-            Payment.aggregate([{ $facet: {
-                byRange:  [{ $match: { date: { $gte: fromDate, $lte: toDate } } },
-                            { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } }],
-                today:    [{ $match: { date: today } },
-                            { $group: { _id: null, total: { $sum: '$amount' } } }],
-                month:    [{ $match: { month: currentMonthName, year: currentYear } },
-                            { $group: { _id: null, total: { $sum: '$amount' } } }],
-                allTime:  [{ $group: { _id: null, total: { $sum: '$amount' } } }],
-                recent:   [{ $sort: { createdAt: -1 } }, { $limit: 5 }],
-                byMethod: [{ $group: { _id: '$paymentMethod', total: { $sum: '$amount' } } }],
-                byType:   [{ $group: { _id: '$type',          total: { $sum: '$amount' } } }]
-            }}]),
-            Expense.aggregate([{ $facet: {
-                byRange:  [{ $match: { date: { $gte: fromDate, $lte: toDate }, status: 'Approved' } },
-                            { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } }],
-                today:    [{ $match: { date: today, status: 'Approved' } },
-                            { $group: { _id: null, total: { $sum: '$amount' } } }],
-                month:    [{ $match: { month: currentMonthName, year: currentYear, status: 'Approved' } },
-                            { $group: { _id: null, total: { $sum: '$amount' } } }],
-                allTime:  [{ $match: { status: 'Approved' } },
-                            { $group: { _id: null, total: { $sum: '$amount' } } }],
-                recent:   [{ $sort: { createdAt: -1 } }, { $limit: 5 }],
-                byMethod: [{ $match: { status: 'Approved' } },
-                            { $group: { _id: '$paymentMethod', total: { $sum: '$amount' } } }],
-                incSrc:   [{ $match: { incomeSource: { $ne: '' }, status: 'Approved' } },
-                            { $group: { _id: '$incomeSource', total: { $sum: '$amount' } } }]
-            }}])
+        const [
+            allPayments,
+            { data: allExpenses },
+            { data: activeStudents },
+            allBookIncomes
+        ] = await Promise.all([
+            getAllPayments('student_id, student_name, amount, date, month, year, payment_method, type, created_at'),
+            supabase.from('expenses').select('expense_id, category, amount, date, month, year, payment_method, status, income_source, created_at').eq('status', 'Approved'),
+            supabase.from('students').select('student_id, name, phone, batch, fee').eq('status', 'Active'),
+            getActiveBookIncomes()
         ]);
 
-        const pa = payAgg[0], ea = expAgg[0];
-        const g = f => f[0]?.total || 0;
+        let rangeIncome = 0, rangePaymentCount = 0;
+        let rangeExpense = 0, rangeExpenseCount = 0;
+        let todayCollection = 0, todayExpense = 0;
+        let monthlyCollection = 0, monthlyExpense = 0;
+        let totalCollection = 0, totalExpense = 0;
 
-        const rangeIncome       = g(pa.byRange),  rangePaymentCount = pa.byRange[0]?.count || 0;
-        const rangeExpense      = g(ea.byRange),  rangeExpenseCount = ea.byRange[0]?.count || 0;
-        const todayCollection   = g(pa.today),    todayExpense      = g(ea.today);
-        const monthlyCollection = g(pa.month),    monthlyExpense    = g(ea.month);
-        const totalCollection   = g(pa.allTime),  totalExpense      = g(ea.allTime);
-
-        const recentPayments = pa.recent || [];
-        const recentExpenses = ea.recent || [];
-
-        // ── 2. Balance by payment method ──────────────────────────────────────
         const payM = {}, expM = {};
-        (pa.byMethod||[]).forEach(r => { payM[r._id] = r.total; });
-        (ea.byMethod||[]).forEach(r => { expM[r._id] = r.total; });
+        const incomeBySource = {};
+        const pMap = {};
 
-        const gP = (...m) => m.reduce((s,x) => s+(payM[x]||0), 0);
-        const gE = (...m) => m.reduce((s,x) => s+(expM[x]||0), 0);
+        (allPayments || []).forEach(p => {
+            const amt = Number(p.amount || 0);
+            totalCollection += amt;
 
-        const cashInHand   = gP('Cash')                             - gE('Cash');
-        const bankBalance  = gP('Bank Transfer','Bank','Cheque')    - gE('Bank','Cheque');
-        const bKashBalance = gP('bKash')                            - gE('bKash');
-        const nagadBalance = gP('Nagad')                            - gE('Nagad');
-        const otherBalance = gP('Rocket','Card')                    - gE('Rocket','Card');
+            if (p.date >= fromDate && p.date <= toDate) {
+                rangeIncome += amt;
+                rangePaymentCount++;
+            }
+            if (p.date === today) todayCollection += amt;
+            if (p.month === currentMonthName && Number(p.year) === currentYear) monthlyCollection += amt;
+
+            const m = p.payment_method || 'Cash';
+            payM[m] = (payM[m] || 0) + amt;
+
+            const lbl = p.type === 'Admission' ? 'Admission Fee' : 'Monthly Student Fee';
+            incomeBySource[lbl] = (incomeBySource[lbl] || 0) + amt;
+
+            if (Number(p.year) === currentYear && p.type !== 'Admission') {
+                if (!pMap[p.student_id]) pMap[p.student_id] = {};
+                pMap[p.student_id][p.month] = (pMap[p.student_id][p.month] || 0) + amt;
+            }
+        });
+
+        allBookIncomes.forEach(income => {
+            const amt = Number(income.amount || 0);
+            totalCollection += amt;
+            if (income.date >= fromDate && income.date <= toDate) {
+                rangeIncome += amt;
+                rangePaymentCount++;
+            }
+            if (income.date === today) todayCollection += amt;
+            if (income.month === currentMonthName && Number(income.year) === currentYear) monthlyCollection += amt;
+
+            const method = income.payment_method || 'Cash';
+            payM[method] = (payM[method] || 0) + amt;
+            incomeBySource[income.source] = (incomeBySource[income.source] || 0) + amt;
+        });
+
+        (allExpenses || []).forEach(e => {
+            const amt = Number(e.amount || 0);
+            totalExpense += amt;
+
+            if (e.date >= fromDate && e.date <= toDate) {
+                rangeExpense += amt;
+                rangeExpenseCount++;
+            }
+            if (e.date === today) todayExpense += amt;
+            if (e.month === currentMonthName && Number(e.year) === currentYear) monthlyExpense += amt;
+
+            const m = e.payment_method || 'Cash';
+            expM[m] = (expM[m] || 0) + amt;
+
+            if (e.income_source) {
+                incomeBySource[e.income_source] = (incomeBySource[e.income_source] || 0) + amt;
+            }
+        });
+
+        const gP = (...methods) => methods.reduce((s, x) => s + (payM[x] || 0), 0);
+        const gE = (...methods) => methods.reduce((s, x) => s + (expM[x] || 0), 0);
+
+        const cashInHand   = gP('Cash') - gE('Cash');
+        const bankBalance  = gP('Bank Transfer','Bank','Cheque') - gE('Bank','Cheque');
+        const bKashBalance = gP('bKash') - gE('bKash');
+        const nagadBalance = gP('Nagad') - gE('Nagad');
+        const otherBalance = gP('Rocket','Card') - gE('Rocket','Card');
         const totalAvailableBalance = cashInHand + bankBalance + bKashBalance + nagadBalance + otherBalance;
 
-        // ── 3. Income by source ───────────────────────────────────────────────
-        const incomeBySource = {};
-        (pa.byType||[]).forEach(s => {
-            const lbl = s._id === 'Admission' ? 'Admission Fee' : 'Monthly Student Fee';
-            incomeBySource[lbl] = (incomeBySource[lbl]||0) + s.total;
-        });
-        (ea.incSrc||[]).forEach(s => {
-            if (s._id) incomeBySource[s._id] = (incomeBySource[s._id]||0) + s.total;
-        });
-
-        // ── 4. Due summary (month-wise: Jan → current month, or selected month) ──
-        const currentMonthIndex = new Date().getMonth(); // 0-based (Jan=0)
+        // Due summary
+        const currentMonthIndex = new Date().getMonth();
         const monthNames = ['January','February','March','April','May','June',
                             'July','August','September','October','November','December'];
         const monthsElapsed = monthNames.slice(0, currentMonthIndex + 1);
         const targetMonths = selectedMonth ? [selectedMonth] : monthsElapsed;
 
-        const [activeStudents, allYearPayments] = await Promise.all([
-            Student.find({ status: 'Active' }).select('studentId name phone batch fee').lean(),
-            Payment.find({ year: currentYear }).select('studentId amount month year').lean()
-        ]);
-
-        // Map: studentId → { monthName: totalPaid }
-        const pMap = {};
-        allYearPayments.forEach(p => {
-            if (!pMap[p.studentId]) pMap[p.studentId] = {};
-            pMap[p.studentId][p.month] = (pMap[p.studentId][p.month] || 0) + (p.amount || 0);
-        });
-
         let totalOutstandingFee = 0;
         const studentWiseDue = [];
-        const batchWiseDue   = {};
+        const batchWiseDue = {};
 
-        activeStudents.forEach(s => {
-            const fee = s.fee || 0;
+        (activeStudents || []).forEach(s => {
+            const fee = Number(s.fee || 0);
             if (fee <= 0) return;
-            const sPays = pMap[s.studentId] || {};
+            const sPays = pMap[s.student_id] || {};
 
             let due = 0;
             const unpaidMonths = [];
             targetMonths.forEach(m => {
                 const paid = sPays[m] || 0;
                 if (paid === 0) {
-                    const monthDue = fee - paid;
-                    due += monthDue;
-                    unpaidMonths.push({ month: m, due: monthDue });
+                    due += fee;
+                    unpaidMonths.push({ month: m, due: fee });
                 }
             });
 
             if (due > 0) {
                 totalOutstandingFee += due;
-                studentWiseDue.push({ studentId: s.studentId, name: s.name, phone: s.phone, batch: s.batch, fee, due, unpaidMonths });
+                studentWiseDue.push({ studentId: s.student_id, name: s.name, phone: s.phone, batch: s.batch, fee, due, unpaidMonths });
                 if (!batchWiseDue[s.batch]) batchWiseDue[s.batch] = { total: 0, count: 0 };
                 batchWiseDue[s.batch].total += due;
                 batchWiseDue[s.batch].count += 1;
             }
         });
+
         studentWiseDue.sort((a,b) => b.due - a.due);
-        const topDueStudents = studentWiseDue.slice(0,5);
-        const overdueCount   = studentWiseDue.length;
-        const todayExpectedCollection = studentWiseDue.slice(0,20).reduce((s,x) => s+x.fee, 0);
-        const batchWiseDueArray = Object.entries(batchWiseDue).map(([batch,d]) => ({ batch, total: d.total, count: d.count }));
+        const topDueStudents = studentWiseDue.slice(0, 5);
+        const overdueCount = studentWiseDue.length;
+        const todayExpectedCollection = studentWiseDue.slice(0, 20).reduce((s, x) => s + x.fee, 0);
+        const batchWiseDueArray = Object.entries(batchWiseDue).map(([batch, d]) => ({ batch, total: d.total, count: d.count }));
+
+        // Recent items
+        const recentPayments = (allPayments || [])
+            .sort((a,b) => new Date(b.created_at) - new Date(a.created_at))
+            .slice(0, 5)
+            .map(p => ({
+                studentId: p.student_id,
+                studentName: p.student_name,
+                amount: p.amount,
+                date: p.date,
+                paymentMethod: p.payment_method,
+                createdAt: p.created_at
+            }));
+
+        const recentBookIncomes = allBookIncomes.map(income => ({
+            studentName: income.received_from || 'Book Sale',
+            receiptNo: (income.description || '').replace(/^Book Sale:\s*/i, '') || income.income_id,
+            amount: Number(income.amount || 0),
+            date: income.date,
+            paymentMethod: income.payment_method,
+            createdAt: income.created_at
+        }));
+        const recentIncome = [...recentPayments, ...recentBookIncomes]
+            .sort((a, b) => new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date))
+            .slice(0, 5);
+
+        const recentExpenses = (allExpenses || [])
+            .sort((a,b) => new Date(b.created_at) - new Date(a.created_at))
+            .slice(0, 5)
+            .map(e => ({
+                expenseId: e.expense_id,
+                category: e.category,
+                amount: e.amount,
+                date: e.date,
+                paymentMethod: e.payment_method
+            }));
 
         res.json({
             success: true,
-            range: { fromDate, toDate, income: rangeIncome, expense: rangeExpense,
-                     net: rangeIncome-rangeExpense, netType: rangeIncome-rangeExpense>=0?'Profit':'Loss',
-                     paymentCount: rangePaymentCount, expenseCount: rangeExpenseCount },
-            todayCollection, todayExpense, todayNet: todayCollection-todayExpense,
-            todayNetType: todayCollection-todayExpense>=0?'Profit':'Loss',
-            monthlyCollection, monthlyExpense, monthlyNet: monthlyCollection-monthlyExpense,
-            monthlyNetType: monthlyCollection-monthlyExpense>=0?'Profit':'Loss',
-            totalCollection, totalExpense, totalNet: totalCollection-totalExpense,
-            totalNetType: totalCollection-totalExpense>=0?'Profit':'Loss',
+            range: {
+                fromDate, toDate, income: rangeIncome, expense: rangeExpense,
+                net: rangeIncome - rangeExpense, netType: rangeIncome - rangeExpense >= 0 ? 'Profit' : 'Loss',
+                paymentCount: rangePaymentCount, expenseCount: rangeExpenseCount
+            },
+            todayCollection, todayExpense, todayNet: todayCollection - todayExpense,
+            todayNetType: todayCollection - todayExpense >= 0 ? 'Profit' : 'Loss',
+            monthlyCollection, monthlyExpense, monthlyNet: monthlyCollection - monthlyExpense,
+            monthlyNetType: monthlyCollection - monthlyExpense >= 0 ? 'Profit' : 'Loss',
+            totalCollection, totalExpense, totalNet: totalCollection - totalExpense,
+            totalNetType: totalCollection - totalExpense >= 0 ? 'Profit' : 'Loss',
             balances: { cashInHand, bankBalance, bKashBalance, nagadBalance, otherBalance, totalAvailableBalance },
             incomeBySource,
             dueSummary: { totalOutstandingFee, todayExpectedCollection, overdueCount, totalStudentsWithDue: overdueCount, topDueStudents, batchWiseDue: batchWiseDueArray },
-            recentExpenses, recentPayments
+            recentExpenses, recentPayments: recentIncome
         });
     } catch (err) {
         console.error('dashboard error:', err);
@@ -241,94 +350,111 @@ router.get('/dashboard', async (req, res) => {
 });
 
 // ─── GET /api/finance/graph-data ─────────────────────────────────────────────
-// Optimized: 37 loops (74 queries) → 4 aggregations
 router.get('/graph-data', async (req, res) => {
     try {
         const currentYear = new Date().getFullYear();
         const months = ['January','February','March','April','May','June',
                         'July','August','September','October','November','December'];
 
-        // All 4 heavy queries in parallel
-        const [payMonthly, expMonthly, categoryData, methodData, payTrend, expTrend] = await Promise.all([
-            // Monthly totals for the year — single aggregation
-            Payment.aggregate([
-                { $match: { year: currentYear } },
-                { $group: { _id: '$month', total: { $sum: '$amount' } } }
-            ]),
-            Expense.aggregate([
-                { $match: { year: currentYear, status: 'Approved' } },
-                { $group: { _id: '$month', total: { $sum: '$amount' } } }
-            ]),
-            // Category pie
-            Expense.aggregate([
-                { $match: { year: currentYear, status: 'Approved' } },
-                { $group: { _id: '$category', total: { $sum: '$amount' } } },
-                { $sort:  { total: -1 } }
-            ]),
-            // Method breakdown
-            Payment.aggregate([
-                { $group: { _id: '$paymentMethod', total: { $sum: '$amount' }, count: { $sum: 1 } } }
-            ]),
-            // Trend: last 30 days — single query, group by date
-            Payment.aggregate([
-                { $match: { date: { $gte: (() => { const d=new Date(); d.setDate(d.getDate()-29); return d.toISOString().split('T')[0]; })() } } },
-                { $group: { _id: '$date', income: { $sum: '$amount' } } }
-            ]),
-            Expense.aggregate([
-                { $match: { date: { $gte: (() => { const d=new Date(); d.setDate(d.getDate()-29); return d.toISOString().split('T')[0]; })() }, status: 'Approved' } },
-                { $group: { _id: '$date', expense: { $sum: '$amount' } } }
-            ])
+        const allPayments = await getAllPayments('month, amount, payment_method, date, type, year');
+        const [
+            { data: yearExpenses },
+            { data: allExpenses },
+            allBookIncomes
+        ] = await Promise.all([
+            supabase.from('expenses').select('month, amount, category, date').eq('year', currentYear).eq('status', 'Approved'),
+            supabase.from('expenses').select('payment_method, amount, date').eq('status', 'Approved'),
+            getActiveBookIncomes()
         ]);
+        const yearPayments = allPayments.filter(p => Number(p.year) === currentYear);
 
-        // Build monthly data map
         const payMap = {}, expMap = {};
-        payMonthly.forEach(r => { payMap[r._id] = r.total; });
-        expMonthly.forEach(r => { expMap[r._id] = r.total; });
+        const catMap = {};
+        const methodMap = {};
+        const incSrcMap = {};
+
+        (yearPayments || []).forEach(p => {
+            const amt = Number(p.amount || 0);
+            payMap[p.month] = (payMap[p.month] || 0) + amt;
+
+            const lbl = p.type === 'Admission' ? 'Admission Fee' : 'Monthly Student Fee';
+            incSrcMap[lbl] = (incSrcMap[lbl] || 0) + amt;
+        });
+
+        allBookIncomes.forEach(income => {
+            const amt = Number(income.amount || 0);
+            if (Number(income.year) === currentYear) {
+                payMap[income.month] = (payMap[income.month] || 0) + amt;
+                incSrcMap[income.source] = (incSrcMap[income.source] || 0) + amt;
+            }
+        });
+
+        (yearExpenses || []).forEach(e => {
+            const amt = Number(e.amount || 0);
+            expMap[e.month] = (expMap[e.month] || 0) + amt;
+            catMap[e.category] = (catMap[e.category] || 0) + amt;
+        });
+
+        (allPayments || []).forEach(p => {
+            const amt = Number(p.amount || 0);
+            const m = p.payment_method || 'Cash';
+            const cur = methodMap[m] || { method: m, total: 0, count: 0 };
+            cur.total += amt;
+            cur.count += 1;
+            methodMap[m] = cur;
+        });
+
+        allBookIncomes.forEach(income => {
+            const amt = Number(income.amount || 0);
+            const method = income.payment_method || 'Cash';
+            const cur = methodMap[method] || { method, total: 0, count: 0 };
+            cur.total += amt;
+            cur.count += 1;
+            methodMap[method] = cur;
+        });
 
         const monthlyData = months.map(m => ({
-            month:     m.slice(0,3),
+            month: m.slice(0,3),
             fullMonth: m,
-            income:    payMap[m] || 0,
-            expense:   expMap[m] || 0
+            income: payMap[m] || 0,
+            expense: expMap[m] || 0
         }));
 
-        // Income source (from payment type)
-        const payByType = await Payment.aggregate([
-            { $match: { year: currentYear } },
-            { $group: { _id: '$type', total: { $sum: '$amount' } } }
-        ]);
-        const incSrcMap = {};
-        payByType.forEach(s => {
-            const lbl = s._id === 'Admission' ? 'Admission Fee' : 'Monthly Student Fee';
-            incSrcMap[lbl] = (incSrcMap[lbl]||0) + s.total;
-        });
+        const categoryData = Object.entries(catMap).map(([category, total]) => ({ category, total })).sort((a,b) => b.total - a.total);
         const incomeSourceData = Object.entries(incSrcMap).map(([source, total]) => ({ source, total }));
 
-        // Build trend maps
+        // 30 days trend
         const trendPayMap = {}, trendExpMap = {};
-        payTrend.forEach(r => { trendPayMap[r._id] = r.income; });
-        expTrend.forEach(r => { trendExpMap[r._id] = r.expense; });
+        (allPayments || []).forEach(p => {
+            if (p.date) trendPayMap[p.date] = (trendPayMap[p.date] || 0) + Number(p.amount || 0);
+        });
+        allBookIncomes.forEach(income => {
+            if (income.date) trendPayMap[income.date] = (trendPayMap[income.date] || 0) + Number(income.amount || 0);
+        });
+        (allExpenses || []).forEach(e => {
+            if (e.date) trendExpMap[e.date] = (trendExpMap[e.date] || 0) + Number(e.amount || 0);
+        });
 
         const today = new Date();
         const buildTrend = (days) => Array.from({ length: days }, (_, i) => {
             const d = new Date(today);
-            d.setDate(d.getDate() - (days-1-i));
+            d.setDate(d.getDate() - (days - 1 - i));
             const ds = d.toISOString().split('T')[0];
             return {
                 date: ds,
-                income:  trendPayMap[ds] || 0,
+                income: trendPayMap[ds] || 0,
                 expense: trendExpMap[ds] || 0,
                 label: days === 7
-                    ? d.toLocaleDateString('en', { weekday:'short', day:'numeric' })
-                    : d.toLocaleDateString('en', { month:'short', day:'numeric' })
+                    ? d.toLocaleDateString('en', { weekday: 'short', day: 'numeric' })
+                    : d.toLocaleDateString('en', { month: 'short', day: 'numeric' })
             };
         });
 
         res.json({
             success: true,
             monthlyData,
-            categoryData: categoryData.map(c => ({ category: c._id, total: c.total })),
-            methodData:   methodData.map(m => ({ method: m._id, total: m.total, count: m.count })),
+            categoryData,
+            methodData: Object.values(methodMap),
             incomeSourceData,
             trend: { last7Days: buildTrend(7), last30Days: buildTrend(30) }
         });
@@ -344,23 +470,25 @@ router.get('/income-sources', async (req, res) => {
         const { period, startDate, endDate } = req.query;
         const { fromDate, toDate } = getDateRange({ period, startDate, endDate });
 
-        const [byType, incSrc] = await Promise.all([
-            Payment.aggregate([
-                { $match: { date: { $gte: fromDate, $lte: toDate } } },
-                { $group: { _id: '$type', total: { $sum: '$amount' } } }
-            ]),
-            Expense.aggregate([
-                { $match: { incomeSource: { $ne:'' }, date: { $gte: fromDate, $lte: toDate }, status: 'Approved' } },
-                { $group: { _id: '$incomeSource', total: { $sum: '$amount' } } }
-            ])
+        const [
+            { data: payments },
+            { data: expenses }
+        ] = await Promise.all([
+            supabase.from('payments').select('type, amount').gte('date', fromDate).lte('date', toDate),
+            supabase.from('expenses').select('income_source, amount').gte('date', fromDate).lte('date', toDate).eq('status', 'Approved')
         ]);
 
         const srcMap = {};
-        byType.forEach(s => {
-            const lbl = s._id === 'Admission' ? 'Admission Fee' : 'Monthly Student Fee';
-            srcMap[lbl] = (srcMap[lbl]||0) + s.total;
+        (payments || []).forEach(s => {
+            const lbl = s.type === 'Admission' ? 'Admission Fee' : 'Monthly Student Fee';
+            srcMap[lbl] = (srcMap[lbl] || 0) + Number(s.amount || 0);
         });
-        incSrc.forEach(s => { if (s._id) srcMap[s._id] = (srcMap[s._id]||0) + s.total; });
+
+        (expenses || []).forEach(s => {
+            if (s.income_source) {
+                srcMap[s.income_source] = (srcMap[s.income_source] || 0) + Number(s.amount || 0);
+            }
+        });
 
         const totalIncome = Object.values(srcMap).reduce((a,b) => a+b, 0);
         res.json({
@@ -377,43 +505,40 @@ router.get('/income-sources', async (req, res) => {
 });
 
 // ─── GET /api/finance/due-summary ────────────────────────────────────────────
-// Optimized: 2 queries + in-memory calculation
-// Supports ?month=March → shows due for that specific month only
-// No month → shows cumulative due from Jan → current month
 router.get('/due-summary', async (req, res) => {
     try {
         const currentYear = new Date().getFullYear();
-        const currentMonthIndex = new Date().getMonth(); // 0-based (Jan=0)
+        const currentMonthIndex = new Date().getMonth();
         const monthNames = ['January','February','March','April','May','June',
                             'July','August','September','October','November','December'];
         const monthsElapsed = monthNames.slice(0, currentMonthIndex + 1);
 
-        // Selected month filter (optional)
         const selectedMonth = req.query.month || '';
-        const targetMonths = selectedMonth
-            ? [selectedMonth]  // only the selected month
-            : monthsElapsed;   // Jan → current month
+        const targetMonths = selectedMonth ? [selectedMonth] : monthsElapsed;
 
-        const [activeStudents, allPayments] = await Promise.all([
-            Student.find({ status: 'Active' }).select('studentId name phone batch fee').lean(),
-            Payment.find({ year: currentYear }).select('studentId amount month year').lean()
+        const [
+            { data: activeStudents },
+            allPayments
+        ] = await Promise.all([
+            supabase.from('students').select('student_id, name, phone, batch, fee').eq('status', 'Active'),
+            getAllPayments('student_id, amount, month, year, type')
         ]);
 
-        // Map: studentId → { monthName: totalPaid }
         const pMap = {};
-        allPayments.forEach(p => {
-            if (!pMap[p.studentId]) pMap[p.studentId] = {};
-            pMap[p.studentId][p.month] = (pMap[p.studentId][p.month] || 0) + (p.amount || 0);
+        (allPayments || []).forEach(p => {
+            if (p.type === 'Admission') return;
+            if (!pMap[p.student_id]) pMap[p.student_id] = {};
+            pMap[p.student_id][p.month] = (pMap[p.student_id][p.month] || 0) + Number(p.amount || 0);
         });
 
         let totalOutstandingFee = 0;
         const studentWiseDue = [];
-        const batchWiseDue   = {};
+        const batchWiseDue = {};
 
-        activeStudents.forEach(s => {
-            const fee = s.fee || 0;
+        (activeStudents || []).forEach(s => {
+            const fee = Number(s.fee || 0);
             if (fee <= 0) return;
-            const sPays = pMap[s.studentId] || {};
+            const sPays = pMap[s.student_id] || {};
 
             let due = 0;
             const unpaidMonths = [];
@@ -427,22 +552,23 @@ router.get('/due-summary', async (req, res) => {
 
             if (due > 0) {
                 totalOutstandingFee += due;
-                studentWiseDue.push({ studentId: s.studentId, name: s.name, phone: s.phone, batch: s.batch, fee, due, unpaidMonths });
-                if (!batchWiseDue[s.batch]) batchWiseDue[s.batch] = { total:0, count:0 };
+                studentWiseDue.push({ studentId: s.student_id, name: s.name, phone: s.phone, batch: s.batch, fee, due, unpaidMonths });
+                if (!batchWiseDue[s.batch]) batchWiseDue[s.batch] = { total: 0, count: 0 };
                 batchWiseDue[s.batch].total += due;
                 batchWiseDue[s.batch].count += 1;
             }
         });
-        studentWiseDue.sort((a,b) => b.due-a.due);
+
+        studentWiseDue.sort((a,b) => b.due - a.due);
 
         res.json({
             success: true,
             selectedMonth: selectedMonth || null,
             totalOutstandingFee,
-            todayExpectedCollection: studentWiseDue.slice(0,20).reduce((s,x) => s+x.fee, 0),
-            overdueCount:  studentWiseDue.length,
+            todayExpectedCollection: studentWiseDue.slice(0,20).reduce((s,x) => s + x.fee, 0),
+            overdueCount: studentWiseDue.length,
             topDueStudents: studentWiseDue.slice(0,5),
-            batchWiseDue:  Object.entries(batchWiseDue).map(([batch,d]) => ({ batch, total:d.total, count:d.count })),
+            batchWiseDue: Object.entries(batchWiseDue).map(([batch, d]) => ({ batch, total: d.total, count: d.count })),
             totalStudentsWithDue: studentWiseDue.length
         });
     } catch (err) {
@@ -454,25 +580,46 @@ router.get('/due-summary', async (req, res) => {
 // ─── GET /api/finance/balances ────────────────────────────────────────────────
 router.get('/balances', async (req, res) => {
     try {
-        const [payM, expM] = await Promise.all([
-            Payment.aggregate([{ $group: { _id:'$paymentMethod', total:{ $sum:'$amount' } } }]),
-            Expense.aggregate([{ $match:{ status:'Approved' } }, { $group:{ _id:'$paymentMethod', total:{ $sum:'$amount' } } }])
+        const [
+            payments,
+            { data: expenses }
+        ] = await Promise.all([
+            getAllPayments('payment_method, amount'),
+            supabase.from('expenses').select('payment_method, amount').eq('status', 'Approved')
         ]);
-        const pMap={}, eMap={};
-        payM.forEach(r => { pMap[r._id]=r.total; });
-        expM.forEach(r => { eMap[r._id]=r.total; });
-        const gP=(...m)=>m.reduce((s,x)=>s+(pMap[x]||0),0);
-        const gE=(...m)=>m.reduce((s,x)=>s+(eMap[x]||0),0);
-        const cashInHand   = gP('Cash')                           - gE('Cash');
-        const bankBalance  = gP('Bank Transfer','Bank','Cheque')  - gE('Bank','Cheque');
-        const bKashBalance = gP('bKash')                          - gE('bKash');
-        const nagadBalance = gP('Nagad')                          - gE('Nagad');
-        const otherBalance = gP('Rocket','Card')                  - gE('Rocket','Card');
-        res.json({ success:true, cashInHand, bankBalance, bKashBalance, nagadBalance,
-                   otherBalance, totalAvailableBalance: cashInHand+bankBalance+bKashBalance+nagadBalance+otherBalance,
-                   lastUpdated: new Date().toISOString() });
+
+        const pMap = {}, eMap = {};
+        (payments || []).forEach(p => {
+            const m = p.payment_method || 'Cash';
+            pMap[m] = (pMap[m] || 0) + Number(p.amount || 0);
+        });
+
+        (expenses || []).forEach(e => {
+            const m = e.payment_method || 'Cash';
+            eMap[m] = (eMap[m] || 0) + Number(e.amount || 0);
+        });
+
+        const gP = (...m) => m.reduce((s,x) => s + (pMap[x] || 0), 0);
+        const gE = (...m) => m.reduce((s,x) => s + (eMap[x] || 0), 0);
+
+        const cashInHand   = gP('Cash') - gE('Cash');
+        const bankBalance  = gP('Bank Transfer','Bank','Cheque') - gE('Bank','Cheque');
+        const bKashBalance = gP('bKash') - gE('bKash');
+        const nagadBalance = gP('Nagad') - gE('Nagad');
+        const otherBalance = gP('Rocket','Card') - gE('Rocket','Card');
+
+        res.json({
+            success: true,
+            cashInHand,
+            bankBalance,
+            bKashBalance,
+            nagadBalance,
+            otherBalance,
+            totalAvailableBalance: cashInHand + bankBalance + bKashBalance + nagadBalance + otherBalance,
+            lastUpdated: new Date().toISOString()
+        });
     } catch (err) {
-        res.status(500).json({ success:false, message: err.message });
+        res.status(500).json({ success: false, message: err.message });
     }
 });
 
@@ -480,80 +627,184 @@ router.get('/balances', async (req, res) => {
 router.get('/reports/daily-summary', async (req, res) => {
     try {
         const targetDate = req.query.date || new Date().toISOString().split('T')[0];
-        const [payments, expenses] = await Promise.all([
-            Payment.find({ date: targetDate }),
-            Expense.find({ date: targetDate, status: 'Approved' })
+        const [
+            { data: payments },
+            { data: expenses },
+            bookIncomes
+        ] = await Promise.all([
+            supabase.from('payments').select('*').eq('date', targetDate),
+            supabase.from('expenses').select('*').eq('date', targetDate).eq('status', 'Approved'),
+            getActiveBookIncomes({ fromDate: targetDate, toDate: targetDate })
         ]);
-        const totalCollection = payments.reduce((s,p)=>s+p.amount,0);
-        const totalExpense    = expenses.reduce((s,e)=>s+e.amount,0);
+
+        const reportPayments = [...(payments || []), ...bookIncomes.map(formatBookIncomeForPrint)];
+        const totalCollection = reportPayments.reduce((s,p) => s + Number(p.amount || 0), 0);
+        const totalExpense    = (expenses || []).reduce((s,e) => s + Number(e.amount || 0), 0);
         const net = totalCollection - totalExpense;
-        const collectionByMethod={}, expenseByCategory={};
-        payments.forEach(p=>{ collectionByMethod[p.paymentMethod]=(collectionByMethod[p.paymentMethod]||0)+p.amount; });
-        expenses.forEach(e=>{ expenseByCategory[e.category]=(expenseByCategory[e.category]||0)+e.amount; });
-        res.json({ success:true, date:targetDate, totalCollection, totalExpense, net, netType:net>=0?'Profit':'Loss',
-                   totalStudents:payments.length, totalExpenseEntries:expenses.length,
-                   collectionByMethod, expenseByCategory, payments, expenses });
-    } catch (err) { res.status(500).json({ success:false, message:err.message }); }
+
+        const collectionByMethod = {}, expenseByCategory = {};
+        reportPayments.forEach(p => {
+            const m = p.payment_method || 'Cash';
+            collectionByMethod[m] = (collectionByMethod[m] || 0) + Number(p.amount || 0);
+        });
+        (expenses || []).forEach(e => {
+            expenseByCategory[e.category] = (expenseByCategory[e.category] || 0) + Number(e.amount || 0);
+        });
+
+        res.json({
+            success: true,
+            date: targetDate,
+            totalCollection,
+            totalExpense,
+            net,
+            netType: net >= 0 ? 'Profit' : 'Loss',
+            totalStudents: (payments || []).length,
+            totalExpenseEntries: (expenses || []).length,
+            collectionByMethod,
+            expenseByCategory,
+            payments: reportPayments,
+            expenses: expenses || []
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
 });
 
 router.get('/reports/monthly', async (req, res) => {
     try {
-        const targetMonth = req.query.month || new Date().toLocaleString('default',{month:'long'});
-        const targetYear  = req.query.year  || new Date().getFullYear();
-        const [payments, expenses] = await Promise.all([
-            Payment.find({ month:targetMonth, year:parseInt(targetYear) }),
-            Expense.find({ month:targetMonth, year:parseInt(targetYear), status:'Approved' })
+        const targetMonth = req.query.month || new Date().toLocaleString('default', { month: 'long' });
+        const targetYear  = parseInt(req.query.year) || new Date().getFullYear();
+
+        const [
+            { data: payments },
+            { data: expenses },
+            bookIncomes
+        ] = await Promise.all([
+            supabase.from('payments').select('*').eq('month', targetMonth).eq('year', targetYear),
+            supabase.from('expenses').select('*').eq('month', targetMonth).eq('year', targetYear).eq('status', 'Approved'),
+            getActiveBookIncomes({ month: targetMonth, year: targetYear })
         ]);
-        const totalCollection = payments.reduce((s,p)=>s+p.amount,0);
-        const totalExpense    = expenses.reduce((s,e)=>s+e.amount,0);
-        const net = totalCollection-totalExpense;
-        res.json({ success:true, month:targetMonth, year:targetYear, totalCollection, totalExpense, net,
-                   netType:net>=0?'Profit':'Loss', payments, expenses });
-    } catch (err) { res.status(500).json({ success:false, message:err.message }); }
+
+        const reportPayments = [...(payments || []), ...bookIncomes.map(formatBookIncomeForPrint)];
+        const totalCollection = reportPayments.reduce((s,p) => s + Number(p.amount || 0), 0);
+        const totalExpense    = (expenses || []).reduce((s,e) => s + Number(e.amount || 0), 0);
+        const net = totalCollection - totalExpense;
+
+        res.json({
+            success: true,
+            month: targetMonth,
+            year: targetYear,
+            totalCollection,
+            totalExpense,
+            net,
+            netType: net >= 0 ? 'Profit' : 'Loss',
+            payments: reportPayments,
+            expenses: expenses || []
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
 });
 
 router.get('/reports/date-range', async (req, res) => {
     try {
         const { startDate, endDate } = req.query;
-        if (!startDate||!endDate) return res.status(400).json({ success:false, message:'startDate and endDate required' });
-        const [payments, expenses] = await Promise.all([
-            Payment.find({ date:{ $gte:startDate, $lte:endDate } }),
-            Expense.find({ date:{ $gte:startDate, $lte:endDate }, status:'Approved' })
+        if (!startDate || !endDate) return res.status(400).json({ success: false, message: 'startDate and endDate required' });
+
+        const [
+            { data: payments },
+            { data: expenses },
+            bookIncomes
+        ] = await Promise.all([
+            supabase.from('payments').select('*').gte('date', startDate).lte('date', endDate),
+            supabase.from('expenses').select('*').gte('date', startDate).lte('date', endDate).eq('status', 'Approved'),
+            getActiveBookIncomes({ fromDate: startDate, toDate: endDate })
         ]);
-        const totalCollection = payments.reduce((s,p)=>s+p.amount,0);
-        const totalExpense    = expenses.reduce((s,e)=>s+e.amount,0);
-        const net = totalCollection-totalExpense;
-        res.json({ success:true, startDate, endDate, totalCollection, totalExpense, net, netType:net>=0?'Profit':'Loss', payments, expenses });
-    } catch (err) { res.status(500).json({ success:false, message:err.message }); }
+
+        const reportPayments = [...(payments || []), ...bookIncomes.map(formatBookIncomeForPrint)];
+        const totalCollection = reportPayments.reduce((s,p) => s + Number(p.amount || 0), 0);
+        const totalExpense    = (expenses || []).reduce((s,e) => s + Number(e.amount || 0), 0);
+        const net = totalCollection - totalExpense;
+
+        res.json({
+            success: true,
+            startDate,
+            endDate,
+            totalCollection,
+            totalExpense,
+            net,
+            netType: net >= 0 ? 'Profit' : 'Loss',
+            payments: reportPayments,
+            expenses: expenses || []
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
 });
 
 router.get('/reports/income', async (req, res) => {
     try {
         const { startDate, endDate, source } = req.query;
-        let query = {};
-        if (startDate&&endDate) query.date = { $gte:startDate, $lte:endDate };
-        const payments = await Payment.find(query).sort({ date:-1 });
-        const filtered = (source&&source!=='all')
-            ? payments.filter(p => (p.type==='Admission'?'Admission Fee':'Monthly Student Fee')===source)
-            : payments;
-        res.json({ success:true, payments:filtered, totalIncome:filtered.reduce((s,p)=>s+p.amount,0),
-                   count:filtered.length, startDate:startDate||'All', endDate:endDate||'All' });
-    } catch (err) { res.status(500).json({ success:false, message:err.message }); }
+        let query = supabase.from('payments').select('*').order('date', { ascending: false });
+        if (startDate && endDate) query = query.gte('date', startDate).lte('date', endDate);
+
+        const [{ data: payments, error }, bookIncomes] = await Promise.all([
+            query,
+            getActiveBookIncomes({ fromDate: startDate, toDate: endDate })
+        ]);
+        if (error) throw error;
+
+        const normalizedBookIncomes = bookIncomes.map(formatBookIncomeForPrint);
+        const filtered = source === 'Books'
+            ? normalizedBookIncomes
+            : source && source !== 'all'
+                ? (payments || []).filter(p => (p.type === 'Admission' ? 'Admission Fee' : 'Monthly Student Fee') === source)
+                : [...(payments || []), ...normalizedBookIncomes];
+
+        res.json({
+            success: true,
+            payments: filtered,
+            totalIncome: filtered.reduce((s,p) => s + Number(p.amount || 0), 0),
+            count: filtered.length,
+            startDate: startDate || 'All',
+            endDate: endDate || 'All'
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
 });
 
 router.get('/reports/expense', async (req, res) => {
     try {
         const { startDate, endDate, category, status } = req.query;
-        let query = { status:'Approved' };
-        if (startDate&&endDate) query.date = { $gte:startDate, $lte:endDate };
-        if (category&&category!=='all') query.category = category;
-        if (status&&status!=='all') query.status = status;
-        const expenses = await Expense.find(query).sort({ date:-1 });
+        let query = supabase.from('expenses').select('*').order('date', { ascending: false });
+
+        if (status && status !== 'all') query = query.eq('status', status);
+        else query = query.eq('status', 'Approved');
+
+        if (startDate && endDate) query = query.gte('date', startDate).lte('date', endDate);
+        if (category && category !== 'all') query = query.eq('category', category);
+
+        const { data: expenses, error } = await query;
+        if (error) throw error;
+
         const byCategory = {};
-        expenses.forEach(e=>{ byCategory[e.category]=(byCategory[e.category]||0)+e.amount; });
-        res.json({ success:true, expenses, totalExpense:expenses.reduce((s,e)=>s+e.amount,0),
-                   count:expenses.length, byCategory, startDate:startDate||'All', endDate:endDate||'All' });
-    } catch (err) { res.status(500).json({ success:false, message:err.message }); }
+        (expenses || []).forEach(e => {
+            byCategory[e.category] = (byCategory[e.category] || 0) + Number(e.amount || 0);
+        });
+
+        res.json({
+            success: true,
+            expenses: expenses || [],
+            totalExpense: (expenses || []).reduce((s,e) => s + Number(e.amount || 0), 0),
+            count: (expenses || []).length,
+            byCategory,
+            startDate: startDate || 'All',
+            endDate: endDate || 'All'
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, message: err.message });
+    }
 });
 
 module.exports = router;

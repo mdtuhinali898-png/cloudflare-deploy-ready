@@ -3,7 +3,7 @@
    Loads from MongoDB via /api/ucc/exams
    ========================================================================== */
 
-const API_BASE = 'http://localhost:5002/api';
+const API_BASE = window.API_BASE_URL || (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:5002/api' : '/api');
 
 /* ── State ── */
 let EXAM_DEMO = { exams: [], results: [] };

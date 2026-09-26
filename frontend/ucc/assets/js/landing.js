@@ -4,6 +4,7 @@
    ========================================================================== */
 
 document.addEventListener('DOMContentLoaded', () => {
+  loadMainInstituteAcronym();
   initNavbar();
   initSearchFilter();
   initCounters();
@@ -12,6 +13,46 @@ document.addEventListener('DOMContentLoaded', () => {
   initModals();
   initSmoothScroll();
 });
+
+async function loadMainInstituteAcronym() {
+  const brand = document.getElementById('mainInstituteAcronym');
+  if (!brand) return;
+
+  // Use the immediately available settings first, then prefer the shared value.
+  try {
+    const localSettings = JSON.parse(localStorage.getItem('erp_settings') || '{}');
+    const localName = localSettings?.landing?.brandName;
+    if (localName) updateMainInstituteAcronym(brand, localName);
+  } catch (_) {
+    // Ignore malformed local settings and continue with the shared source.
+  }
+
+  try {
+    const response = await fetch('/api/landing-settings');
+    const result = await response.json();
+    const name = result?.success && result.data?.brandName;
+    if (!name) return;
+
+    updateMainInstituteAcronym(brand, name);
+  } catch (_) {
+    // Keep the short default label if the main landing settings are unavailable.
+  }
+}
+
+function updateMainInstituteAcronym(brand, name) {
+  brand.textContent = createInstituteAcronym(name);
+  brand.closest('a')?.setAttribute('title', `${name}-এ ফিরে যান`);
+}
+
+function createInstituteAcronym(name) {
+  const words = String(name)
+    .replace(/[’']/g, '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  return words.slice(0, 3).map(word => word.charAt(0).toUpperCase()).join('') || 'EDU';
+}
 
 /* --------------------------------------------------------------------------
    1. Navbar & Mobile Menu

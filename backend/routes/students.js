@@ -1,6 +1,63 @@
 const express = require('express');
 const router = express.Router();
-const Student = require('../models/Student');
+const supabase = require('../config/supabase');
+
+function formatStudent(row) {
+    if (!row) return null;
+    return {
+        _id: row.id,
+        id: row.id,
+        studentId: row.student_id,
+        roll: row.roll,
+        name: row.name,
+        guardianName: row.guardian_name,
+        motherName: row.mother_name,
+        dob: row.dob,
+        gender: row.gender,
+        phone: row.phone,
+        address: row.address,
+        batch: row.batch,
+        group: row.student_group,
+        previousSchool: row.previous_school,
+        guardianPhone: row.guardian_phone,
+        fee: Number(row.fee || 0),
+        admissionFee: Number(row.admission_fee || 0),
+        startMonth: row.start_month,
+        status: row.status,
+        notes: row.notes,
+        reference: row.reference,
+        photo: row.photo,
+        admissionDate: row.admission_date,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at
+    };
+}
+
+function toStudentRow(data) {
+    const row = {};
+    if (data.studentId !== undefined) row.student_id = String(data.studentId).trim();
+    if (data.roll !== undefined) row.roll = data.roll ? String(data.roll).trim() : null;
+    if (data.name !== undefined) row.name = data.name;
+    if (data.guardianName !== undefined) row.guardian_name = data.guardianName;
+    if (data.motherName !== undefined) row.mother_name = data.motherName;
+    if (data.dob !== undefined) row.dob = data.dob || null;
+    if (data.gender !== undefined) row.gender = data.gender;
+    if (data.phone !== undefined) row.phone = data.phone ? String(data.phone).trim() : '';
+    if (data.address !== undefined) row.address = data.address;
+    if (data.batch !== undefined) row.batch = data.batch;
+    if (data.group !== undefined) row.student_group = data.group;
+    if (data.previousSchool !== undefined) row.previous_school = data.previousSchool;
+    if (data.guardianPhone !== undefined) row.guardian_phone = data.guardianPhone ? String(data.guardianPhone).trim() : '';
+    if (data.fee !== undefined) row.fee = Number(data.fee || 0);
+    if (data.admissionFee !== undefined) row.admission_fee = Number(data.admissionFee || 0);
+    if (data.startMonth !== undefined) row.start_month = data.startMonth;
+    if (data.status !== undefined) row.status = data.status;
+    if (data.notes !== undefined) row.notes = data.notes;
+    if (data.reference !== undefined) row.reference = data.reference;
+    if (data.photo !== undefined) row.photo = data.photo;
+    if (data.admissionDate !== undefined) row.admission_date = data.admissionDate;
+    return row;
+}
 
 // @route   GET /api/students
 // @desc    Get all students with pagination, filtering, and search
@@ -12,47 +69,97 @@ router.get('/', async (req, res) => {
         const batch = req.query.batch;
         const status = req.query.status;
         const search = req.query.search;
-        
-        // Build query
-        let query = {};
-        
-        if (batch && batch !== 'all') {
-            query.batch = batch;
-        }
-        
-        if (status && status !== 'all') {
-            query.status = status;
-        }
-        
-        if (search) {
-            query.$or = [
-                { studentId: { $regex: search, $options: 'i' } },
-                { name: { $regex: search, $options: 'i' } },
-                { phone: { $regex: search, $options: 'i' } },
-                { reference: { $regex: search, $options: 'i' } }
-            ];
-        }
-        
-        // Execute query with pagination (allow large limits for reports)
+        const directoryView = req.query.view === 'directory';
+        const selectColumns = directoryView
+            ? 'id, student_id, roll, name, phone, batch, admission_date, fee, status, photo'
+            : '*';
+
         const limitValue = limit > 1000 ? 10000 : limit;
-        const sortOrder = batch && batch !== 'all'
-            ? { studentId: 1 }
-            : { createdAt: -1 };
-        const studentsQuery = Student.find(query)
-            .sort(sortOrder);
+        const offset = (page - 1) * limitValue;
+
+        let query = supabase.from('students').select(selectColumns, { count: 'exact' });
+
         if (batch && batch !== 'all') {
-            studentsQuery.collation({ locale: 'en', numericOrdering: true });
+            query = query.eq('batch', batch);
         }
-        const students = await studentsQuery
-            .limit(limitValue)
-            .skip((page - 1) * limitValue);
-        
-        const total = await Student.countDocuments(query);
+
+        if (status && status !== 'all') {
+            query = query.eq('status', status);
+        }
+
+        let exactStudents = [];
+        if (search) {
+            const cleanSearch = search.trim();
+
+            // When searching on page 1, prioritize exact matches (student_id, roll, phone, or name)
+            if (page === 1) {
+                let exactQuery = supabase.from('students').select(selectColumns);
+                if (batch && batch !== 'all') exactQuery = exactQuery.eq('batch', batch);
+                if (status && status !== 'all') exactQuery = exactQuery.eq('status', status);
+                exactQuery = exactQuery.or(`student_id.ilike.${cleanSearch},roll.ilike.${cleanSearch},phone.eq.${cleanSearch},name.ilike.${cleanSearch}`);
+                const { data: exactRows, error: exactError } = await exactQuery.limit(limitValue);
+                if (!exactError && exactRows && exactRows.length > 0) {
+                    exactStudents = exactRows;
+                }
+            }
+
+            query = query.or(`student_id.ilike.%${cleanSearch}%,roll.ilike.%${cleanSearch}%,name.ilike.%${cleanSearch}%,phone.ilike.%${cleanSearch}%,reference.ilike.%${cleanSearch}%`);
+
+            if (exactStudents.length > 0) {
+                const exactIds = exactStudents.map(s => s.id);
+                query = query.not('id', 'in', `(${exactIds.join(',')})`);
+            }
+        }
+
+        if (search) {
+            query = query.order('student_id', { ascending: true });
+        } else if (batch && batch !== 'all') {
+            query = query.order('student_id', { ascending: true });
+        } else {
+            query = query.order('created_at', { ascending: false });
+        }
+
+        let data = [];
+        let count = 0;
+
+        if (search && exactStudents.length > 0) {
+            const totalExact = exactStudents.length;
+            if (page === 1) {
+                const remainingLimit = Math.max(0, limitValue - totalExact);
+                if (remainingLimit > 0) {
+                    query = query.range(0, remainingLimit - 1);
+                    const res = await query;
+                    if (res.error) throw res.error;
+                    data = [...exactStudents, ...(res.data || [])];
+                    count = (res.count || 0) + totalExact;
+                } else {
+                    const { count: c, error: cErr } = await query.range(0, 0);
+                    if (cErr) throw cErr;
+                    data = exactStudents.slice(0, limitValue);
+                    count = (c || 0) + totalExact;
+                }
+            } else {
+                const generalOffset = (page - 1) * limitValue - totalExact;
+                query = query.range(generalOffset, generalOffset + limitValue - 1);
+                const res = await query;
+                if (res.error) throw res.error;
+                data = res.data || [];
+                count = (res.count || 0) + totalExact;
+            }
+        } else {
+            query = query.range(offset, offset + limitValue - 1);
+            const res = await query;
+            if (res.error) throw res.error;
+            data = res.data || [];
+            count = res.count || 0;
+        }
+
+        const total = count || 0;
         const totalPages = Math.ceil(total / limitValue);
-        
+
         res.json({
             success: true,
-            students,
+            students: (data || []).map(formatStudent),
             total,
             page,
             totalPages
@@ -64,26 +171,31 @@ router.get('/', async (req, res) => {
 });
 
 // @route   GET /api/students/stats
-// @desc    Get student statistics (must be before /:id route)
+// @desc    Get student statistics
 // @access  Public
 router.get('/stats', async (req, res) => {
     try {
-        const totalStudents = await Student.countDocuments();
-        const activeStudents = await Student.countDocuments({ status: 'Active' });
-        const inactiveStudents = await Student.countDocuments({ status: 'Inactive' });
-        
-        // Count new admissions (last 30 days)
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        const newAdmissions = await Student.countDocuments({
-            createdAt: { $gte: thirtyDaysAgo }
-        });
-        
+        const isoThirtyDaysAgo = thirtyDaysAgo.toISOString();
+
+        const [
+            { count: totalStudents },
+            { count: activeStudents },
+            { count: inactiveStudents },
+            { count: newAdmissions }
+        ] = await Promise.all([
+            supabase.from('students').select('*', { count: 'exact', head: true }),
+            supabase.from('students').select('*', { count: 'exact', head: true }).eq('status', 'Active'),
+            supabase.from('students').select('*', { count: 'exact', head: true }).eq('status', 'Inactive'),
+            supabase.from('students').select('*', { count: 'exact', head: true }).gte('created_at', isoThirtyDaysAgo)
+        ]);
+
         res.json({
-            total: totalStudents,
-            active: activeStudents,
-            inactive: inactiveStudents,
-            newAdmission: newAdmissions
+            total: totalStudents || 0,
+            active: activeStudents || 0,
+            inactive: inactiveStudents || 0,
+            newAdmission: newAdmissions || 0
         });
     } catch (error) {
         console.error('Error fetching stats:', error);
@@ -92,39 +204,52 @@ router.get('/stats', async (req, res) => {
 });
 
 // @route   GET /api/students/stats/overview
-// @desc    Get student statistics (alternative route, must be before /:id)
+// @desc    Get student statistics overview
 // @access  Public
 router.get('/stats/overview', async (req, res) => {
     try {
-        const totalStudents = await Student.countDocuments();
-        const activeStudents = await Student.countDocuments({ status: 'Active' });
-        const inactiveStudents = await Student.countDocuments({ status: 'Inactive' });
-        
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        const newAdmissions = await Student.countDocuments({
-            createdAt: { $gte: thirtyDaysAgo }
-        });
-        
+        const isoThirtyDaysAgo = thirtyDaysAgo.toISOString();
+
+        const [
+            { count: totalStudents },
+            { count: activeStudents },
+            { count: inactiveStudents },
+            { count: newAdmissions }
+        ] = await Promise.all([
+            supabase.from('students').select('*', { count: 'exact', head: true }),
+            supabase.from('students').select('*', { count: 'exact', head: true }).eq('status', 'Active'),
+            supabase.from('students').select('*', { count: 'exact', head: true }).eq('status', 'Inactive'),
+            supabase.from('students').select('*', { count: 'exact', head: true }).gte('created_at', isoThirtyDaysAgo)
+        ]);
+
         res.json({
-            total: totalStudents,
-            active: activeStudents,
-            inactive: inactiveStudents,
-            newAdmission: newAdmissions
+            total: totalStudents || 0,
+            active: activeStudents || 0,
+            inactive: inactiveStudents || 0,
+            newAdmission: newAdmissions || 0
         });
     } catch (error) {
-        console.error('Error fetching stats:', error);
+        console.error('Error fetching stats overview:', error);
         res.status(500).json({ success: false, message: 'Error fetching statistics', error: error.message });
     }
 });
 
 // @route   GET /api/students/batches/list
-// @desc    Get all unique batches (must be before /:id)
+// @desc    Get all unique batches
 // @access  Public
 router.get('/batches/list', async (req, res) => {
     try {
-        const batches = await Student.distinct('batch');
-        res.json({ success: true, batches });
+        const { data, error } = await supabase
+            .from('batches')
+            .select('name')
+            .order('name');
+
+        if (error) throw error;
+
+        const uniqueBatches = (data || []).map(item => item.name).filter(Boolean);
+        res.json({ success: true, batches: uniqueBatches });
     } catch (error) {
         console.error('Error fetching batches:', error);
         res.status(500).json({ success: false, message: 'Error fetching batches', error: error.message });
@@ -132,7 +257,7 @@ router.get('/batches/list', async (req, res) => {
 });
 
 // @route   GET /api/students/:id
-// @desc    Get single student by ID (exact case-insensitive match)
+// @desc    Get single student by ID
 // @access  Public
 router.get('/:id', async (req, res) => {
     try {
@@ -141,33 +266,40 @@ router.get('/:id', async (req, res) => {
             return res.status(400).json({ success: false, message: 'Student ID is required' });
         }
 
-        const escapedId = idParam.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idParam);
 
-        // 1. Exact match by studentId (case-insensitive)
-        let student = await Student.findOne({
-            studentId: { $regex: `^${escapedId}$`, $options: 'i' }
-        });
+        // 1. Exact match by student_id (case-insensitive)
+        let { data: student } = await supabase
+            .from('students')
+            .select('*')
+            .ilike('student_id', idParam)
+            .maybeSingle();
 
-        // 2. If not found and param is a valid MongoDB ObjectId (24 hex characters)
-        if (!student && idParam.match(/^[0-9a-fA-F]{24}$/)) {
-            student = await Student.findById(idParam);
+        // 2. If UUID
+        if (!student && isUuid) {
+            const { data: byUuid } = await supabase
+                .from('students')
+                .select('*')
+                .eq('id', idParam)
+                .maybeSingle();
+            student = byUuid;
         }
 
-        // 3. Fallback: exact match by phone or exact match by name
+        // 3. Fallback by phone or name
         if (!student) {
-            student = await Student.findOne({
-                $or: [
-                    { phone: idParam },
-                    { name: { $regex: `^${escapedId}$`, $options: 'i' } }
-                ]
-            });
+            const { data: byPhoneOrName } = await supabase
+                .from('students')
+                .select('*')
+                .or(`phone.eq.${idParam},name.ilike.${idParam}`)
+                .limit(1);
+            student = byPhoneOrName && byPhoneOrName[0];
         }
 
         if (!student) {
             return res.status(404).json({ success: false, message: 'Student not found' });
         }
 
-        res.json({ success: true, student });
+        res.json({ success: true, student: formatStudent(student) });
     } catch (error) {
         console.error('Error fetching student:', error);
         res.status(500).json({ success: false, message: 'Error fetching student', error: error.message });
@@ -180,24 +312,42 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
     try {
         const studentData = req.body;
-        
+        const studentId = String(studentData.studentId || '').trim();
+
+        if (!studentId) {
+            return res.status(400).json({ success: false, message: 'Student ID is required' });
+        }
+
         // Check if student ID already exists
-        const existingStudent = await Student.findOne({ studentId: studentData.studentId });
+        const { data: existingStudent } = await supabase
+            .from('students')
+            .select('id')
+            .ilike('student_id', studentId)
+            .maybeSingle();
+
         if (existingStudent) {
             return res.status(400).json({ 
                 success: false, 
-                message: `Student with ID ${studentData.studentId} already exists` 
+                message: `Student with ID ${studentId} already exists` 
             });
         }
-        
-        // Create new student
-        const student = new Student(studentData);
-        await student.save();
-        
+
+        const newRow = toStudentRow(studentData);
+        newRow.created_at = new Date();
+        newRow.updated_at = new Date();
+
+        const { data: savedStudent, error } = await supabase
+            .from('students')
+            .insert(newRow)
+            .select()
+            .single();
+
+        if (error) throw error;
+
         res.status(201).json({ 
             success: true, 
             message: 'Student added successfully',
-            student 
+            student: formatStudent(savedStudent)
         });
     } catch (error) {
         console.error('Error creating student:', error);
@@ -210,35 +360,59 @@ router.post('/', async (req, res) => {
 // @access  Public
 router.put('/:id', async (req, res) => {
     try {
-        let query = { studentId: req.params.id };
-        if (req.params.id && req.params.id.match(/^[0-9a-fA-F]{24}$/)) {
-            query = { $or: [{ _id: req.params.id }, { studentId: req.params.id }] };
+        const idParam = (req.params.id || '').trim();
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idParam);
+
+        // Find existing student
+        let { data: existingStudent } = await supabase
+            .from('students')
+            .select('*')
+            .ilike('student_id', idParam)
+            .maybeSingle();
+
+        if (!existingStudent && isUuid) {
+            const { data: byUuid } = await supabase
+                .from('students')
+                .select('*')
+                .eq('id', idParam)
+                .maybeSingle();
+            existingStudent = byUuid;
         }
 
-        // Check if student exists
-        const existingStudent = await Student.findOne(query);
         if (!existingStudent) {
             return res.status(404).json({ success: false, message: 'Student not found' });
         }
 
-        // If studentId is being updated, check that it doesn't conflict with another student
-        if (req.body.studentId && req.body.studentId !== existingStudent.studentId) {
-            const conflict = await Student.findOne({ studentId: req.body.studentId, _id: { $ne: existingStudent._id } });
+        // If studentId changed, check conflict
+        if (req.body.studentId && req.body.studentId !== existingStudent.student_id) {
+            const { data: conflict } = await supabase
+                .from('students')
+                .select('id')
+                .ilike('student_id', req.body.studentId)
+                .neq('id', existingStudent.id)
+                .maybeSingle();
+
             if (conflict) {
                 return res.status(400).json({ success: false, message: `Student ID ${req.body.studentId} is already in use by another student.` });
             }
         }
 
-        const student = await Student.findByIdAndUpdate(
-            existingStudent._id,
-            req.body,
-            { new: true, runValidators: true }
-        );
-        
+        const updateData = toStudentRow(req.body);
+        updateData.updated_at = new Date();
+
+        const { data: updatedStudent, error } = await supabase
+            .from('students')
+            .update(updateData)
+            .eq('id', existingStudent.id)
+            .select()
+            .single();
+
+        if (error) throw error;
+
         res.json({ 
             success: true, 
             message: 'Student updated successfully',
-            student 
+            student: formatStudent(updatedStudent)
         });
     } catch (error) {
         console.error('Error updating student:', error);
@@ -251,12 +425,51 @@ router.put('/:id', async (req, res) => {
 // @access  Public
 router.delete('/:id', async (req, res) => {
     try {
-        const student = await Student.findOneAndDelete({ studentId: req.params.id });
-        
+        const idParam = (req.params.id || '').trim();
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idParam);
+
+        let studentQuery = supabase.from('students').select('id, student_id, roll');
+        studentQuery = isUuid
+            ? studentQuery.eq('id', idParam)
+            : studentQuery.ilike('student_id', idParam);
+
+        const { data: student, error: lookupError } = await studentQuery.maybeSingle();
+        if (lookupError) throw lookupError;
         if (!student) {
             return res.status(404).json({ success: false, message: 'Student not found' });
         }
-        
+
+        const rawKeys = [
+            student.student_id,
+            student.student_id ? String(student.student_id).toLowerCase() : null,
+            student.student_id ? String(student.student_id).toUpperCase() : null,
+            student.roll,
+            student.roll ? String(student.roll).toLowerCase() : null,
+            student.roll ? String(student.roll).toUpperCase() : null,
+            student.id
+        ].filter(Boolean).map(String);
+
+        const studentKeys = [...new Set(rawKeys)];
+
+        // Remove records keyed by either the public student ID, roll, or the database ID.
+        // If any related table fails, keep the student row so the cleanup can be retried.
+        const relatedDeletes = await Promise.all([
+            supabase.from('payments').delete().in('student_id', studentKeys),
+            supabase.from('results').delete().in('student_id', studentKeys),
+            supabase.from('dues').delete().in('student_id', studentKeys),
+            supabase.from('book_sales').delete().in('student_id', studentKeys)
+        ]);
+        const relatedErrors = relatedDeletes.map(result => result.error).filter(Boolean);
+        if (relatedErrors.length) {
+            throw new Error(`Could not remove all student-related records: ${relatedErrors.map(error => error.message).join('; ')}`);
+        }
+
+        const { error: deleteError } = await supabase
+            .from('students')
+            .delete()
+            .eq('id', student.id);
+        if (deleteError) throw deleteError;
+
         res.json({ 
             success: true, 
             message: 'Student deleted successfully' 

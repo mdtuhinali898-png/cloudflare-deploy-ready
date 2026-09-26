@@ -2,9 +2,12 @@
    EduSmart Global App JavaScript - Shared across all pages
    ========================================================================== */
 
-const API_BASE_URL = window.location.protocol === 'http:' && window.location.hostname === 'localhost' 
-    ? 'http://localhost:5002/api' 
-    : '/api';
+window.API_BASE_URL = window.API_BASE_URL || (
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+        ? (window.location.port === '5002' ? '/api' : 'http://localhost:5002/api')
+        : '/api'
+);
+var API_BASE_URL = window.API_BASE_URL;
 
 let globalInstituteInfo = {
     name: 'EduSmart Coaching Center',
@@ -37,11 +40,44 @@ async function loadGlobalInstituteInfo() {
 function updateAllInstituteInfo() {
     // Update title
     if (globalInstituteInfo.name) {
-        document.title = `${globalInstituteInfo.name} - EduSmart Admin`;
+        if (!document.title.includes(globalInstituteInfo.name)) {
+            const pagePrefix = document.title.split(' - ')[0] || document.title;
+            document.title = `${pagePrefix} - ${globalInstituteInfo.name}`;
+        }
         
         // Update sidebar logo
         const brandName = document.getElementById('landingBrandName');
         if (brandName) brandName.textContent = globalInstituteInfo.name;
+
+        if (typeof window.updateSidebarInstituteInfo === 'function') {
+            window.updateSidebarInstituteInfo();
+        } else {
+            const sidebarLogo = document.querySelector('.sidebar-logo');
+            if (sidebarLogo) {
+                const logoTextSpan = sidebarLogo.querySelector('span');
+                if (logoTextSpan) {
+                    const adminBadge = logoTextSpan.querySelector('.admin-badge');
+                    const badgeHtml = adminBadge ? adminBadge.outerHTML : '<small class="admin-badge">Admin</small>';
+                    const nameParts = globalInstituteInfo.name.trim().split(/\s+/);
+                    let formattedHtml = '';
+                    if (nameParts.length > 1) {
+                        const firstPart = nameParts.slice(0, -1).join(' ');
+                        const lastPart = nameParts[nameParts.length - 1];
+                        formattedHtml = `${firstPart} <span class="gradient-text">${lastPart}</span>`;
+                    } else {
+                        formattedHtml = `<span class="gradient-text">${globalInstituteInfo.name}</span>`;
+                    }
+                    logoTextSpan.innerHTML = `${formattedHtml} ${badgeHtml}`;
+                    logoTextSpan.title = globalInstituteInfo.name;
+                }
+                if (globalInstituteInfo.logo) {
+                    const logoIcon = sidebarLogo.querySelector('.logo-icon');
+                    if (logoIcon) {
+                        logoIcon.innerHTML = `<img src="${globalInstituteInfo.logo}" alt="Logo" style="width:100%;height:100%;object-fit:contain;border-radius:inherit;">`;
+                    }
+                }
+            }
+        }
     }
     
     // Update footer
@@ -50,12 +86,34 @@ function updateAllInstituteInfo() {
         footerDesc.textContent = globalInstituteInfo.about;
     }
     
-    // Update any element with institute-name class
-    document.querySelectorAll('.institute-name').forEach(el => {
-        if (el.textContent && el.textContent !== 'EduSmart') {
+    // Update any element with institute classes
+    if (globalInstituteInfo.name) {
+        document.querySelectorAll('.institute-name').forEach(el => {
             el.textContent = globalInstituteInfo.name;
-        }
-    });
+        });
+    }
+    if (globalInstituteInfo.phone) {
+        document.querySelectorAll('.institute-phone').forEach(el => {
+            el.textContent = globalInstituteInfo.phone;
+        });
+    }
+    if (globalInstituteInfo.email) {
+        document.querySelectorAll('.institute-email').forEach(el => {
+            el.textContent = globalInstituteInfo.email;
+        });
+    }
+    if (globalInstituteInfo.address) {
+        document.querySelectorAll('.institute-address').forEach(el => {
+            el.textContent = globalInstituteInfo.address;
+        });
+    }
+    if (globalInstituteInfo.logo) {
+        document.querySelectorAll('.institute-logo').forEach(el => {
+            if (el.tagName === 'IMG') {
+                el.src = globalInstituteInfo.logo;
+            }
+        });
+    }
 }
 
 // Get institute info

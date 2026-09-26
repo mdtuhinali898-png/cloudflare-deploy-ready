@@ -70,8 +70,10 @@ const API_BASE_URL = window.location.protocol === 'http:' && window.location.hos
             });
             const result = await response.json();
             if (!result.success) throw new Error(result.message || 'Settings save failed');
+            return true;
         } catch (error) {
             console.error('Could not save settings to database.', error);
+            return false;
         }
     }
 
@@ -132,7 +134,31 @@ const API_BASE_URL = window.location.protocol === 'http:' && window.location.hos
                     { title: 'Varsity B Unit Program', price: '৳ 14,000 / course', description: 'Comprehensive syllabus covering English Grammar, Literature, General Knowledge & Bangla.', icon: 'fas fa-landmark', category: 'varsity', className: 'admission', type: 'regular' },
                     { title: 'HSC Academic Care', price: '৳ 2,500 / month', description: 'Mastering Board exam syllabus for 1st & 2nd year students. Creative CQ & MCQ mastery.', icon: 'fas fa-book-reader', category: 'academic', className: 'hsc', type: 'regular' },
                     { title: 'SSC Academic Care', price: '৳ 2,000 / month', description: 'Strong core building for Grade 9 & 10 students ensuring Golden A+ results in SSC board exams.', icon: 'fas fa-shapes', category: 'academic', className: 'ssc', type: 'regular' }
-                ]
+                ],
+                whyUs: {
+                    eyebrow: 'Our Distinction',
+                    title: 'Why EduSmart Leads the Industry',
+                    description: 'We blend world-class pedagogy with modern SaaS tools to deliver unparalleled learning outcomes.',
+                    cards: [
+                        { icon: 'fas fa-user-tie', title: 'Experienced Teachers', description: 'Learn from top-tier alumni from BUET, DMC, and Dhaka University with 10+ years of teaching excellence.' },
+                        { icon: 'fas fa-chalkboard', title: 'Smart Classroom', description: 'Interactive 4K smart boards, digital note sharing, and recorded lectures for offline review.' },
+                        { icon: 'fas fa-headset', title: '24/7 Online Support', description: 'Dedicated student portal with instant doubt-clearing forums and direct teacher Q&A access.' },
+                        { icon: 'fas fa-file-pdf', title: 'PDF Study Notes', description: 'Access high-yield summary sheets, previous years\' solved question banks, and formula cheat-sheets.' },
+                        { icon: 'fas fa-tasks', title: 'Weekly Exam & SMS', description: 'OMR-evaluated weekly exams with instant SMS notifications sent to parents\' mobile numbers.' },
+                        { icon: 'fas fa-chart-pie', title: 'AI Result Analytics', description: 'Detailed performance breakdown charts revealing weak topics, speed accuracy, and merit ranks.' }
+                    ]
+                },
+                teachers: {
+                    eyebrow: 'Expert Faculty',
+                    title: 'Guided by the Nation\'s Best Educators',
+                    description: 'Our renowned instructors bring deep subject expertise and inspiring mentorship to every lesson.',
+                    cards: [
+                        { name: 'Dr. Rafiqul Islam', subject: 'Physics', qualification: 'BUET CSE & M.Sc (Physics)', description: '12+ Years Teaching Experience in Admission Coaching', photo: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=400', linkedin: '', youtube: '', facebook: '' },
+                        { name: 'Dr. Sharmin Akter', subject: 'Biology', qualification: 'MBBS (Dhaka Medical College)', description: 'Specialist in Human Physiology & Botany Tricks', photo: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=400', linkedin: '', youtube: '', facebook: '' },
+                        { name: 'Engr. Mahmudul Hasan', subject: 'Higher Math', qualification: 'BUET EEE (Merit 18th)', description: 'Renowned for Shortcut Calculus & Coordinate Geometry', photo: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&q=80&w=400', linkedin: '', youtube: '', facebook: '' },
+                        { name: 'Prof. Farhana Yeasmin', subject: 'Chemistry', qualification: 'Dhaka University (Chemistry)', description: 'Organic Chemistry Mastermind & Book Author', photo: 'https://images.unsplash.com/photo-1580894732413-a7042745307a?auto=format&fit=crop&q=80&w=400', linkedin: '', youtube: '', facebook: '' }
+                    ]
+                }
             }
         };
     }
@@ -169,7 +195,9 @@ const API_BASE_URL = window.location.protocol === 'http:' && window.location.hos
 
     document.getElementById('instituteForm').addEventListener('submit', async (e) => {
         e.preventDefault();
-        
+        const submitButton = e.submitter || document.querySelector('#instituteForm button[type="submit"]');
+        if (submitButton) submitButton.disabled = true;
+
         const instituteData = {
             name: document.getElementById('instituteName').value,
             director: document.getElementById('directorName').value,
@@ -181,22 +209,53 @@ const API_BASE_URL = window.location.protocol === 'http:' && window.location.hos
             about: document.getElementById('instituteAbout').value,
             logo: settings.institute.logo || ''
         };
-        
-        settings.institute = instituteData;
-        saveSettings();
-        
-        // Also save to global institute API for all pages
+
         try {
-            await fetch(`${API_BASE_URL}/institute`, {
+            const previousLogo = instituteData.logo;
+            if (instituteData.logo.startsWith('data:')) {
+                const uploadResponse = await fetch(`${API_BASE_URL}/institute/logo`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ dataUrl: instituteData.logo })
+                });
+                const uploadResult = await uploadResponse.json();
+                if (!uploadResponse.ok || !uploadResult.success) throw new Error(uploadResult.message || 'Logo upload failed');
+                instituteData.logo = uploadResult.url;
+            }
+
+            settings.institute = instituteData;
+            const settingsSaved = await saveSettings();
+            const response = await fetch(`${API_BASE_URL}/institute`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ institute: instituteData })
             });
+            const result = await response.json();
+            if (!response.ok || !result.success) throw new Error(result.message || 'Institute information save failed');
+
+            if (previousLogo && previousLogo !== instituteData.logo && previousLogo.startsWith('http')) {
+                fetch(`${API_BASE_URL}/institute/logo`, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ imageUrl: previousLogo })
+                }).catch(error => console.warn('Could not remove the replaced institute logo:', error));
+            }
+
+            try { sessionStorage.setItem('edusmart_institute_info', JSON.stringify(instituteData)); } catch(_) {}
+            if (typeof window.updateSidebarInstituteInfo === 'function') {
+                window.updateSidebarInstituteInfo();
+            }
+            document.getElementById('logoPreview').innerHTML = instituteData.logo
+                ? `<img src="${instituteData.logo}" alt="Logo">`
+                : '<i class="fas fa-image"></i>';
+            if (!settingsSaved) console.warn('The full settings record did not save, but institute information was saved.');
+            alert('✅ Institute information saved successfully!');
         } catch (error) {
-            console.warn('Could not sync institute info to global API:', error);
+            console.error('Could not save institute information:', error);
+            alert(`❌ Could not save institute information: ${error.message}`);
+        } finally {
+            if (submitButton) submitButton.disabled = false;
         }
-        
-        alert('✅ Institute information saved successfully!');
     });
 
     // Logo Upload
@@ -206,6 +265,13 @@ const API_BASE_URL = window.location.protocol === 'http:' && window.location.hos
 
         if (file.size > 2 * 1024 * 1024) {
             alert('File size must be less than 2MB!');
+            e.target.value = '';
+            return;
+        }
+
+        if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+            alert('Please choose a JPG, PNG, or WebP image.');
+            e.target.value = '';
             return;
         }
 
@@ -590,7 +656,12 @@ const API_BASE_URL = window.location.protocol === 'http:' && window.location.hos
     // ============================================
     function ensureLandingSettings() {
         if (!settings.landing) settings.landing = getDefaultSettings().landing;
+        if (!settings.landing.footer || typeof settings.landing.footer !== 'object') settings.landing.footer = {};
         if (!Array.isArray(settings.landing.programs)) settings.landing.programs = [];
+        if (!settings.landing.whyUs || typeof settings.landing.whyUs !== 'object') settings.landing.whyUs = getDefaultSettings().landing.whyUs;
+        if (!Array.isArray(settings.landing.whyUs.cards)) settings.landing.whyUs.cards = [];
+        if (!settings.landing.teachers || typeof settings.landing.teachers !== 'object') settings.landing.teachers = getDefaultSettings().landing.teachers;
+        if (!Array.isArray(settings.landing.teachers.cards)) settings.landing.teachers.cards = [];
     }
 
     function loadLandingForm() {
@@ -601,9 +672,14 @@ const API_BASE_URL = window.location.protocol === 'http:' && window.location.hos
         document.getElementById('landingHeroDescription').value = landing.heroDescription || '';
         document.getElementById('landingFooterDescription').value = landing.footerDescription || '';
         document.getElementById('landingOfficeHours').value = landing.officeHours || '';
+        loadLandingFooterForm();
         const preview = document.getElementById('heroImagePreview');
         preview.src = landing.heroImage || 'assets/images/hero-student.jpg';
         renderLandingPrograms();
+        loadWhyUsForm();
+        renderWhyUsCards();
+        loadTeachersForm();
+        renderTeacherCards();
     }
 
     document.getElementById('landingForm').addEventListener('submit', async (e) => {
@@ -612,27 +688,261 @@ const API_BASE_URL = window.location.protocol === 'http:' && window.location.hos
         Object.assign(settings.landing, {
             brandName: document.getElementById('landingBrandName').value.trim(),
             heroTitle: document.getElementById('landingHeroTitle').value.trim(),
-            heroDescription: document.getElementById('landingHeroDescription').value.trim(),
-            footerDescription: document.getElementById('landingFooterDescription').value.trim(),
-            officeHours: document.getElementById('landingOfficeHours').value.trim()
+            heroDescription: document.getElementById('landingHeroDescription').value.trim()
         });
         saveSettings();
         await saveLandingSettingsToServer();
     });
 
-    document.getElementById('heroImageInput').addEventListener('change', (e) => {
+    document.getElementById('heroImageInput').addEventListener('change', async (e) => {
         const file = e.target.files[0];
         if (!file) return;
+        if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) return alert('Please choose a JPG, PNG, or WebP image.');
         if (file.size > 2 * 1024 * 1024) return alert('Image must be smaller than 2MB.');
+        const uploadStatus = document.getElementById('heroImageUploadStatus');
+        const uploadButton = e.target.parentElement.querySelector('.btn-upload');
+        const currentImage = settings.landing?.heroImage || '';
         const reader = new FileReader();
         reader.onload = async (event) => {
             ensureLandingSettings();
-            settings.landing.heroImage = event.target.result;
             document.getElementById('heroImagePreview').src = event.target.result;
-            saveSettings();
-            await saveLandingSettingsToServer();
+            if (uploadStatus) uploadStatus.textContent = 'Uploading image…';
+            if (uploadButton) uploadButton.disabled = true;
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/landing-settings/hero-image`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ dataUrl: event.target.result })
+                });
+                const result = await response.json();
+                if (!response.ok || !result.success || !result.url) throw new Error(result.message || 'Image upload failed.');
+
+                settings.landing.heroImage = result.url;
+                document.getElementById('heroImagePreview').src = result.url;
+                saveSettings();
+                await saveLandingSettingsToServer();
+                if (uploadStatus) uploadStatus.textContent = 'Image uploaded to Supabase Storage.';
+            } catch (error) {
+                settings.landing.heroImage = currentImage;
+                document.getElementById('heroImagePreview').src = currentImage || 'assets/images/hero-student.jpg';
+                if (uploadStatus) uploadStatus.textContent = error.message || 'Image upload failed.';
+            } finally {
+                if (uploadButton) uploadButton.disabled = false;
+                e.target.value = '';
+            }
         };
         reader.readAsDataURL(file);
+    });
+
+    const defaultLandingFooter = {
+        quickHeading: 'Quick Links', programsHeading: 'Our Programs', contactHeading: 'Contact & Location', socialHeading: '',
+        facebook: '', youtube: '', linkedin: '', instagram: '',
+        address: 'Farmgate Main Campus, Dhaka - 1215, Bangladesh', phone: '+880 1700-000000 / +880 1800-000000', email: 'support@edusmart.edu.bd',
+        quickLinks: [{label:'Home',url:'#home'},{label:'Programs',url:'#programs'},{label:'Why Choose Us',url:'#why-us'},{label:'Meet Faculty',url:'#teachers'},{label:'Latest Notices',url:'#notice'},{label:'Login Portal',url:'login.html'}],
+        programLinks: [{label:'Medical Admission',url:'#programs'},{label:'Engineering Prep',url:'#programs'},{label:'Varsity A Unit',url:'#programs'},{label:'Varsity B Unit',url:'#programs'},{label:'HSC Academic Care',url:'#programs'},{label:'SSC Golden A+',url:'#programs'}],
+        bottomLinks: [{label:'Privacy Policy',url:'#'},{label:'Terms of Service',url:'#'},{label:'Security',url:'#'}]
+    };
+    function footerLinksToText(links) { return (Array.isArray(links) ? links : []).map(link => `${link.label || ''} | ${link.url || ''}`).join('\n'); }
+    function footerTextToLinks(value) {
+        return value.split(/\r?\n/).map(line => line.trim()).filter(Boolean).map(line => {
+            const splitAt = line.indexOf('|');
+            return splitAt < 0 ? { label: line, url: '#' } : { label: line.slice(0, splitAt).trim(), url: line.slice(splitAt + 1).trim() || '#' };
+        }).filter(link => link.label);
+    }
+    function loadLandingFooterForm() {
+        const footer = { ...defaultLandingFooter, ...(settings.landing.footer || {}) };
+        ['facebook','youtube','linkedin','instagram','address','phone','email','quickHeading','programsHeading','contactHeading','socialHeading'].forEach(key => {
+            const el = document.getElementById(`footer${key[0].toUpperCase()}${key.slice(1)}`);
+            if (el) el.value = footer[key] || '';
+        });
+        document.getElementById('footerQuickLinks').value = footerLinksToText(footer.quickLinks);
+        document.getElementById('footerProgramLinks').value = footerLinksToText(footer.programLinks);
+        document.getElementById('footerBottomLinks').value = footerLinksToText(footer.bottomLinks);
+    }
+    document.getElementById('landingFooterForm').addEventListener('submit', async e => {
+        e.preventDefault();
+        ensureLandingSettings();
+        const read = key => document.getElementById(`footer${key[0].toUpperCase()}${key.slice(1)}`).value.trim();
+        settings.landing.footer = {
+            facebook:read('facebook'), youtube:read('youtube'), linkedin:read('linkedin'), instagram:read('instagram'),
+            address:read('address'), phone:read('phone'), email:read('email'), quickHeading:read('quickHeading'),
+            programsHeading:read('programsHeading'), contactHeading:read('contactHeading'), socialHeading:read('socialHeading'),
+            quickLinks:footerTextToLinks(document.getElementById('footerQuickLinks').value),
+            programLinks:footerTextToLinks(document.getElementById('footerProgramLinks').value),
+            bottomLinks:footerTextToLinks(document.getElementById('footerBottomLinks').value)
+        };
+        settings.landing.footerDescription = document.getElementById('landingFooterDescription').value.trim();
+        settings.landing.officeHours = document.getElementById('landingOfficeHours').value.trim();
+        saveSettings();
+        await saveLandingSettingsToServer();
+    });
+
+    document.getElementById('removeHeroImageBtn').addEventListener('click', async () => {
+        ensureLandingSettings();
+        const imageUrl = settings.landing.heroImage || '';
+        const uploadStatus = document.getElementById('heroImageUploadStatus');
+        const removeButton = document.getElementById('removeHeroImageBtn');
+
+        if (!imageUrl) {
+            if (uploadStatus) uploadStatus.textContent = 'No custom banner image is currently set.';
+            return;
+        }
+        if (!confirm('Remove this banner image? It will be deleted from Supabase Storage.')) return;
+
+        if (uploadStatus) uploadStatus.textContent = 'Removing image…';
+        removeButton.disabled = true;
+        try {
+            if (imageUrl.includes('/storage/v1/object/public/landing-images/')) {
+                const response = await fetch(`${API_BASE_URL}/landing-settings/hero-image`, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ imageUrl })
+                });
+                const result = await response.json();
+                if (!response.ok || !result.success) throw new Error(result.message || 'Could not remove the image.');
+            }
+
+            settings.landing.heroImage = '';
+            document.getElementById('heroImagePreview').src = 'assets/images/hero-student.jpg';
+            saveSettings();
+            await saveLandingSettingsToServer();
+            if (uploadStatus) uploadStatus.textContent = 'Banner image removed.';
+        } catch (error) {
+            if (uploadStatus) uploadStatus.textContent = error.message || 'Could not remove the image.';
+        } finally {
+            removeButton.disabled = false;
+        }
+    });
+
+    function loadWhyUsForm() {
+        const whyUs = settings.landing.whyUs;
+        document.getElementById('whyUsEyebrowInput').value = whyUs.eyebrow || '';
+        document.getElementById('whyUsTitleInput').value = whyUs.title || '';
+        document.getElementById('whyUsDescriptionInput').value = whyUs.description || '';
+    }
+
+    document.getElementById('whyUsForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        ensureLandingSettings();
+        Object.assign(settings.landing.whyUs, {
+            eyebrow: document.getElementById('whyUsEyebrowInput').value.trim(),
+            title: document.getElementById('whyUsTitleInput').value.trim(),
+            description: document.getElementById('whyUsDescriptionInput').value.trim()
+        });
+        saveSettings();
+        await saveLandingSettingsToServer();
+    });
+
+    function renderWhyUsCards() {
+        const list = document.getElementById('whyUsCardsList');
+        const cards = settings.landing.whyUs.cards;
+        list.innerHTML = cards.length
+            ? cards.map((card, index) => `<div class="landing-program-row"><div><strong>${escapeHtml(card.title)}</strong><p>${escapeHtml(card.icon || 'fas fa-star')}</p></div><div class="landing-row-actions"><button type="button" onclick="editWhyUsCard(${index})"><i class="fas fa-pen"></i></button><button type="button" class="delete-card" onclick="deleteWhyUsCard(${index})"><i class="fas fa-trash"></i></button></div></div>`).join('')
+            : '<p class="content-help">No feature cards yet. Add a card to show it on the landing page.</p>';
+    }
+
+    window.openWhyUsEditor = () => {
+        document.getElementById('whyUsEditorForm').reset();
+        document.getElementById('whyUsEditIndex').value = '';
+        document.getElementById('whyUsIcon').value = 'fas fa-star';
+        document.getElementById('whyUsEditorTitle').textContent = 'Add Why Us Card';
+        document.getElementById('whyUsEditorModal').classList.add('open');
+    };
+    window.closeWhyUsEditor = () => document.getElementById('whyUsEditorModal').classList.remove('open');
+    window.editWhyUsCard = (index) => {
+        const card = settings.landing.whyUs.cards[index];
+        document.getElementById('whyUsEditIndex').value = index;
+        document.getElementById('whyUsCardTitle').value = card.title || '';
+        document.getElementById('whyUsCardDescription').value = card.description || '';
+        document.getElementById('whyUsIcon').value = card.icon || 'fas fa-star';
+        document.getElementById('whyUsEditorTitle').textContent = 'Edit Why Us Card';
+        document.getElementById('whyUsEditorModal').classList.add('open');
+    };
+    window.deleteWhyUsCard = async (index) => {
+        if (!confirm('Delete this Why Us card?')) return;
+        settings.landing.whyUs.cards.splice(index, 1);
+        saveSettings();
+        await saveLandingSettingsToServer();
+        renderWhyUsCards();
+    };
+    document.getElementById('whyUsEditorForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        ensureLandingSettings();
+        const card = {
+            title: document.getElementById('whyUsCardTitle').value.trim(),
+            description: document.getElementById('whyUsCardDescription').value.trim(),
+            icon: document.getElementById('whyUsIcon').value.trim() || 'fas fa-star'
+        };
+        const index = document.getElementById('whyUsEditIndex').value;
+        if (index === '') settings.landing.whyUs.cards.push(card);
+        else settings.landing.whyUs.cards[Number(index)] = card;
+        saveSettings();
+        await saveLandingSettingsToServer();
+        renderWhyUsCards();
+        closeWhyUsEditor();
+    });
+
+    function loadTeachersForm() {
+        const teachers = settings.landing.teachers;
+        document.getElementById('teachersEyebrowInput').value = teachers.eyebrow || '';
+        document.getElementById('teachersTitleInput').value = teachers.title || '';
+        document.getElementById('teachersDescriptionInput').value = teachers.description || '';
+    }
+
+    document.getElementById('teachersForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        ensureLandingSettings();
+        Object.assign(settings.landing.teachers, {
+            eyebrow: document.getElementById('teachersEyebrowInput').value.trim(),
+            title: document.getElementById('teachersTitleInput').value.trim(),
+            description: document.getElementById('teachersDescriptionInput').value.trim()
+        });
+        saveSettings();
+        await saveLandingSettingsToServer();
+    });
+
+    function renderTeacherCards() {
+        const list = document.getElementById('teachersCardsList');
+        const cards = settings.landing.teachers.cards;
+        list.innerHTML = cards.length
+            ? cards.map((card, index) => `<div class="landing-program-row"><div><strong>${escapeHtml(card.name)}</strong><p>${escapeHtml(card.subject || 'Teacher')}</p></div><div class="landing-row-actions"><button type="button" onclick="editTeacherCard(${index})"><i class="fas fa-pen"></i></button><button type="button" class="delete-card" onclick="deleteTeacherCard(${index})"><i class="fas fa-trash"></i></button></div></div>`).join('')
+            : '<p class="content-help">No teacher cards yet. Add a teacher to show the card on the landing page.</p>';
+    }
+
+    window.openTeacherEditor = () => {
+        document.getElementById('teacherEditorForm').reset();
+        document.getElementById('teacherEditIndex').value = '';
+        document.getElementById('teacherEditorTitle').textContent = 'Add Teacher';
+        document.getElementById('teacherEditorModal').classList.add('open');
+    };
+    window.closeTeacherEditor = () => document.getElementById('teacherEditorModal').classList.remove('open');
+    window.editTeacherCard = (index) => {
+        const card = settings.landing.teachers.cards[index];
+        Object.entries({ teacherEditIndex: index, teacherName: card.name, teacherSubject: card.subject, teacherQualification: card.qualification, teacherDescription: card.description, teacherPhoto: card.photo, teacherLinkedin: card.linkedin, teacherYoutube: card.youtube, teacherFacebook: card.facebook }).forEach(([id, value]) => document.getElementById(id).value = value || '');
+        document.getElementById('teacherEditorTitle').textContent = 'Edit Teacher';
+        document.getElementById('teacherEditorModal').classList.add('open');
+    };
+    window.deleteTeacherCard = async (index) => {
+        if (!confirm('Delete this teacher card?')) return;
+        settings.landing.teachers.cards.splice(index, 1);
+        saveSettings();
+        await saveLandingSettingsToServer();
+        renderTeacherCards();
+    };
+    document.getElementById('teacherEditorForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        ensureLandingSettings();
+        const card = {
+            name: document.getElementById('teacherName').value.trim(), subject: document.getElementById('teacherSubject').value.trim(), qualification: document.getElementById('teacherQualification').value.trim(), description: document.getElementById('teacherDescription').value.trim(), photo: document.getElementById('teacherPhoto').value.trim(), linkedin: document.getElementById('teacherLinkedin').value.trim(), youtube: document.getElementById('teacherYoutube').value.trim(), facebook: document.getElementById('teacherFacebook').value.trim()
+        };
+        const index = document.getElementById('teacherEditIndex').value;
+        if (index === '') settings.landing.teachers.cards.push(card);
+        else settings.landing.teachers.cards[Number(index)] = card;
+        saveSettings();
+        await saveLandingSettingsToServer();
+        renderTeacherCards();
+        closeTeacherEditor();
     });
 
     function renderLandingPrograms() {

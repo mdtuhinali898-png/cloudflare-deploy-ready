@@ -3,7 +3,7 @@
    ========================================================================== */
 
 /* $ is provided by exams.js (loaded before this file) */
-const API_BASE_ME = 'http://localhost:5002/api';
+const API_BASE_ME = window.API_BASE_URL || (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:5002/api' : '/api');
 
 let currentExam = null;
 let entryData   = [];   /* [{ roll, name, studentId, isAbsent, remarks, obtained, subjects: [{ subjectName, fullMarks, passMarks, marks, correct, wrong }] }] */

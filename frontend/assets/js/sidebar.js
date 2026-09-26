@@ -9,8 +9,22 @@
     // DOM refs
     const sidebar = document.getElementById('sidebar');
     const sidebarToggle = document.getElementById('sidebarToggle');
+    const topHeader = document.querySelector('.top-header');
+    let menuToggle = document.getElementById('menuToggle');
 
     if (!sidebar) return;
+
+    // The sidebar is off-screen on phones, so its own toggle cannot open it.
+    // Create one reachable toggle in every AEA admin page header.
+    if (!menuToggle && topHeader) {
+        menuToggle = document.createElement('button');
+        menuToggle.type = 'button';
+        menuToggle.id = 'menuToggle';
+        menuToggle.className = 'menu-toggle mobile-sidebar-trigger';
+        menuToggle.setAttribute('aria-label', 'Open navigation menu');
+        menuToggle.innerHTML = '<i class="fas fa-bars"></i>';
+        topHeader.prepend(menuToggle);
+    }
 
     // Keep finance navigation compact while preserving the dashboard link.
     function setupFinanceMenu() {
@@ -121,11 +135,7 @@
                     overlay = document.createElement('div');
                     overlay.className = 'sidebar-overlay';
                     document.body.appendChild(overlay);
-                    overlay.addEventListener('click', () => {
-                        sidebar.classList.remove('show');
-                        document.body.style.overflow = '';
-                        overlay.classList.remove('active');
-                    });
+                    overlay.addEventListener('click', closeMobileSidebar);
                 }
                 overlay.classList.add('active');
             } else {
@@ -140,6 +150,13 @@
         }
     }
 
+    function closeMobileSidebar() {
+        sidebar.classList.remove('show');
+        document.body.style.overflow = '';
+        const overlay = document.querySelector('.sidebar-overlay');
+        if (overlay) overlay.classList.remove('active');
+    }
+
     // Click on collapse/expand button in sidebar header
     if (sidebarToggle) {
         sidebarToggle.addEventListener('click', (e) => {
@@ -148,17 +165,30 @@
         });
     }
 
+    if (menuToggle) {
+        menuToggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (window.innerWidth <= 992) toggleSidebar();
+        });
+    }
+
     // On mobile: close sidebar when clicking outside or on a nav item
     if ('matchMedia' in window && window.matchMedia('(max-width: 992px)').matches) {
         sidebar.classList.remove('collapsed');
         document.body.classList.remove('sidebar-collapsed');
         document.addEventListener('click', (e) => {
-            if (!sidebar.contains(e.target) && !e.target.closest('#sidebarToggle')) {
-                sidebar.classList.remove('show');
-                document.body.style.overflow = '';
+            if (!sidebar.contains(e.target) && !e.target.closest('#sidebarToggle') && !e.target.closest('#menuToggle')) {
+                closeMobileSidebar();
             }
         });
     }
+
+    sidebar.addEventListener('click', (e) => {
+        const navLink = e.target.closest('a.nav-item[href]');
+        if (window.innerWidth <= 992 && navLink && navLink.getAttribute('href') !== '#') {
+            closeMobileSidebar();
+        }
+    });
 
     // Re-evaluate on resize to clear mobile states
     window.addEventListener('resize', () => {
@@ -205,7 +235,95 @@
     // Set active nav item on page load
     setActiveNavItem();
 
-    const API_BASE_URL = 'http://localhost:5002/api';
+    const API_BASE_URL = window.API_BASE_URL || (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:5002/api' : '/api');
+
+    function escapeHtml(str) {
+        return String(str || '').replace(/[&<>'"]/g, c => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+        }[c]));
+    }
+
+    // Dynamic Institute Name & Logo in Sidebar
+    async function updateSidebarInstituteInfo() {
+        const sidebarLogo = sidebar.querySelector('.sidebar-logo');
+        if (!sidebarLogo) return;
+
+        function applyInstitute(info) {
+            if (!info || !info.name) return;
+            const logoTextSpan = sidebarLogo.querySelector('span');
+            if (logoTextSpan) {
+                const adminBadge = logoTextSpan.querySelector('.admin-badge');
+                const badgeHtml = adminBadge ? adminBadge.outerHTML : '<small class="admin-badge">Admin</small>';
+
+                const nameParts = info.name.trim().split(/\s+/);
+                let formattedHtml = '';
+                if (nameParts.length > 1) {
+                    const firstPart = nameParts.slice(0, -1).join(' ');
+                    const lastPart = nameParts[nameParts.length - 1];
+                    formattedHtml = `${escapeHtml(firstPart)} <span class="gradient-text">${escapeHtml(lastPart)}</span>`;
+                } else {
+                    formattedHtml = `<span class="gradient-text">${escapeHtml(info.name)}</span>`;
+                }
+
+                logoTextSpan.classList.add('sidebar-institute-label');
+                logoTextSpan.innerHTML = `<span class="sidebar-institute-name">${formattedHtml}</span>${badgeHtml}`;
+                logoTextSpan.title = info.name;
+
+                const instituteName = logoTextSpan.querySelector('.sidebar-institute-name');
+                const fitNameToSidebar = () => {
+                    if (!instituteName || !logoTextSpan.clientWidth) return;
+                    const availableWidth = instituteName.clientWidth;
+                    if (!availableWidth) return;
+                    const style = window.getComputedStyle(instituteName);
+                    const canvas = document.createElement('canvas');
+                    const context = canvas.getContext('2d');
+                    const baseSize = 16;
+                    context.font = `800 ${baseSize}px ${style.fontFamily}`;
+                    const textWidth = context.measureText(info.name).width;
+                    const fittedSize = Math.min(baseSize, baseSize * availableWidth / Math.max(textWidth, 1));
+                    instituteName.style.fontSize = `${Math.max(8, fittedSize)}px`;
+                };
+
+                requestAnimationFrame(fitNameToSidebar);
+                if (window.ResizeObserver) {
+                    if (logoTextSpan._instituteNameObserver) logoTextSpan._instituteNameObserver.disconnect();
+                    logoTextSpan._instituteNameObserver = new ResizeObserver(fitNameToSidebar);
+                    logoTextSpan._instituteNameObserver.observe(logoTextSpan);
+                }
+            }
+
+            if (info.logo) {
+                const logoIcon = sidebarLogo.querySelector('.logo-icon');
+                if (logoIcon) {
+                    logoIcon.innerHTML = `<img src="${info.logo}" alt="Logo" style="width:100%;height:100%;object-fit:contain;border-radius:inherit;">`;
+                }
+            }
+        }
+
+        // Apply immediately from cache to prevent any visual delay
+        try {
+            const cached = sessionStorage.getItem('edusmart_institute_info');
+            if (cached) applyInstitute(JSON.parse(cached));
+        } catch (_) {}
+
+        // Fetch latest from API
+        try {
+            const res = await fetch(`${API_BASE_URL}/institute/public`);
+            if (res.ok) {
+                const json = await res.json();
+                if (json.success && json.data) {
+                    try { sessionStorage.setItem('edusmart_institute_info', JSON.stringify(json.data)); } catch(_) {}
+                    applyInstitute(json.data);
+                }
+            }
+        } catch (err) {
+            console.warn('Could not load institute info for sidebar:', err);
+        }
+    }
+
+    updateSidebarInstituteInfo();
+    window.updateSidebarInstituteInfo = updateSidebarInstituteInfo;
+
     const sidebarSearchInput = document.getElementById('sidebarSearchInput');
     const sidebarSearchResults = document.getElementById('sidebarSearchResults');
     let sidebarSearchTimeout = null;
@@ -244,10 +362,13 @@
         }
 
         const normalizedQuery = query.trim().toLowerCase();
-        const exactMatch = students.find(s => String(s.studentId || '').toLowerCase() === normalizedQuery);
+        const exactMatch = students.find(s => 
+            String(s.studentId || '').toLowerCase() === normalizedQuery ||
+            String(s.roll || '').toLowerCase() === normalizedQuery
+        );
         if (exactMatch || students.length === 1) {
             const target = exactMatch || students[0];
-            window.location.href = `/student-profile.html?id=${encodeURIComponent(target.studentId)}`;
+            window.location.href = `student-profile.html?id=${encodeURIComponent(target.studentId)}`;
             return;
         }
 
@@ -255,7 +376,7 @@
         sidebarSearchResults.innerHTML = students.map(student => `
             <button type="button" class="search-result-item" data-id="${student.studentId}">
                 <div class="search-result-meta">
-                    <strong>${student.studentId}</strong>
+                    <strong>${student.studentId}${student.roll && student.roll !== student.studentId ? ` (${student.roll})` : ''}</strong>
                     <span>${student.name || 'Unnamed student'}</span>
                 </div>
                 <span class="search-result-phone">${student.phone || 'No phone'}</span>
@@ -266,7 +387,7 @@
             btn.addEventListener('click', () => {
                 const studentId = btn.dataset.id;
                 if (studentId) {
-                    window.location.href = `/student-profile.html?id=${encodeURIComponent(studentId)}`;
+                    window.location.href = `student-profile.html?id=${encodeURIComponent(studentId)}`;
                 }
             });
         });

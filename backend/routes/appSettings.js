@@ -1,21 +1,30 @@
 const express = require('express');
-const AppSettings = require('../models/AppSettings');
 const router = express.Router();
+const supabase = require('../config/supabase');
 
 router.get('/', async (req, res, next) => {
     try {
-        const setting = await AppSettings.findOne({ key: 'main-settings' }).lean();
-        res.json({ success: true, data: setting ? setting.data : null });
+        const { data, error } = await supabase
+            .from('app_settings')
+            .select('value')
+            .eq('key', 'main-settings')
+            .maybeSingle();
+
+        if (error) throw error;
+        res.json({ success: true, data: data ? data.value : null });
     } catch (error) { next(error); }
 });
 
 router.put('/', async (req, res, next) => {
     try {
-        const setting = await AppSettings.findOneAndUpdate(
-            { key: 'main-settings' }, { key: 'main-settings', data: req.body },
-            { new: true, upsert: true, runValidators: true }
-        ).lean();
-        res.json({ success: true, data: setting.data });
+        const { data, error } = await supabase
+            .from('app_settings')
+            .upsert({ key: 'main-settings', value: req.body, updated_at: new Date() }, { onConflict: 'key' })
+            .select()
+            .single();
+
+        if (error) throw error;
+        res.json({ success: true, data: data.value });
     } catch (error) { next(error); }
 });
 

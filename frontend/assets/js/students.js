@@ -9,6 +9,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const ITEMS_PER_PAGE = 20;
     let currentPage = 1;
     let studentsData = [];
+    let searchTimer = null;
+    let studentsRequestController = null;
+    let latestStudentsRequest = 0;
 
     // ============================================
     // 2. API CONFIGURATION
@@ -29,13 +32,18 @@ document.addEventListener('DOMContentLoaded', () => {
             const status = document.getElementById('filterStatus').value;
             const search = document.getElementById('searchInput').value;
             
-            let url = `${API_BASE_URL}/students?page=${currentPage}&limit=${ITEMS_PER_PAGE}`;
+            if (studentsRequestController) studentsRequestController.abort();
+            studentsRequestController = new AbortController();
+            const requestId = ++latestStudentsRequest;
+            let url = `${API_BASE_URL}/students?page=${currentPage}&limit=${ITEMS_PER_PAGE}&view=directory`;
             if (batch && batch !== 'all') url += `&batch=${encodeURIComponent(batch)}`;
             if (status && status !== 'all') url += `&status=${encodeURIComponent(status)}`;
             if (search) url += `&search=${encodeURIComponent(search)}`;
 
-            const response = await fetch(url);
+            const response = await fetch(url, { signal: studentsRequestController.signal });
             const data = await response.json();
+
+            if (requestId !== latestStudentsRequest) return;
             
             studentsData = data.students || [];
             totalStudents = data.total || 0;
@@ -43,6 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             renderTable();
         } catch (error) {
+            if (error.name === 'AbortError') return;
             console.error('Error fetching students:', error);
             alert('Failed to load students from server. Please try again.');
         }
@@ -250,7 +259,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // ============================================
     document.getElementById('filterBatch').addEventListener('change', () => { currentPage = 1; fetchStudents(); });
     document.getElementById('filterStatus').addEventListener('change', () => { currentPage = 1; fetchStudents(); });
-    document.getElementById('searchInput').addEventListener('input', () => { currentPage = 1; fetchStudents(); });
+    document.getElementById('searchInput').addEventListener('input', () => {
+        currentPage = 1;
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(fetchStudents, 300);
+    });
 
     // ============================================
     // 8. INITIALIZE

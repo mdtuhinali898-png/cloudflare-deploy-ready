@@ -1,7 +1,77 @@
 const express = require('express');
 const router = express.Router();
-const Payment = require('../models/Payment');
-const Student = require('../models/Student');
+const supabase = require('../config/supabase');
+
+function formatStudent(row) {
+    if (!row) return null;
+    return {
+        _id: row.id,
+        id: row.id,
+        studentId: row.student_id,
+        roll: row.roll,
+        name: row.name,
+        guardianName: row.guardian_name,
+        motherName: row.mother_name,
+        phone: row.phone,
+        address: row.address,
+        batch: row.batch,
+        group: row.student_group,
+        previousSchool: row.previous_school,
+        guardianPhone: row.guardian_phone,
+        fee: Number(row.fee || 0),
+        admissionFee: Number(row.admission_fee || 0),
+        startMonth: row.start_month,
+        status: row.status,
+        photo: row.photo
+    };
+}
+
+function formatPayment(row) {
+    if (!row) return null;
+    return {
+        _id: row.id,
+        id: row.id,
+        receiptNo: row.receipt_no,
+        studentId: row.student_id,
+        studentName: row.student_name,
+        month: row.month,
+        year: row.year,
+        fee: Number(row.fee || 0),
+        monthlyFee: Number(row.monthly_fee || 0),
+        admissionFee: Number(row.admission_fee || 0),
+        discount: Number(row.discount || 0),
+        fine: Number(row.fine || 0),
+        amount: Number(row.amount || 0),
+        paymentMethod: row.payment_method,
+        type: row.type || 'Monthly',
+        status: row.status || 'Paid',
+        remarks: row.remarks || '',
+        date: row.date,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at
+    };
+}
+
+function toPaymentRow(data) {
+    const row = {};
+    if (data.receiptNo !== undefined) row.receipt_no = data.receiptNo;
+    if (data.studentId !== undefined) row.student_id = String(data.studentId).trim();
+    if (data.studentName !== undefined) row.student_name = data.studentName;
+    if (data.month !== undefined) row.month = data.month;
+    if (data.year !== undefined) row.year = Number(data.year);
+    if (data.fee !== undefined) row.fee = Number(data.fee || 0);
+    if (data.monthlyFee !== undefined) row.monthly_fee = Number(data.monthlyFee || 0);
+    if (data.admissionFee !== undefined) row.admission_fee = Number(data.admissionFee || 0);
+    if (data.discount !== undefined) row.discount = Number(data.discount || 0);
+    if (data.fine !== undefined) row.fine = Number(data.fine || 0);
+    if (data.amount !== undefined) row.amount = Number(data.amount || 0);
+    if (data.paymentMethod !== undefined) row.payment_method = data.paymentMethod;
+    if (data.type !== undefined) row.type = data.type;
+    if (data.status !== undefined) row.status = data.status;
+    if (data.remarks !== undefined) row.remarks = data.remarks;
+    if (data.date !== undefined) row.date = String(data.date);
+    return row;
+}
 
 // @route   GET /api/payments
 // @desc    Get all payments with filtering
@@ -13,31 +83,22 @@ router.get('/', async (req, res) => {
         const method = req.query.method;
         const status = req.query.status;
         const studentId = req.query.studentId;
-        
-        // Build query
-        let query = {};
-        
-        if (month && month !== 'all') {
-            query.month = month;
-        }
-        
-        if (method && method !== 'all') {
-            query.paymentMethod = method;
-        }
-        
-        if (status && status !== 'all') {
-            query.status = status;
-        }
-        
-        if (studentId) {
-            query.studentId = studentId;
-        }
-        
-        // Execute query
-        const payments = await Payment.find(query)
-            .sort({ createdAt: -1 })
+
+        let query = supabase
+            .from('payments')
+            .select('*')
+            .order('created_at', { ascending: false })
             .limit(limit);
-        
+
+        if (month && month !== 'all') query = query.eq('month', month);
+        if (method && method !== 'all') query = query.eq('payment_method', method);
+        if (status && status !== 'all') query = query.eq('status', status);
+        if (studentId) query = query.eq('student_id', studentId.trim());
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        const payments = (data || []).map(formatPayment);
         res.json({
             success: true,
             payments,
@@ -54,163 +115,32 @@ router.get('/', async (req, res) => {
 // @access  Public
 router.get('/receipt/:receiptNo', async (req, res) => {
     try {
-        let payment = await Payment.findOne({ 
-            receiptNo: { $regex: `^${req.params.receiptNo.trim()}$`, $options: 'i' } 
-        });
-        
-        if (!payment && req.params.receiptNo.match(/^[0-9a-fA-F]{24}$/)) {
-            payment = await Payment.findById(req.params.receiptNo);
+        const receiptNo = (req.params.receiptNo || '').trim();
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(receiptNo);
+
+        let { data: payment } = await supabase
+            .from('payments')
+            .select('*')
+            .ilike('receipt_no', receiptNo)
+            .maybeSingle();
+
+        if (!payment && isUuid) {
+            const { data: byId } = await supabase
+                .from('payments')
+                .select('*')
+                .eq('id', receiptNo)
+                .maybeSingle();
+            payment = byId;
         }
-        
+
         if (!payment) {
             return res.status(404).json({ success: false, message: 'Payment not found' });
         }
-        
-        res.json({ success: true, payment });
+
+        res.json({ success: true, payment: formatPayment(payment) });
     } catch (error) {
         console.error('Error fetching payment by receipt:', error);
         res.status(500).json({ success: false, message: 'Error fetching payment', error: error.message });
-    }
-});
-
-// @route   GET /api/payments/:id
-// @desc    Get single payment by ID
-// @access  Public
-router.get('/:id([a-fA-F0-9]{24})', async (req, res) => {
-    try {
-        const payment = await Payment.findById(req.params.id);
-        
-        if (!payment) {
-            return res.status(404).json({ success: false, message: 'Payment not found' });
-        }
-        
-        res.json({ success: true, payment });
-    } catch (error) {
-        console.error('Error fetching payment:', error);
-        res.status(500).json({ success: false, message: 'Error fetching payment', error: error.message });
-    }
-});
-
-// @route   POST /api/payments
-// @desc    Create new payment
-// @access  Public
-router.post('/', async (req, res) => {
-    try {
-        const paymentData = req.body;
-        
-        // Generate receipt number
-        const receiptCount = await Payment.countDocuments();
-        const receiptNo = 'RCPT-' + Date.now() + '-' + (receiptCount + 1);
-        
-        // Auto-calculate month and year from date if not provided
-        if (!paymentData.month || !paymentData.year) {
-            if (paymentData.date) {
-                const dateObj = new Date(paymentData.date);
-                if (!paymentData.month) {
-                    paymentData.month = dateObj.toLocaleString('default', { month: 'long' });
-                }
-                if (!paymentData.year) {
-                    paymentData.year = dateObj.getFullYear();
-                }
-            }
-        }
-        
-        // Create payment with receipt number
-        const payment = new Payment({
-            ...paymentData,
-            receiptNo
-        });
-        
-        await payment.save();
-        
-        res.status(201).json({ 
-            success: true, 
-            message: 'Payment added successfully',
-            payment,
-            receiptNo
-        });
-    } catch (error) {
-        console.error('Error creating payment:', error);
-        res.status(500).json({ success: false, message: 'Error creating payment', error: error.message });
-    }
-});
-
-// @route   PUT /api/payments/:id
-// @desc    Update payment
-// @access  Public
-router.put('/:id', async (req, res) => {
-    try {
-        const updateData = { ...req.body };
-        
-        // Auto-calculate month and year from date if date is updated
-        if (updateData.date) {
-            const dateObj = new Date(updateData.date);
-            if (!updateData.month) {
-                updateData.month = dateObj.toLocaleString('default', { month: 'long' });
-            }
-            if (!updateData.year) {
-                updateData.year = dateObj.getFullYear();
-            }
-        }
-        
-        const payment = await Payment.findByIdAndUpdate(
-            req.params.id,
-            updateData,
-            { new: true, runValidators: true }
-        );
-        
-        if (!payment) {
-            return res.status(404).json({ success: false, message: 'Payment not found' });
-        }
-        
-        res.json({ 
-            success: true, 
-            message: 'Payment updated successfully',
-            payment 
-        });
-    } catch (error) {
-        console.error('Error updating payment:', error);
-        res.status(500).json({ success: false, message: 'Error updating payment', error: error.message });
-    }
-});
-
-// @route   DELETE /api/payments/:id
-// @desc    Delete payment
-// @access  Public
-router.delete('/:id', async (req, res) => {
-    try {
-        const payment = await Payment.findByIdAndDelete(req.params.id);
-        
-        if (!payment) {
-            return res.status(404).json({ success: false, message: 'Payment not found' });
-        }
-        
-        res.json({ 
-            success: true, 
-            message: 'Payment deleted successfully' 
-        });
-    } catch (error) {
-        console.error('Error deleting payment:', error);
-        res.status(500).json({ success: false, message: 'Error deleting payment', error: error.message });
-    }
-});
-
-// @route   GET /api/payments/student/:studentId
-// @desc    Get all payments for a specific student
-// @access  Public
-router.get('/student/:studentId', async (req, res) => {
-    try {
-        const payments = await Payment.find({ studentId: req.params.studentId })
-            .sort({ date: -1 });
-        
-        res.json({
-            success: true,
-            payments,
-            total: payments.length
-        });
-    } catch (error) {
-        console.error('Error fetching student payments:', error);
-        res.status(500).json({ success: false, message: 'Error fetching student payments', error: error.message });
     }
 });
 
@@ -222,35 +152,39 @@ router.get('/stats/overview', async (req, res) => {
         const today = new Date().toISOString().split('T')[0];
         const currentMonthName = new Date().toLocaleString('default', { month: 'long' });
         const currentYear = new Date().getFullYear();
-        
-        // Today's collection
-        const todayPayments = await Payment.find({ date: today });
-        const todayCollection = todayPayments.reduce((sum, p) => sum + p.amount, 0);
-        
-        // This month's collection (month is stored as string like "July")
-        const monthPayments = await Payment.find({ month: currentMonthName, year: currentYear });
-        const monthlyIncome = monthPayments.reduce((sum, p) => sum + p.amount, 0);
-        
-        // Total payments count
-        const totalPayments = await Payment.countDocuments();
-        
-        // Payment method breakdown
-        const methodStats = await Payment.aggregate([
-            {
-                $group: {
-                    _id: '$paymentMethod',
-                    count: { $sum: 1 },
-                    total: { $sum: '$amount' }
-                }
-            }
+
+        const [
+            { data: todayPayments },
+            { data: monthPayments },
+            { count: totalPayments },
+            { data: allPaymentMethods }
+        ] = await Promise.all([
+            supabase.from('payments').select('amount').eq('date', today),
+            supabase.from('payments').select('amount').eq('month', currentMonthName).eq('year', currentYear),
+            supabase.from('payments').select('*', { count: 'exact', head: true }),
+            supabase.from('payments').select('payment_method, amount')
         ]);
-        
+
+        const todayCollection = (todayPayments || []).reduce((sum, p) => sum + Number(p.amount || 0), 0);
+        const monthlyIncome = (monthPayments || []).reduce((sum, p) => sum + Number(p.amount || 0), 0);
+
+        // Group by payment method
+        const methodMap = new Map();
+        (allPaymentMethods || []).forEach(p => {
+            const m = p.payment_method || 'Cash';
+            const cur = methodMap.get(m) || { _id: m, count: 0, total: 0 };
+            cur.count += 1;
+            cur.total += Number(p.amount || 0);
+            methodMap.set(m, cur);
+        });
+        const methodStats = Array.from(methodMap.values());
+
         res.json({
             success: true,
             todayCollection,
-            todayPaymentsCount: todayPayments.length,
+            todayPaymentsCount: (todayPayments || []).length,
             monthlyIncome,
-            totalPayments,
+            totalPayments: totalPayments || 0,
             methodStats
         });
     } catch (error) {
@@ -259,207 +193,29 @@ router.get('/stats/overview', async (req, res) => {
     }
 });
 
-// @route   GET /api/payments/batch-monthly-status
-// @desc    Get batch-wise monthly payment status
+// @route   GET /api/payments/student/:studentId
+// @desc    Get all payments for a specific student
 // @access  Public
-router.get('/batch-monthly-status', async (req, res) => {
+router.get('/student/:studentId', async (req, res) => {
     try {
-        const { batch, month, year } = req.query;
-        
-        if (!batch || !month || !year) {
-            return res.status(400).json({ 
-                success: false, 
-                message: 'Batch, month and year are required' 
-            });
-        }
-        
-        // Get all students in the batch
-        const students = await Student.find({ batch, status: 'Active' }).lean();
-        
-        // A payment does not have to store its batch. The student's batch is
-        // authoritative, which also makes historic payments report correctly.
-        // Older data used MongoDB's document ID while new payments use the
-        // readable Student ID. Accept both so no historical payment is lost.
-        const studentByAnyId = new Map();
-        students.forEach(student => {
-            [student.studentId, String(student._id), student.id]
-                .filter(Boolean)
-                .forEach(id => studentByAnyId.set(String(id), student));
-        });
-        const studentIds = [...studentByAnyId.keys()];
-        const allStudentPayments = await Payment.find({ studentId: { $in: studentIds } }).lean();
+        const studentId = (req.params.studentId || '').trim();
+        const { data, error } = await supabase
+            .from('payments')
+            .select('*')
+            .eq('student_id', studentId)
+            .order('date', { ascending: false });
 
-        const monthIndex = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-        const getMonthIndex = value => monthIndex.findIndex(name => name.toLowerCase() === String(value || '').trim().toLowerCase());
-        const selectedMonthIndex = getMonthIndex(month);
-        const selectedYear = Number(year);
-        const paymentMatchesPeriod = payment => {
-            const paymentMonthIndex = getMonthIndex(payment.month);
-            const paymentYear = Number(payment.year);
-            if (paymentMonthIndex === selectedMonthIndex && paymentYear === selectedYear) return true;
+        if (error) throw error;
+        const payments = (data || []).map(formatPayment);
 
-            // Some old payments have no month/year. Use their payment date as
-            // a safe fallback instead of incorrectly showing them as unpaid.
-            if ((!payment.month || !payment.year) && payment.date) {
-                const date = new Date(`${payment.date}T00:00:00`);
-                return !Number.isNaN(date.getTime()) && date.getMonth() === selectedMonthIndex && date.getFullYear() === selectedYear;
-            }
-            return false;
-        };
-        const payments = allStudentPayments.filter(paymentMatchesPeriod);
-        const paymentsByStudent = new Map();
-        payments.forEach(payment => {
-            const student = studentByAnyId.get(String(payment.studentId));
-            if (!student) return;
-            const current = paymentsByStudent.get(student.studentId) || [];
-            current.push(payment);
-            paymentsByStudent.set(student.studentId, current);
-        });
-        const lastPaymentByStudent = new Map();
-        allStudentPayments
-            .sort((first, second) => String(second.date || '').localeCompare(String(first.date || '')) || new Date(second.createdAt || 0) - new Date(first.createdAt || 0))
-            .forEach(payment => {
-                const student = studentByAnyId.get(String(payment.studentId));
-                if (student && !lastPaymentByStudent.has(student.studentId)) lastPaymentByStudent.set(student.studentId, payment);
-            });
-        
-        // Calculate paid and unpaid students
-        const paidStudents = [];
-        const unpaidStudents = [];
-        
-        for (const student of students) {
-            const studentPayments = paymentsByStudent.get(student.studentId) || [];
-            const totalPaid = studentPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
-            const monthlyFee = student.fee || 0;
-            
-            // Paid = any payment received (even partial counts as paid;
-            // only students with ZERO payment for this month are Due)
-            if (studentPayments.length > 0 && totalPaid > 0) {
-                // Paid student
-                const lastPayment = studentPayments.sort((a, b) => b.date.localeCompare(a.date))[0];
-                paidStudents.push({
-                    id: student.studentId || student.id,
-                    name: student.name,
-                    phone: student.phone,
-                    paidAmount: totalPaid,
-                    paymentDate: lastPayment.date,
-                    receiptNo: lastPayment.receiptNo,
-                    method: lastPayment.paymentMethod || lastPayment.method
-                });
-            } else {
-                // Unpaid/Due student (no payment at all for this month)
-                const lastPayment = lastPaymentByStudent.get(student.studentId);
-                
-                unpaidStudents.push({
-                    id: student.studentId || student.id,
-                    name: student.name,
-                    phone: student.phone,
-                    dueAmount: monthlyFee,
-                    lastPaymentDate: lastPayment ? lastPayment.date : 'N/A'
-                });
-            }
-        }
-        
-        const totalStudents = students.length;
-        const paidCount = paidStudents.length;
-        const unpaidCount = unpaidStudents.length;
-        const collectionRate = totalStudents > 0 ? ((paidCount / totalStudents) * 100).toFixed(1) : 0;
-        
         res.json({
             success: true,
-            totalStudents,
-            paidCount,
-            unpaidCount,
-            collectionRate,
-            paidStudents,
-            unpaidStudents
+            payments,
+            total: payments.length
         });
-        
     } catch (error) {
-        console.error('Error fetching batch monthly status:', error);
-        res.status(500).json({ 
-            success: false, 
-            message: 'Error fetching batch monthly status', 
-            error: error.message 
-        });
-    }
-});
-
-// @route   GET /api/payments/batch-payment-status
-// @desc    Get a selected batch's payment status across one or more months
-// @access  Public
-router.get('/batch-payment-status', async (req, res) => {
-    try {
-        const { batch, year } = req.query;
-        const validMonths = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-        const selectedMonths = String(req.query.months || '')
-            .split(',')
-            .map(month => month.trim())
-            .filter(month => validMonths.includes(month))
-            .filter((month, index, months) => months.indexOf(month) === index)
-            .sort((first, second) => validMonths.indexOf(first) - validMonths.indexOf(second));
-
-        if (!batch || !year || selectedMonths.length === 0) {
-            return res.status(400).json({ success: false, message: 'Batch, year and at least one month are required' });
-        }
-
-        // The batch report must include every student in the selected batch;
-        // payment status is still calculated from each student's actual fee.
-        const students = await Student.find({ batch })
-            .select('studentId name batch fee phone _id')
-            .lean();
-        const studentByAnyId = new Map();
-        students.forEach(student => {
-            [student.studentId, String(student._id), student.id]
-                .filter(Boolean)
-                .forEach(id => studentByAnyId.set(String(id), student));
-        });
-        const payments = await Payment.find({ studentId: { $in: [...studentByAnyId.keys()] } }).lean();
-        const selectedYear = Number(year);
-        const monthFromDate = payment => {
-            if (!payment.date) return null;
-            const date = new Date(`${payment.date}T00:00:00`);
-            return Number.isNaN(date.getTime()) ? null : validMonths[date.getMonth()];
-        };
-        const yearFromDate = payment => {
-            if (!payment.date) return null;
-            const date = new Date(`${payment.date}T00:00:00`);
-            return Number.isNaN(date.getTime()) ? null : date.getFullYear();
-        };
-
-        const paymentsByStudent = new Map();
-        payments.forEach(payment => {
-            const student = studentByAnyId.get(String(payment.studentId));
-            if (!student) return;
-            const list = paymentsByStudent.get(student.studentId) || [];
-            list.push(payment);
-            paymentsByStudent.set(student.studentId, list);
-        });
-
-        const reportStudents = students.map(student => {
-            const studentPayments = paymentsByStudent.get(student.studentId) || [];
-            const monthlyStatus = {};
-            selectedMonths.forEach(month => {
-                const paidAmount = studentPayments
-                    .filter(payment => {
-                        const paymentMonth = payment.month || monthFromDate(payment);
-                        const paymentYear = payment.year || yearFromDate(payment);
-                        return String(paymentMonth).toLowerCase() === month.toLowerCase() && Number(paymentYear) === selectedYear;
-                    })
-                    .reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
-                monthlyStatus[month] = paidAmount > 0 ? 'Paid' : 'Unpaid';
-            });
-            return { id: student.studentId, name: student.name, batch: student.batch, fee: student.fee || 0, monthlyStatus };
-        }).sort((first, second) => String(first.id || '').localeCompare(
-            String(second.id || ''),
-            undefined,
-            { numeric: true, sensitivity: 'base' }
-        ));
-
-        res.json({ success: true, batch, year: selectedYear, months: selectedMonths, students: reportStudents });
-    } catch (error) {
-        console.error('Error fetching batch payment status:', error);
-        res.status(500).json({ success: false, message: 'Error fetching batch payment status', error: error.message });
+        console.error('Error fetching student payments:', error);
+        res.status(500).json({ success: false, message: 'Error fetching student payments', error: error.message });
     }
 });
 
@@ -468,21 +224,28 @@ router.get('/batch-payment-status', async (req, res) => {
 // @access  Public
 router.get('/student/:studentId/monthly-status', async (req, res) => {
     try {
-        const { studentId } = req.params;
-        
+        const studentId = (req.params.studentId || '').trim();
+
         // Find student
-        const student = await Student.findOne({ studentId });
+        const { data: student } = await supabase
+            .from('students')
+            .select('*')
+            .ilike('student_id', studentId)
+            .maybeSingle();
+
         if (!student) {
             return res.status(404).json({ success: false, message: 'Student not found' });
         }
-        
-        // Find all payments for this student
-        const payments = await Payment.find({ studentId }).sort({ date: -1 });
-        
-        // Get current year or student's admission year
+
+        const { data: paymentsRaw } = await supabase
+            .from('payments')
+            .select('*')
+            .eq('student_id', student.student_id)
+            .order('date', { ascending: false });
+
+        const payments = (paymentsRaw || []).map(formatPayment);
         const currentYear = new Date().getFullYear();
-        
-        // Define month mappings
+
         const months = [
             { name: 'January', num: 1 },
             { name: 'February', num: 2 },
@@ -497,24 +260,18 @@ router.get('/student/:studentId/monthly-status', async (req, res) => {
             { name: 'November', num: 11 },
             { name: 'December', num: 12 }
         ];
-        
-        // Build monthly status for last 12 months
-        // Calculate correct order: starting from 12 months ago to current month
-        const currentMonthIndex = new Date().getMonth(); // 0=January, 11=December
+
+        const currentMonthIndex = new Date().getMonth();
         const monthlyStatus = months.map((month, idx) => {
-            // Determine correct year for this month in a 12-month cycle
-            // Month goes from Jan(0) to Dec(11)
-            // If this month's index is ahead of current month, it belongs to previous year
             let monthYear = currentYear;
             if (idx > currentMonthIndex) {
                 monthYear = currentYear - 1;
             }
-            
-            // Check if payment exists for this specific month and year
-            const monthPayments = payments.filter(p => 
-                p.month === month.name && p.year === monthYear
+
+            const monthPayments = payments.filter(p =>
+                p.type !== 'Admission' && p.month === month.name && Number(p.year) === monthYear
             );
-            
+
             if (monthPayments.length === 0) {
                 return {
                     month: month.name,
@@ -525,46 +282,44 @@ router.get('/student/:studentId/monthly-status', async (req, res) => {
                     receiptNo: null
                 };
             }
-            
-            // Get the latest payment for this month
+
             const latestPayment = monthPayments[0];
-            const totalPaid = monthPayments.reduce((sum, p) => sum + p.amount, 0);
-            const fee = student.fee || 0;
-            
+            const totalPaid = monthPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+            const fee = Number(student.fee || 0);
+
             let status = 'Due';
             if (totalPaid > 0) {
                 status = 'Paid';
             }
-            
+
             return {
                 month: month.name,
                 monthNum: month.num,
                 status,
                 amount: totalPaid,
-                fee: fee,
+                fee,
                 paidDate: latestPayment.date,
                 receiptNo: latestPayment.receiptNo,
                 paymentMethod: latestPayment.paymentMethod
             };
         });
-        
-        // Calculate statistics
+
         const paidMonths = monthlyStatus.filter(m => m.status === 'Paid').length;
         const partialMonths = monthlyStatus.filter(m => m.status === 'Partial').length;
         const unpaidMonths = monthlyStatus.filter(m => m.status === 'Unpaid').length;
         const totalPaidAmount = monthlyStatus.reduce((sum, m) => sum + m.amount, 0);
-        const totalExpected = student.fee * 12;
+        const totalExpected = Number(student.fee || 0) * 12;
         const totalDue = Math.max(0, totalExpected - totalPaidAmount);
-        
+
         res.json({
             success: true,
             student: {
-                studentId: student.studentId,
+                studentId: student.student_id,
                 name: student.name,
                 batch: student.batch,
-                fee: student.fee,
+                fee: Number(student.fee || 0),
                 phone: student.phone,
-                guardianName: student.guardianName,
+                guardianName: student.guardian_name,
                 photo: student.photo,
                 status: student.status
             },
@@ -582,6 +337,336 @@ router.get('/student/:studentId/monthly-status', async (req, res) => {
     } catch (error) {
         console.error('Error fetching monthly status:', error);
         res.status(500).json({ success: false, message: 'Error fetching monthly payment status', error: error.message });
+    }
+});
+
+// @route   GET /api/payments/batch-monthly-status
+// @desc    Get batch-wise monthly payment status
+// @access  Public
+router.get('/batch-monthly-status', async (req, res) => {
+    try {
+        const { batch, month, year } = req.query;
+
+        if (!batch || !month || !year) {
+            return res.status(400).json({ success: false, message: 'Batch, month and year are required' });
+        }
+
+        const { data: studentsRaw, error: studentErr } = await supabase
+            .from('students')
+            .select('*')
+            .eq('batch', batch)
+            .ilike('status', 'active');
+
+        if (studentErr) throw studentErr;
+
+        const students = (studentsRaw || []).map(formatStudent);
+        const studentIds = students.map(s => s.studentId).filter(Boolean);
+
+        let allStudentPayments = [];
+        if (studentIds.length > 0) {
+            const { data: allStudentPaymentsRaw, error: payErr } = await supabase
+                .from('payments')
+                .select('*')
+                .in('student_id', studentIds);
+
+            if (payErr) throw payErr;
+            allStudentPayments = (allStudentPaymentsRaw || []).map(formatPayment);
+        }
+
+        const monthIndex = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+        const getMonthIndex = value => monthIndex.findIndex(name => name.toLowerCase() === String(value || '').trim().toLowerCase());
+        const selectedMonthIndex = getMonthIndex(month);
+        const selectedYear = Number(year);
+
+        const paymentMatchesPeriod = payment => {
+            const paymentMonthIndex = getMonthIndex(payment.month);
+            const paymentYear = Number(payment.year);
+            if (paymentMonthIndex === selectedMonthIndex && paymentYear === selectedYear) return true;
+
+            if ((!payment.month || !payment.year) && payment.date) {
+                const date = new Date(`${payment.date}T00:00:00`);
+                return !Number.isNaN(date.getTime()) && date.getMonth() === selectedMonthIndex && date.getFullYear() === selectedYear;
+            }
+            return false;
+        };
+
+        const payments = allStudentPayments.filter(payment => payment.type !== 'Admission' && paymentMatchesPeriod(payment));
+        const paymentsByStudent = new Map();
+        payments.forEach(payment => {
+            const current = paymentsByStudent.get(payment.studentId) || [];
+            current.push(payment);
+            paymentsByStudent.set(payment.studentId, current);
+        });
+
+        const lastPaymentByStudent = new Map();
+        allStudentPayments
+            .sort((first, second) => String(second.date || '').localeCompare(String(first.date || '')))
+            .filter(payment => payment.type !== 'Admission')
+            .forEach(payment => {
+                if (!lastPaymentByStudent.has(payment.studentId)) lastPaymentByStudent.set(payment.studentId, payment);
+            });
+
+        const paidStudents = [];
+        const unpaidStudents = [];
+
+        for (const student of students) {
+            const studentPayments = paymentsByStudent.get(student.studentId) || [];
+            const totalPaid = studentPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+            const monthlyFee = student.fee || 0;
+
+            if (studentPayments.length > 0 && totalPaid > 0) {
+                const lastPayment = studentPayments.sort((a, b) => b.date.localeCompare(a.date))[0];
+                paidStudents.push({
+                    id: student.studentId,
+                    name: student.name,
+                    phone: student.phone,
+                    paidAmount: totalPaid,
+                    paymentDate: lastPayment.date,
+                    receiptNo: lastPayment.receiptNo,
+                    method: lastPayment.paymentMethod
+                });
+            } else {
+                const lastPayment = lastPaymentByStudent.get(student.studentId);
+                unpaidStudents.push({
+                    id: student.studentId,
+                    name: student.name,
+                    phone: student.phone,
+                    dueAmount: monthlyFee,
+                    lastPaymentDate: lastPayment ? lastPayment.date : 'N/A'
+                });
+            }
+        }
+
+        const totalStudents = students.length;
+        const paidCount = paidStudents.length;
+        const unpaidCount = unpaidStudents.length;
+        const collectionRate = totalStudents > 0 ? ((paidCount / totalStudents) * 100).toFixed(1) : 0;
+
+        res.json({
+            success: true,
+            totalStudents,
+            paidCount,
+            unpaidCount,
+            collectionRate,
+            paidStudents,
+            unpaidStudents
+        });
+    } catch (error) {
+        console.error('Error fetching batch monthly status:', error);
+        res.status(500).json({ success: false, message: 'Error fetching batch monthly status', error: error.message });
+    }
+});
+
+// @route   GET /api/payments/batch-payment-status
+// @desc    Get a selected batch's payment status across one or more months
+// @access  Public
+router.get('/batch-payment-status', async (req, res) => {
+    try {
+        const { batch, year } = req.query;
+        const validMonths = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+        const selectedMonths = String(req.query.months || '')
+            .split(',')
+            .map(m => m.trim())
+            .filter(m => validMonths.includes(m))
+            .filter((m, idx, arr) => arr.indexOf(m) === idx)
+            .sort((a, b) => validMonths.indexOf(a) - validMonths.indexOf(b));
+
+        if (!batch || !year || selectedMonths.length === 0) {
+            return res.status(400).json({ success: false, message: 'Batch, year and at least one month are required' });
+        }
+
+        const { data: studentsRaw, error: studentErr } = await supabase
+            .from('students')
+            .select('student_id, name, batch, fee, phone')
+            .eq('batch', batch);
+
+        if (studentErr) throw studentErr;
+
+        const students = (studentsRaw || []).map(formatStudent);
+        const studentIds = students.map(s => s.studentId).filter(Boolean);
+
+        let payments = [];
+        if (studentIds.length > 0) {
+            const { data: paymentsRaw, error: payErr } = await supabase
+                .from('payments')
+                .select('*')
+                .in('student_id', studentIds);
+
+            if (payErr) throw payErr;
+            payments = (paymentsRaw || []).map(formatPayment);
+        }
+        const selectedYear = Number(year);
+
+        const paymentsByStudent = new Map();
+        payments.filter(payment => payment.type !== 'Admission').forEach(payment => {
+            const list = paymentsByStudent.get(payment.studentId) || [];
+            list.push(payment);
+            paymentsByStudent.set(payment.studentId, list);
+        });
+
+        const reportStudents = students.map(student => {
+            const studentPayments = paymentsByStudent.get(student.studentId) || [];
+            const monthlyStatus = {};
+            selectedMonths.forEach(month => {
+                const paidAmount = studentPayments
+                    .filter(payment => {
+                        const paymentMonth = payment.month || (payment.date ? validMonths[new Date(`${payment.date}T00:00:00`).getMonth()] : null);
+                        const paymentYear = payment.year || (payment.date ? new Date(`${payment.date}T00:00:00`).getFullYear() : null);
+                        return String(paymentMonth).toLowerCase() === month.toLowerCase() && Number(paymentYear) === selectedYear;
+                    })
+                    .reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+                monthlyStatus[month] = paidAmount > 0 ? 'Paid' : 'Unpaid';
+            });
+            return { id: student.studentId, name: student.name, batch: student.batch, fee: student.fee || 0, monthlyStatus };
+        }).sort((first, second) => String(first.id || '').localeCompare(String(second.id || ''), undefined, { numeric: true, sensitivity: 'base' }));
+
+        res.json({ success: true, batch, year: selectedYear, months: selectedMonths, students: reportStudents });
+    } catch (error) {
+        console.error('Error fetching batch payment status:', error);
+        res.status(500).json({ success: false, message: 'Error fetching batch payment status', error: error.message });
+    }
+});
+
+// @route   POST /api/payments
+// @desc    Create new payment
+// @access  Public
+router.post('/', async (req, res) => {
+    try {
+        const paymentData = req.body;
+
+        // Auto-calculate month and year from date if not provided
+        if (!paymentData.month || !paymentData.year) {
+            if (paymentData.date) {
+                const dateObj = new Date(paymentData.date);
+                if (!paymentData.month) {
+                    paymentData.month = dateObj.toLocaleString('default', { month: 'long' });
+                }
+                if (!paymentData.year) {
+                    paymentData.year = dateObj.getFullYear();
+                }
+            }
+        }
+
+        // Generate receipt number
+        const { count: receiptCount } = await supabase
+            .from('payments')
+            .select('*', { count: 'exact', head: true });
+
+        const receiptNo = 'RCPT-' + Date.now() + '-' + ((receiptCount || 0) + 1);
+
+        const newRow = toPaymentRow(paymentData);
+        newRow.receipt_no = receiptNo;
+        newRow.created_at = new Date();
+        newRow.updated_at = new Date();
+
+        const { data: savedPayment, error } = await supabase
+            .from('payments')
+            .insert(newRow)
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        res.status(201).json({ 
+            success: true, 
+            message: 'Payment added successfully',
+            payment: formatPayment(savedPayment),
+            receiptNo
+        });
+    } catch (error) {
+        console.error('Error creating payment:', error);
+        res.status(500).json({ success: false, message: 'Error creating payment', error: error.message });
+    }
+});
+
+// @route   PUT /api/payments/:id
+// @desc    Update payment
+// @access  Public
+router.put('/:id', async (req, res) => {
+    try {
+        const idParam = req.params.id;
+        const updateData = toPaymentRow(req.body);
+
+        if (updateData.date) {
+            const dateObj = new Date(updateData.date);
+            if (!updateData.month) updateData.month = dateObj.toLocaleString('default', { month: 'long' });
+            if (!updateData.year) updateData.year = dateObj.getFullYear();
+        }
+        updateData.updated_at = new Date();
+
+        let query = supabase.from('payments').update(updateData);
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idParam);
+        if (isUuid) {
+            query = query.eq('id', idParam);
+        } else {
+            query = query.eq('receipt_no', idParam);
+        }
+
+        const { data: updatedPayment, error } = await query.select().single();
+        if (error) throw error;
+
+        if (!updatedPayment) {
+            return res.status(404).json({ success: false, message: 'Payment not found' });
+        }
+
+        res.json({ 
+            success: true, 
+            message: 'Payment updated successfully',
+            payment: formatPayment(updatedPayment)
+        });
+    } catch (error) {
+        console.error('Error updating payment:', error);
+        res.status(500).json({ success: false, message: 'Error updating payment', error: error.message });
+    }
+});
+
+// @route   DELETE /api/payments/:id
+// @desc    Delete payment
+// @access  Public
+router.delete('/:id', async (req, res) => {
+    try {
+        const idParam = req.params.id;
+        let query = supabase.from('payments').delete();
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idParam);
+        if (isUuid) {
+            query = query.eq('id', idParam);
+        } else {
+            query = query.eq('receipt_no', idParam);
+        }
+
+        const { error } = await query;
+        if (error) throw error;
+
+        res.json({ success: true, message: 'Payment deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting payment:', error);
+        res.status(500).json({ success: false, message: 'Error deleting payment', error: error.message });
+    }
+});
+
+// @route   GET /api/payments/:id
+// @desc    Get single payment by ID
+// @access  Public
+router.get('/:id', async (req, res) => {
+    try {
+        const idParam = req.params.id;
+        let query = supabase.from('payments').select('*');
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idParam);
+        if (isUuid) {
+            query = query.eq('id', idParam);
+        } else {
+            query = query.eq('receipt_no', idParam);
+        }
+
+        const { data: payment, error } = await query.maybeSingle();
+        if (error || !payment) {
+            return res.status(404).json({ success: false, message: 'Payment not found' });
+        }
+
+        res.json({ success: true, payment: formatPayment(payment) });
+    } catch (error) {
+        console.error('Error fetching payment:', error);
+        res.status(500).json({ success: false, message: 'Error fetching payment', error: error.message });
     }
 });
 

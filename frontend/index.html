@@ -19,12 +19,12 @@
        ========================================================================== -->
   <div class="navbar-wrapper">
     <nav class="navbar">
-      <div style="display:flex; align-items:center; gap:0.5rem;">
+      <div class="navbar-brand-group">
         <a href="/index.html" class="logo">
           <div class="logo-icon">
             <i class="fas fa-graduation-cap"></i>
           </div>
-          <span id="landingBrandName">Edu<span class="gradient-text">Smart</span></span>
+          <span id="landingBrandName" data-short-name="ES">Edu<span class="gradient-text">Smart</span></span>
         </a>
         <a href="/ucc/index.html" class="logo branch-switcher-btn" title="UCC পাবনা শাখায় যান" style="
           font-size:0.85rem;
@@ -53,6 +53,10 @@
         <li><a href="#teachers" class="nav-link"><i class="fas fa-chalkboard-user"></i> Teachers</a></li>
         <li><a href="#notice" class="nav-link"><i class="fas fa-bullhorn"></i> Notice</a></li>
         <li><a href="#faq" class="nav-link"><i class="fas fa-circle-question"></i> FAQ</a></li>
+        <li class="mobile-login-actions">
+          <button class="btn btn-outline btn-sm btn-student-login"><i class="fas fa-user"></i> Student Login</button>
+          <button class="btn btn-primary btn-sm btn-admin-login"><i class="fas fa-shield-alt"></i> Admin Login</button>
+        </li>
       </ul>
 
       <div class="nav-actions">
@@ -348,12 +352,12 @@
   <section class="why-us-section" id="why-us">
     <div class="container">
       <div class="section-header">
-        <span class="sub-title">Our Distinction</span>
-        <h2>Why EduSmart Leads the Industry</h2>
-        <p>We blend world-class pedagogy with modern SaaS tools to deliver unparalleled learning outcomes.</p>
+        <span class="sub-title" id="whyUsEyebrow">Our Distinction</span>
+        <h2 id="whyUsTitle">Why EduSmart Leads the Industry</h2>
+        <p id="whyUsDescription">We blend world-class pedagogy with modern SaaS tools to deliver unparalleled learning outcomes.</p>
       </div>
 
-      <div class="why-grid">
+      <div class="why-grid" id="whyUsGrid">
         <div class="why-card">
           <div class="why-icon-wrapper">
             <i class="fas fa-user-tie"></i>
@@ -441,12 +445,12 @@
   <section class="teachers-section" id="teachers">
     <div class="container">
       <div class="section-header">
-        <span class="sub-title">Expert Faculty</span>
-        <h2>Guided by the Nation's Best Educators</h2>
-        <p>Our renowned instructors bring deep subject expertise and inspiring mentorship to every lesson.</p>
+        <span class="sub-title" id="teachersEyebrow">Expert Faculty</span>
+        <h2 id="teachersTitle">Guided by the Nation's Best Educators</h2>
+        <p id="teachersDescription">Our renowned instructors bring deep subject expertise and inspiring mentorship to every lesson.</p>
       </div>
 
-      <div class="teachers-grid">
+      <div class="teachers-grid" id="teachersGrid">
         
         <!-- Teacher 1 -->
         <div class="teacher-card">
@@ -723,6 +727,7 @@
           <p id="landingFooterDescription">
             The next-generation smart coaching management software & learning ecosystem empowering students, teachers, and administrators.
           </p>
+          <h4 id="landingFooterSocialHeading" hidden></h4>
           <div class="social-links">
             <a href="#" class="social-btn" aria-label="Facebook"><i class="fab fa-facebook-f"></i></a>
             <a href="#" class="social-btn" aria-label="YouTube"><i class="fab fa-youtube"></i></a>
@@ -781,7 +786,7 @@
       </div>
 
       <div class="footer-bottom">
-        <div>© 2026 EduSmart Coaching & Student Management System. All rights reserved.</div>
+        <div>© <span id="landingCopyrightYear"></span> Coaching &amp; Student Management System. All rights reserved. Md Tuhin Ali</div>
         <div class="footer-bottom-links">
           <a href="#">Privacy Policy</a>
           <a href="#">Terms of Service</a>

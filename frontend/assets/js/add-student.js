@@ -168,7 +168,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (modal) modal.classList.add('show');
     }
 
-    // Print admission receipt
+    // Print admission receipt via hidden iframe (no new window/tab)
     function printAdmissionReceipt() {
         const data = window.__admissionData;
         if (!data) return;
@@ -180,12 +180,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const admissionFee = Number(payload.admissionFee || 0);
         const totalAmount = monthlyFee + admissionFee;
 
+        const origin = window.location.origin;
+        const basePath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') + 1);
+        const baseUrl = origin + basePath;
+
         const receiptHTML = `
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <base href="${baseUrl}">
     <title>Admission Receipt - ${institute.name || 'EduSmart'}</title>
     <link rel="stylesheet" href="assets/css/receipt.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -289,15 +294,40 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
         </div>
     </div>
-    <script>
-        window.onload = function() { window.print(); };
-    </script>
 </body>
 </html>`;
 
-        const printWindow = window.open('', '_blank', 'width=800,height=600');
-        printWindow.document.write(receiptHTML);
-        printWindow.document.close();
+        // Remove previous print frame if exists
+        const oldFrame = document.getElementById('admissionPrintFrame');
+        if (oldFrame) oldFrame.remove();
+
+        // Create invisible iframe for seamless in-page printing
+        const iframe = document.createElement('iframe');
+        iframe.id = 'admissionPrintFrame';
+        iframe.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;border:none;opacity:0;pointer-events:none;z-index:-9999;';
+        document.body.appendChild(iframe);
+
+        const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+        iframeDoc.open();
+        iframeDoc.write(receiptHTML);
+        iframeDoc.close();
+
+        // Directly open browser print dialog when styles & content are loaded
+        iframe.onload = function() {
+            setTimeout(() => {
+                try {
+                    iframe.contentWindow.focus();
+                    iframe.contentWindow.print();
+                } catch (err) {
+                    console.error('Print trigger error:', err);
+                }
+            }, 250);
+        };
+
+        // Clean up iframe after printing
+        iframe.contentWindow.addEventListener('afterprint', () => {
+            iframe.remove();
+        });
     }
 
     form.addEventListener('submit', async event => {
@@ -335,20 +365,39 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const student = data.student;
 
-            // Step 2: If admission fee > 0, create a Payment record (existing process - not modified)
+            // Step 2: Record the monthly fee and admission fee as separate paid transactions.
             let receiptNo = null;
-            if (payload.admissionFee > 0) {
-                const today = new Date().toISOString().split('T')[0];
-                const currentMonth = new Date().toLocaleString('default', { month: 'long' });
-                const currentYear = new Date().getFullYear();
+            const today = new Date().toISOString().split('T')[0];
+            const currentMonth = new Date().toLocaleString('default', { month: 'long' });
+            const currentYear = new Date().getFullYear();
+            const paymentErrors = [];
 
-                const paymentData = {
+            async function createAdmissionPayment(paymentData, useReceipt = false) {
+                try {
+                    const paymentResponse = await fetch(`${apiBase}/payments`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(paymentData)
+                    });
+                    const paymentResult = await paymentResponse.json();
+                    if (!paymentResponse.ok || !paymentResult.success || !paymentResult.payment) {
+                        throw new Error(paymentResult.message || 'Payment could not be saved.');
+                    }
+                    if (useReceipt || !receiptNo) receiptNo = paymentResult.payment.receiptNo;
+                } catch (paymentError) {
+                    console.error(`Could not save ${paymentData.type} payment:`, paymentError);
+                    paymentErrors.push(paymentData.type);
+                }
+            }
+
+            if (payload.admissionFee > 0) {
+                await createAdmissionPayment({
                     studentId: student.studentId,
                     studentName: student.name,
                     month: currentMonth,
                     year: currentYear,
                     fee: payload.admissionFee,
-                    monthlyFee: payload.fee,
+                    monthlyFee: 0,
                     admissionFee: payload.admissionFee,
                     discount: 0,
                     fine: 0,
@@ -358,21 +407,31 @@ document.addEventListener('DOMContentLoaded', () => {
                     status: 'Paid',
                     remarks: 'Admission fee payment',
                     date: today
-                };
+                }, true);
+            }
 
-                try {
-                    const paymentResponse = await fetch(`${apiBase}/payments`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(paymentData)
-                    });
-                    const paymentResult = await paymentResponse.json();
-                    if (paymentResult.success && paymentResult.payment) {
-                        receiptNo = paymentResult.payment.receiptNo;
-                    }
-                } catch (paymentError) {
-                    console.error('Error creating admission payment:', paymentError);
-                }
+            if (payload.fee > 0) {
+                await createAdmissionPayment({
+                    studentId: student.studentId,
+                    studentName: student.name,
+                    month: currentMonth,
+                    year: currentYear,
+                    fee: payload.fee,
+                    monthlyFee: payload.fee,
+                    admissionFee: 0,
+                    discount: 0,
+                    fine: 0,
+                    amount: payload.fee,
+                    paymentMethod: 'Cash',
+                    type: 'Monthly',
+                    status: 'Paid',
+                    remarks: 'Monthly fee collected during admission',
+                    date: today
+                });
+            }
+
+            if (paymentErrors.length) {
+                alert(`Student admission was saved, but the ${paymentErrors.join(' and ')} payment could not be recorded. Please collect/save the missing payment separately.`);
             }
 
             hideProcessingOverlay();
@@ -386,14 +445,50 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // Reset form after admission is closed/completed
+    function resetAdmissionForm() {
+        form.reset();
+        photo = '';
+
+        // Reset photo preview to default placeholder
+        const previewImg = document.getElementById('photoPreviewImg');
+        const placeholder = document.getElementById('photoPlaceholder');
+        if (previewImg) { previewImg.src = ''; previewImg.style.display = 'none'; }
+        if (placeholder) { placeholder.style.display = 'flex'; }
+
+        // Re-enable submit button
+        const submitButton = form.querySelector('[type="submit"]');
+        if (submitButton) submitButton.disabled = false;
+
+        // Reset fee summary display
+        const sumMonthly = document.getElementById('sumMonthlyFee');
+        const sumAdm = document.getElementById('sumAdmissionFee');
+        const sumTotal = document.getElementById('sumTotalInitial');
+        if (sumMonthly) sumMonthly.textContent = '৳ 0';
+        if (sumAdm) sumAdm.textContent = '৳ 0';
+        if (sumTotal) sumTotal.textContent = '৳ 0';
+
+        const rollInput = document.getElementById('rollNo');
+        const rollHelp = document.getElementById('rollHelp');
+        if (rollInput) rollInput.value = '';
+        if (rollHelp) rollHelp.textContent = '';
+
+        // Reload batches to fetch updated students list and prepare next Roll/ID
+        loadBatches();
+    }
+
+    function closeSuccessModal() {
+        const modal = document.getElementById('admissionSuccessModal');
+        if (modal) modal.classList.remove('show');
+        resetAdmissionForm();
+    }
+
     // Modal event handlers
     document.getElementById('modalClose')?.addEventListener('click', () => {
-        const modal = document.getElementById('admissionSuccessModal');
-        if (modal) modal.classList.remove('show');
+        closeSuccessModal();
     });
     document.getElementById('modalCloseBtn')?.addEventListener('click', () => {
-        const modal = document.getElementById('admissionSuccessModal');
-        if (modal) modal.classList.remove('show');
+        closeSuccessModal();
     });
     document.getElementById('modalPrintBtn')?.addEventListener('click', () => {
         printAdmissionReceipt();
@@ -401,7 +496,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('admissionSuccessModal')?.addEventListener('click', (e) => {
         const modal = document.getElementById('admissionSuccessModal');
         if (e.target === modal && modal) {
-            modal.classList.remove('show');
+            closeSuccessModal();
         }
     });
 

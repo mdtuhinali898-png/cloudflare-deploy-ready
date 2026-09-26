@@ -1,75 +1,97 @@
 const express = require('express');
 const router = express.Router();
-const Notice = require('../models/Notice');
+const supabase = require('../config/supabase');
+
+function formatNotice(row) {
+    if (!row) return null;
+    return {
+        _id: row.id,
+        id: row.id,
+        title: row.title,
+        content: row.content,
+        targetBatch: row.target_batch || 'All',
+        status: row.status || 'Published',
+        createdBy: row.created_by || 'Admin',
+        createdAt: row.created_at,
+        updatedAt: row.updated_at
+    };
+}
 
 // Get all active notices for public landing page
 router.get('/public', async (req, res, next) => {
     try {
-        const notices = await Notice.find({ isActive: true })
-            .sort({ sortOrder: 1, createdAt: -1 })
-            .limit(10)
-            .lean();
-        res.json({ success: true, data: notices });
+        const { data, error } = await supabase
+            .from('notices')
+            .select('*')
+            .eq('status', 'Published')
+            .order('created_at', { ascending: false })
+            .limit(10);
+
+        if (error) throw error;
+        res.json({ success: true, data: (data || []).map(formatNotice) });
     } catch (error) { next(error); }
 });
 
 // Admin: Get all notices
 router.get('/', async (req, res, next) => {
     try {
-        const notices = await Notice.find({})
-            .sort({ sortOrder: 1, createdAt: -1 })
-            .lean();
-        res.json({ success: true, data: notices });
+        const { data, error } = await supabase
+            .from('notices')
+            .select('*')
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+        res.json({ success: true, data: (data || []).map(formatNotice) });
     } catch (error) { next(error); }
 });
 
 // Admin: Create notice
 router.post('/', async (req, res, next) => {
     try {
-        const notice = await Notice.create(req.body);
-        res.json({ success: true, data: notice });
+        const { title, content, targetBatch, status, createdBy } = req.body;
+        const newRow = {
+            title,
+            content,
+            target_batch: targetBatch || 'All',
+            status: status || 'Published',
+            created_by: createdBy || 'Admin',
+            created_at: new Date(),
+            updated_at: new Date()
+        };
+
+        const { data, error } = await supabase.from('notices').insert(newRow).select().single();
+        if (error) throw error;
+        res.json({ success: true, data: formatNotice(data) });
     } catch (error) { next(error); }
 });
 
 // Admin: Update notice
 router.put('/:id', async (req, res, next) => {
     try {
-        const notice = await Notice.findByIdAndUpdate(
-            req.params.id,
-            req.body,
-            { new: true, runValidators: true }
-        );
-        res.json({ success: true, data: notice });
-    } catch (error) { next(error); }
-});
+        const { title, content, targetBatch, status } = req.body;
+        const updateData = { updated_at: new Date() };
+        if (title !== undefined) updateData.title = title;
+        if (content !== undefined) updateData.content = content;
+        if (targetBatch !== undefined) updateData.target_batch = targetBatch;
+        if (status !== undefined) updateData.status = status;
 
-// Upload PDF for notice
-router.post('/:id/upload-pdf', async (req, res, next) => {
-    try {
-        const { pdfData, fileName } = req.body;
-        
-        if (!pdfData) {
-            return res.status(400).json({ success: false, message: 'PDF data is required' });
-        }
-        
-        const notice = await Notice.findById(req.params.id);
-        if (!notice) {
-            return res.status(404).json({ success: false, message: 'Notice not found' });
-        }
-        
-        // Store PDF as base64 data URL
-        const pdfUrl = `data:application/pdf;base64,${pdfData}`;
-        notice.pdfUrl = pdfUrl;
-        await notice.save();
-        
-        res.json({ success: true, data: notice });
+        const { data, error } = await supabase
+            .from('notices')
+            .update(updateData)
+            .eq('id', req.params.id)
+            .select()
+            .single();
+
+        if (error) throw error;
+        res.json({ success: true, data: formatNotice(data) });
     } catch (error) { next(error); }
 });
 
 // Admin: Delete notice
 router.delete('/:id', async (req, res, next) => {
     try {
-        await Notice.findByIdAndDelete(req.params.id);
+        const { error } = await supabase.from('notices').delete().eq('id', req.params.id);
+        if (error) throw error;
         res.json({ success: true });
     } catch (error) { next(error); }
 });

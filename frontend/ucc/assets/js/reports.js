@@ -1,5 +1,5 @@
-/* UCC reports UI: connected to MongoDB backend via /api/ucc/reports */
-const API_BASE = 'http://localhost:5002/api';
+/* UCC reports UI: connected to backend via /api/ucc/reports */
+const API_BASE = window.API_BASE_URL || (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:5002/api' : '/api');
 let REPORT_DATA = { students: [], transactions: [], materials: [] };
 let BW_DATA = { batches: [], students: [] };
 let bwActiveState = {};

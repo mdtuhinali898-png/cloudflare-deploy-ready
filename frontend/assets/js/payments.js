@@ -22,19 +22,13 @@ let currentStudent = null;
 // 2. API FUNCTIONS
 // ============================================
 async function loadStudentsFromAPI() {
-    try {
-        const response = await fetch(`${API_BASE_URL}/students?limit=1000`);
-        const data = await response.json();
-        studentsData = data.students || [];
-    } catch (error) {
-        console.error('Error loading students:', error);
-        studentsData = [];
-    }
+    // On-demand search is used; no need to download 1000 students on page load
+    studentsData = [];
 }
 
 async function loadPaymentsFromAPI() {
     try {
-        const response = await fetch(`${API_BASE_URL}/payments?limit=1000`);
+        const response = await fetch(`${API_BASE_URL}/payments?limit=250`);
         const data = await response.json();
         const apiPayments = data.payments || data.data || [];
         
@@ -553,6 +547,44 @@ window.searchStudent = async () => {
         });
     }
 
+    let historyPage = 1;
+    const HISTORY_PAGE_SIZE = 25;
+
+    function renderHistoryPagination(totalFiltered) {
+        let container = document.getElementById('paymentPaginationContainer');
+        if (!container) return;
+        const totalPages = Math.ceil(totalFiltered / HISTORY_PAGE_SIZE) || 1;
+        if (totalPages <= 1) {
+            container.innerHTML = '';
+            container.style.display = 'none';
+            return;
+        }
+
+        container.style.display = 'flex';
+        let html = `
+            <div style="font-size:13px; color:#64748b; font-weight:500;">
+                Showing <strong>${(historyPage - 1) * HISTORY_PAGE_SIZE + 1}</strong> - <strong>${Math.min(historyPage * HISTORY_PAGE_SIZE, totalFiltered)}</strong> of <strong>${totalFiltered}</strong>
+            </div>
+            <div style="display:flex; gap:8px; align-items:center;">
+                <button type="button" class="btn-page-nav" ${historyPage === 1 ? 'disabled style="opacity:0.4; cursor:not-allowed; padding:6px 14px; border-radius:8px; border:1px solid #cbd5e1; background:#f8fafc;"' : 'style="cursor:pointer; padding:6px 14px; border-radius:8px; border:1px solid #cbd5e1; background:#ffffff; font-weight:600;"'} onclick="window.changeHistoryPage(${historyPage - 1})">
+                    <i class="fas fa-chevron-left"></i> Prev
+                </button>
+                <span style="font-size:13px; font-weight:700; color:#334155; padding:4px 8px;">Page ${historyPage} / ${totalPages}</span>
+                <button type="button" class="btn-page-nav" ${historyPage >= totalPages ? 'disabled style="opacity:0.4; cursor:not-allowed; padding:6px 14px; border-radius:8px; border:1px solid #cbd5e1; background:#f8fafc;"' : 'style="cursor:pointer; padding:6px 14px; border-radius:8px; border:1px solid #cbd5e1; background:#ffffff; font-weight:600;"'} onclick="window.changeHistoryPage(${historyPage + 1})">
+                    Next <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+        `;
+        container.innerHTML = html;
+    }
+
+    window.changeHistoryPage = (newPage) => {
+        historyPage = newPage;
+        renderHistory();
+        const tableCard = document.querySelector('.table-responsive');
+        if (tableCard) tableCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    };
+
     function renderHistory() {
         const tbody = document.getElementById('paymentHistoryBody');
         const filtered = getFilteredHistory();
@@ -568,14 +600,22 @@ window.searchStudent = async () => {
                         No payments found matching your criteria.
                     </td>
                 </tr>`;
+            renderHistoryPagination(0);
             return;
         }
 
-        tbody.innerHTML = filtered.map((p, index) => {
+        const totalPages = Math.ceil(filtered.length / HISTORY_PAGE_SIZE) || 1;
+        if (historyPage > totalPages) historyPage = totalPages;
+        if (historyPage < 1) historyPage = 1;
+
+        const startIndex = (historyPage - 1) * HISTORY_PAGE_SIZE;
+        const pageItems = filtered.slice(startIndex, startIndex + HISTORY_PAGE_SIZE);
+
+        tbody.innerHTML = pageItems.map((p, index) => {
             const statusClass = p.status === 'Paid' ? 'status-paid' : (p.status === 'Partial' ? 'status-partial' : 'status-due');
             const statusIcon = p.status === 'Paid' ? '✅' : (p.status === 'Partial' ? '⚠️' : '❌');
             return `
-                <tr style="animation: fadeSlideIn 0.3s ease-out ${index * 0.05}s both;">
+                <tr style="animation: fadeSlideIn 0.2s ease-out both;">
                     <td><strong>${p.receipt}</strong></td>
                     <td>${p.studentId}</td>
                     <td>${p.name}</td>
@@ -593,15 +633,17 @@ window.searchStudent = async () => {
                 </tr>
             `;
         }).join('');
+
+        renderHistoryPagination(filtered.length);
     }
 
     // ============================================
     // 11. EVENT LISTENERS
     // ============================================
-    document.getElementById('filterMonth').addEventListener('change', renderHistory);
-    document.getElementById('filterMethod').addEventListener('change', renderHistory);
-    document.getElementById('filterStatus').addEventListener('change', renderHistory);
-    document.getElementById('historySearch').addEventListener('input', renderHistory);
+    document.getElementById('filterMonth').addEventListener('change', () => { historyPage = 1; renderHistory(); });
+    document.getElementById('filterMethod').addEventListener('change', () => { historyPage = 1; renderHistory(); });
+    document.getElementById('filterStatus').addEventListener('change', () => { historyPage = 1; renderHistory(); });
+    document.getElementById('historySearch').addEventListener('input', () => { historyPage = 1; renderHistory(); });
 
     // Enter key to search
     document.getElementById('studentSearchInput').addEventListener('keypress', (e) => {

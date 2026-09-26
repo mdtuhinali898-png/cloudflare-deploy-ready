@@ -5,9 +5,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 // ============================================
 // 1. CONFIG & STATE
 // ============================================
-const API_BASE_URL = (window.location.protocol === 'http:' || window.location.protocol === 'https:')
-    ? `${window.location.protocol}//${window.location.hostname}:${window.location.port || '5002'}/api`
-    : 'http://localhost:5002/api';
+const API_BASE_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? (window.location.port === '5002' ? '/api' : 'http://localhost:5002/api')
+    : '/api';
 
 const STUDENTS_KEY = 'erp_students_data';
 const PAYMENTS_KEY = 'erp_payments_data';

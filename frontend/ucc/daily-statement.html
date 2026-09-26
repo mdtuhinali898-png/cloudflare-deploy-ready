@@ -538,7 +538,7 @@ async function loadData() {
     } catch (e) { console.error('Failed to load collection print data:', e); }
   }
   const date = params.get('date') || new Date().toISOString().split('T')[0];
-  const API = 'http://localhost:5002/api';
+  const API = window.API_BASE_URL || (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'http://localhost:5002/api' : '/api');
 
   try {
     const res = await fetch(`${API}/ucc/payments/daily-statement?startDate=${date}&endDate=${date}`);

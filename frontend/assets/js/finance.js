@@ -190,15 +190,20 @@ async function loadPeriodData() {
 
 // ── loadAllFinanceData: full load (first visit + auto-refresh) ───────────────
 async function loadAllFinanceData() {
-    showFullLoading();
+    showCardsSkeleton();
     _lastLoadTime = Date.now();
     try {
-        // dashboard is always fresh; graph + budget use cache when valid
-        await Promise.all([
-            loadDashboardData(),
-            _isCacheValid() ? Promise.resolve() : loadGraphData(),
-            _isCacheValid() ? Promise.resolve() : loadBudgetData()
-        ]);
+        // 1. Load primary dashboard data first (cards, balances, recent activity)
+        await loadDashboardData();
+        hideFullLoading();
+
+        // 2. Load graphs and budgets asynchronously in background if not cached
+        if (!_isCacheValid()) {
+            Promise.allSettled([
+                loadGraphData(),
+                loadBudgetData()
+            ]).catch(e => console.warn('Background finance data load error:', e));
+        }
     } catch (error) {
         console.error('Error loading finance data:', error);
         showError('Failed to load financial data. Check your connection and try again.');
@@ -952,6 +957,15 @@ function printBudgetReport() {
 }
 
 async function fetchAndPrint(url, reportType) {
+    const printBtn = document.getElementById('financePrintBtn');
+    const printBtnText = document.getElementById('financePrintBtnText');
+    const originalText = printBtnText ? printBtnText.innerHTML : 'Print Report';
+    
+    if (printBtnText) {
+        printBtnText.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Preparing Print...`;
+    }
+    if (printBtn) printBtn.style.opacity = '0.75';
+
     try {
         const response = await fetch(url);
         const data = await response.json();
@@ -959,201 +973,700 @@ async function fetchAndPrint(url, reportType) {
         if (data.success) {
             let instituteName = 'EduSmart Coaching Center';
             try {
-                const instituteResponse = await fetch('/api/institute/public');
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 1500);
+                const instituteResponse = await fetch('/api/institute/public', { signal: controller.signal });
+                clearTimeout(timeoutId);
                 const instituteResult = await instituteResponse.json();
-                if (instituteResult.success && instituteResult.data.name) {
+                if (instituteResult.success && instituteResult.data && instituteResult.data.name) {
                     instituteName = instituteResult.data.name;
                 }
             } catch (e) {
-                console.warn('Could not fetch institute info:', e);
+                // Ignore timeout, use default
             }
             
             openPrintWindow(data, reportType, instituteName);
+        } else {
+            alert('Could not fetch report data: ' + (data.message || 'Unknown error'));
         }
     } catch (error) {
         console.error('Error generating report:', error);
-        alert('Error generating report. Please try again.');
+        alert('Error generating report. Please check your connection and try again.');
+    } finally {
+        if (printBtnText) printBtnText.innerHTML = originalText;
+        if (printBtn) printBtn.style.opacity = '1';
     }
 }
 
 function openPrintWindow(data, reportType, instituteName) {
-    const printWindow = window.open('', '_blank', 'width=800,height=600');
     const content = generateEnhancedPrintContent(data, reportType, instituteName);
-    printWindow.document.write(content);
-    printWindow.document.close();
-    printWindow.focus();
-    setTimeout(() => { printWindow.print(); printWindow.close(); }, 500);
+    
+    // Direct in-page print via hidden iframe (no new window/tab, 100% bypasses popup blocker)
+    let printFrame = document.getElementById('financePrintFrame');
+    if (printFrame) printFrame.remove();
+    
+    printFrame = document.createElement('iframe');
+    printFrame.id = 'financePrintFrame';
+    printFrame.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;border:none;opacity:0;pointer-events:none;z-index:-9999;';
+    document.body.appendChild(printFrame);
+    
+    const frameDoc = printFrame.contentDocument || printFrame.contentWindow.document;
+    frameDoc.open();
+    frameDoc.write(content);
+    frameDoc.close();
+    
+    function triggerPrint() {
+        setTimeout(() => {
+            try {
+                printFrame.contentWindow.focus();
+                printFrame.contentWindow.print();
+            } catch (e) {
+                console.error('Finance print error:', e);
+            }
+        }, 250);
+    }
+
+    if (frameDoc.readyState === 'complete') {
+        triggerPrint();
+    } else {
+        printFrame.onload = triggerPrint;
+    }
+
+    // Auto cleanup after printing or canceling
+    if (printFrame.contentWindow) {
+        printFrame.contentWindow.addEventListener('afterprint', () => {
+            printFrame.remove();
+        });
+    }
+}
+
+function _getPrintMethodBadge(method) {
+    const m = (method || 'Cash').toString().toLowerCase();
+    let cls = 'method-other';
+    if (m.includes('cash')) cls = 'method-cash';
+    else if (m.includes('bkash')) cls = 'method-bkash';
+    else if (m.includes('nagad')) cls = 'method-nagad';
+    else if (m.includes('bank') || m.includes('cheque') || m.includes('transfer')) cls = 'method-bank';
+    return `<span class="method-pill ${cls}">${escapeHtml(method || 'Cash')}</span>`;
 }
 
 function generateEnhancedPrintContent(data, reportType, instituteName) {
     const date = new Date().toLocaleDateString('en-BD', { year: 'numeric', month: 'long', day: 'numeric' });
     const time = new Date().toLocaleTimeString('en-BD', { hour: '2-digit', minute: '2-digit', hour12: true });
     
-    let html = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>${reportType} - ${instituteName}</title>
-        <style>
-            * { margin: 0; padding: 0; box-sizing: border-box; }
-            @page { size: A4; margin: 15mm 18mm; }
-            body { font-family: 'Segoe UI', sans-serif; font-size: 11pt; color: #1f2937; }
-            .doc-header { text-align: center; padding: 12px 0 10px; border-bottom: 2px double #1e40af; margin-bottom: 12px; }
-            .company-name { font-size: 12pt; font-weight: 800; color: #1e40af; text-transform: uppercase; }
-            .report-title { font-size: 9pt; font-weight: 700; color: #374151; margin-top: 4px; padding: 3px 8px; background: #eff6ff; border-left: 3px solid #1e40af; display: inline-block; }
-            .meta-box { display: flex; justify-content: space-between; background: #f8fafc; border: 1px solid #e5e7eb; padding: 12px 15px; margin-bottom: 20px; font-size: 10pt; }
-            .exec-summary { background: #eff6ff; border: 1px solid #bfdbfe; border-left: 5px solid #1e40af; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
-            .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-            .summary-item { background: white; padding: 10px; border-radius: 6px; border: 1px solid #e5e7eb; }
-            .summary-item-label { font-size: 8pt; color: #6b7280; font-weight: 600; text-transform: uppercase; }
-            .summary-item-value { font-size: 10pt; font-weight: 700; color: #1e40af; }
-            .section-title { font-size: 10pt; font-weight: 700; color: #1e40af; margin: 15px 0 10px; padding: 6px 12px; background: #f3f4f6; border-left: 3px solid #1e40af; text-transform: uppercase; }
-            table { width: 100%; border-collapse: collapse; margin-bottom: 12px; font-size: 9pt; }
-            th { background: #1e40af; color: white; padding: 6px 8px; text-align: left; font-weight: 600; font-size: 8pt; text-transform: uppercase; border: 1px solid #1d4ed8; }
-            td { padding: 5px 8px; border: 1px solid #e5e7eb; }
-            tr:nth-child(even) { background: #f9fafb; }
-            .amount-col { text-align: right; font-family: 'Courier New', monospace; font-weight: 600; }
-            .total-row { background: #fef3c7 !important; font-weight: 700; color: #92400e; }
-            .no-data { text-align: center; padding: 30px; color: #6b7280; font-style: italic; }
-            .signature-section { margin-top: 30px; padding-top: 15px; border-top: 2px solid #1e40af; display: flex; justify-content: space-between; }
-            .signature-box { text-align: center; width: 45%; }
-            .signature-line { margin-top: 40px; border-top: 1.5px solid #374151; padding-top: 6px; font-weight: 600; }
-            .doc-footer { margin-top: 20px; padding-top: 12px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 9pt; color: #6b7280; }
-            @media print { body { padding: 0; } }
-        </style>
-    </head>
-    <body>
-        <div class="doc-header">
-            <div class="company-name">${instituteName}</div>
-            <div class="report-title">${reportType}</div>
-        </div>
-        <div class="meta-box">
-            <div><div style="font-weight:600;font-size:9pt;">Report Date</div><div>${date}</div></div>
-            <div style="text-align:right;"><div style="font-weight:600;font-size:9pt;">Generated</div><div>${time}</div></div>
-        </div>
-    `;
-    
-    // Executive summary
-    const totalCollection = data.totalCollection || data.totalIncome || data.total || 0;
-    const totalExpense = data.totalExpense || 0;
-    const net = data.net || (totalCollection - totalExpense) || 0;
+    // Executive summary calculations
+    const totalCollection = Number(data.totalCollection || data.totalIncome || data.total || 0);
+    const totalExpense = Number(data.totalExpense || 0);
+    const net = Number(data.net !== undefined ? data.net : (totalCollection - totalExpense));
     const netType = net >= 0 ? 'Profit' : 'Loss';
     
-    html += `
-        <div class="exec-summary">
-            <div style="font-weight:700;font-size:10pt;margin-bottom:8px;">Executive Summary</div>
-            <div class="summary-grid">
-                <div class="summary-item">
-                    <div class="summary-item-label">Total Income</div>
-                    <div class="summary-item-value">${formatCurrency(totalCollection)}</div>
-                </div>
-                <div class="summary-item">
-                    <div class="summary-item-label">Total Expense</div>
-                    <div class="summary-item-value">${formatCurrency(totalExpense)}</div>
-                </div>
-                <div class="summary-item">
-                    <div class="summary-item-label">Net ${netType}</div>
-                    <div class="summary-item-value" style="color:${net >= 0 ? '#059669' : '#dc2626'}">${formatCurrency(Math.abs(net))}</div>
-                </div>
+    const payments = data.payments || [];
+    const expenses = data.expenses || [];
+    const budgets = data.budgets || [];
+    const hasPayments = payments.length > 0;
+    const hasExpenses = expenses.length > 0;
+    
+    let html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>${escapeHtml(reportType)} - ${escapeHtml(instituteName)}</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        :root {
+            --indigo: #4f46e5;
+            --indigo-dark: #3730a3;
+            --indigo-light: #eef2ff;
+            --purple: #7c3aed;
+            --purple-light: #f5f3ff;
+            --text-main: #0f172a;
+            --text-body: #1e293b;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+            --row-alt: #f8fafc;
+            --green-bg: #ecfdf5; --green-text: #059669; --green-border: #a7f3d0;
+            --blue-bg: #eff6ff;  --blue-text: #2563eb;  --blue-border: #bfdbfe;
+            --amber-bg: #fffbeb; --amber-text: #b45309; --amber-border: #fde68a;
+            --red-bg: #fef2f2;   --red-text: #dc2626;   --red-border: #fecaca;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        @page {
+            size: A4 portrait;
+            margin: 12mm 15mm;
+        }
+
+        body {
+            font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+            font-size: 8.5pt;
+            color: var(--text-body);
+            background: #fff;
+            line-height: 1.4;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+        }
+
+        /* ── UCC Style Header ── */
+        .ds-header {
+            background: linear-gradient(135deg, #1e1b4b 0%, #312e81 55%, #4f46e5 100%);
+            color: #fff;
+            padding: 16px 20px;
+            border-radius: 8px;
+            margin-bottom: 14px;
+        }
+        .ds-header-main {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+        }
+        .ds-header h1 {
+            font-size: 16pt;
+            font-weight: 900;
+            letter-spacing: 0.3px;
+            color: #fff;
+            line-height: 1.2;
+            margin-bottom: 3px;
+        }
+        .ds-sub {
+            font-size: 8pt;
+            color: rgba(255, 255, 255, 0.85);
+            margin-bottom: 4px;
+        }
+        .ds-generated {
+            font-size: 7.5pt;
+            color: rgba(255, 255, 255, 0.75);
+        }
+        .ds-generated b { color: #fff; }
+        .ds-header-right {
+            text-align: right;
+            flex-shrink: 0;
+        }
+        .ds-report-label {
+            font-size: 7pt;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: rgba(255, 255, 255, 0.75);
+            margin-bottom: 4px;
+        }
+        .ds-batch-tag {
+            background: rgba(255, 255, 255, 0.18);
+            border: 1px solid rgba(255, 255, 255, 0.35);
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-size: 9.5pt;
+            font-weight: 800;
+            display: inline-block;
+            color: #fff;
+        }
+        .ds-header-line {
+            height: 3px;
+            background: linear-gradient(90deg, #f59e0b, rgba(255, 255, 255, 0.6), #f59e0b);
+            border-radius: 2px;
+            margin-top: 10px;
+        }
+
+        /* ── UCC Style KPI Summary Strip ── */
+        .ds-summary-strip {
+            margin: 12px 0 18px;
+            padding: 12px 14px;
+            background: linear-gradient(135deg, var(--indigo-light) 0%, var(--purple-light) 100%);
+            border: 1px solid #c7d2fe;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
+        .ds-strip-box {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: #fff;
+            border: 1px solid #e0e7ff;
+            border-radius: 8px;
+            padding: 9px 12px;
+            box-shadow: 0 1px 4px rgba(79, 70, 229, 0.05);
+        }
+        .ds-strip-icon {
+            flex: 0 0 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+        }
+        .ds-strip-box.income .ds-strip-icon { background: var(--green-bg); color: var(--green-text); }
+        .ds-strip-box.expense .ds-strip-icon { background: var(--red-bg); color: var(--red-text); }
+        .ds-strip-box.net.profit .ds-strip-icon { background: linear-gradient(135deg, #059669, #10b981); color: #fff; }
+        .ds-strip-box.net.loss .ds-strip-icon { background: linear-gradient(135deg, #dc2626, #ef4444); color: #fff; }
+
+        .ds-strip-body { min-width: 0; }
+        .ds-strip-label {
+            font-size: 6.5pt;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+        }
+        .ds-strip-value {
+            font-size: 11.5pt;
+            font-weight: 900;
+            color: var(--text-main);
+            font-family: 'Inter', sans-serif;
+            line-height: 1.25;
+            margin: 1px 0;
+        }
+        .ds-strip-sub {
+            font-size: 6.5pt;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        .ds-strip-box.net.profit {
+            background: linear-gradient(135deg, #065f46, #047857);
+            border-color: #059669;
+        }
+        .ds-strip-box.net.profit .ds-strip-label { color: rgba(255, 255, 255, 0.8); }
+        .ds-strip-box.net.profit .ds-strip-value { color: #fff; }
+        .ds-strip-box.net.profit .ds-strip-sub { color: rgba(255, 255, 255, 0.75); }
+
+        .ds-strip-box.net.loss {
+            background: linear-gradient(135deg, #991b1b, #b91c1c);
+            border-color: #dc2626;
+        }
+        .ds-strip-box.net.loss .ds-strip-label { color: rgba(255, 255, 255, 0.8); }
+        .ds-strip-box.net.loss .ds-strip-value { color: #fff; }
+        .ds-strip-box.net.loss .ds-strip-sub { color: rgba(255, 255, 255, 0.75); }
+
+        /* ── Section Title ── */
+        .ds-section {
+            margin-top: 16px;
+            margin-bottom: 6px;
+        }
+        .ds-section-title {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding-bottom: 5px;
+            margin-bottom: 8px;
+            border-bottom: 1.5px solid var(--border);
+        }
+        .ds-section-title h2 {
+            margin: 0;
+            font-size: 10pt;
+            font-weight: 800;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 7px;
+        }
+        .ds-section-title h2 i {
+            color: var(--indigo);
+            font-size: 9pt;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--indigo-light);
+            border-radius: 5px;
+        }
+        .ds-subtitle {
+            font-size: 7.5pt;
+            color: var(--text-muted);
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        /* ── Full Width UCC Clean Tables ── */
+        .report-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 8pt;
+            margin-bottom: 16px;
+            table-layout: fixed;
+        }
+        .report-table th {
+            background: var(--indigo);
+            color: #fff;
+            padding: 5px 6px;
+            text-align: left;
+            font-size: 6.8pt;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border: 1px solid var(--indigo-dark);
+            white-space: nowrap;
+            overflow: hidden;
+        }
+        .report-table th.num, .report-table td.num {
+            text-align: right;
+        }
+        .report-table td {
+            padding: 4px 6px;
+            border-bottom: 1px solid #eef0f4;
+            border-left: 1px solid #f1f5f9;
+            border-right: 1px solid #f1f5f9;
+            vertical-align: middle;
+            line-height: 1.35;
+            overflow: hidden;
+            word-wrap: break-word;
+        }
+        .report-table tbody tr:nth-child(even) td {
+            background: var(--row-alt);
+        }
+
+        /* Monospace ID/Receipt with word-wrap so it never bleeds into date */
+        .code-cell {
+            color: var(--indigo);
+            font-weight: 700;
+            font-family: 'Consolas', 'JetBrains Mono', 'Courier New', monospace;
+            font-size: 7pt;
+            letter-spacing: -0.01em;
+            word-break: break-all;
+            overflow-wrap: anywhere;
+            line-height: 1.25;
+            display: block;
+        }
+        .date-cell {
+            white-space: nowrap;
+            font-size: 7.5pt;
+            color: #334155;
+            font-weight: 500;
+        }
+        .amount-cell {
+            font-weight: 700;
+            font-family: 'Consolas', 'Courier New', monospace;
+            text-align: right;
+            white-space: nowrap;
+            color: #0f172a;
+        }
+
+        /* Total Row */
+        .total-row td {
+            background: var(--indigo-light) !important;
+            color: var(--indigo-dark) !important;
+            font-weight: 800;
+            border-top: 1.5px solid var(--indigo) !important;
+            border-bottom: 1.5px solid var(--indigo) !important;
+            font-size: 8pt;
+        }
+        .total-row-expense td {
+            background: #fef2f2 !important;
+            color: #991b1b !important;
+            font-weight: 800;
+            border-top: 1.5px solid #dc2626 !important;
+            border-bottom: 1.5px solid #dc2626 !important;
+            font-size: 8pt;
+        }
+
+        /* Method Pills */
+        .method-pill {
+            display: inline-block;
+            padding: 1.5px 6px;
+            border-radius: 99px;
+            font-size: 6.8pt;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+        .method-cash  { background: var(--green-bg); color: var(--green-text); border: 1px solid var(--green-border); }
+        .method-bkash { background: #fdf2f8; color: #db2777; border: 1px solid #fbcfe8; }
+        .method-nagad { background: var(--amber-bg); color: var(--amber-text); border: 1px solid var(--amber-border); }
+        .method-bank  { background: var(--blue-bg); color: var(--blue-text); border: 1px solid var(--blue-border); }
+        .method-other { background: #f1f5f9; color: #475569; border: 1px solid var(--border); }
+
+        .no-data {
+            text-align: center;
+            padding: 16px;
+            color: var(--text-muted);
+            font-style: italic;
+            border: 1px dashed var(--border);
+            border-radius: 6px;
+            margin-bottom: 16px;
+            font-size: 8pt;
+        }
+
+        /* ── UCC Style Signatures ── */
+        .ds-signatures {
+            display: flex;
+            justify-content: space-between;
+            margin: 28px 0 10px;
+            gap: 20px;
+        }
+        .ds-sig {
+            flex: 1;
+            text-align: center;
+        }
+        .ds-sig-line {
+            border-top: 1.5px solid #374151;
+            padding-top: 4px;
+            margin-bottom: 3px;
+        }
+        .ds-sig-role {
+            font-size: 8.5pt;
+            font-weight: 800;
+            color: #1e293b;
+        }
+        .ds-sig-sub {
+            font-size: 7pt;
+            color: var(--text-muted);
+        }
+
+        /* ── Footer ── */
+        .ds-final-note {
+            text-align: center;
+            padding-top: 10px;
+            margin-top: 10px;
+            border-top: 1px solid var(--border);
+            font-size: 7pt;
+            color: var(--text-muted);
+        }
+        .ds-final-note b { color: var(--indigo); font-weight: 700; }
+
+        /* ── Print Optimizations ── */
+        @media print {
+            thead { display: table-header-group; }
+            tr { page-break-inside: avoid; }
+            .ds-signatures { page-break-inside: avoid; }
+            .ds-summary-strip { page-break-inside: avoid; }
+            .ds-section { page-break-inside: avoid; }
+        }
+    </style>
+</head>
+<body>
+    <!-- 1. Header -->
+    <div class="ds-header">
+        <div class="ds-header-main">
+            <div>
+                <h1>${escapeHtml(instituteName)}</h1>
+                <div class="ds-sub">Financial Management &amp; Accounts Statement</div>
+                <div class="ds-generated"><b>Generated on:</b> ${date} at ${time}</div>
+            </div>
+            <div class="ds-header-right">
+                <div class="ds-report-label">Report Period / Scope</div>
+                <div class="ds-batch-tag">${escapeHtml(reportType)}</div>
             </div>
         </div>
-    `;
-    
-    // Income + Expense side by side
-    const hasPayments = data.payments && data.payments.length > 0;
-    const hasExpenses = data.expenses && data.expenses.length > 0;
+        <div class="ds-header-line"></div>
+    </div>
 
-    if (hasPayments || hasExpenses) {
-        html += `<div style="display:table;width:100%;table-layout:fixed;border-spacing:8px 0;">`;
+    <!-- 2. KPI Summary Strip -->
+    <div class="ds-summary-strip">
+        <div class="ds-strip-box income">
+            <div class="ds-strip-icon"><i class="fas fa-arrow-down"></i></div>
+            <div class="ds-strip-body">
+                <div class="ds-strip-label">Total Income / Collection</div>
+                <div class="ds-strip-value">${formatCurrency(totalCollection)}</div>
+                <div class="ds-strip-sub">${payments.length} Transactions</div>
+            </div>
+        </div>
+        <div class="ds-strip-box expense">
+            <div class="ds-strip-icon"><i class="fas fa-arrow-up"></i></div>
+            <div class="ds-strip-body">
+                <div class="ds-strip-label">Total Expenses</div>
+                <div class="ds-strip-value">${formatCurrency(totalExpense)}</div>
+                <div class="ds-strip-sub">${expenses.length} Expense Records</div>
+            </div>
+        </div>
+        <div class="ds-strip-box net ${net >= 0 ? 'profit' : 'loss'}">
+            <div class="ds-strip-icon"><i class="fas ${net >= 0 ? 'fa-chart-line' : 'fa-chart-pie'}"></i></div>
+            <div class="ds-strip-body">
+                <div class="ds-strip-label">Net ${netType}</div>
+                <div class="ds-strip-value">${formatCurrency(Math.abs(net))}</div>
+                <div class="ds-strip-sub">${net >= 0 ? 'Surplus Balance' : 'Deficit Amount'}</div>
+            </div>
+        </div>
+    </div>`;
 
-        // LEFT: Income
-        html += `<div style="display:table-cell;vertical-align:top;width:50%;">`;
-        if (hasPayments) {
-            html += `
-                <div class="section-title">Income / Payment Details</div>
-                <table>
-                    <thead><tr><th>Receipt</th><th>Student</th><th>Month</th><th class="amount-col">Amount</th><th>Method</th></tr></thead>
-                    <tbody>
-                        ${data.payments.slice(0, 200).map(p => `
-                        <tr>
-                            <td>${p.receiptNo || '-'}</td>
-                            <td>${p.studentName || '-'}</td>
-                            <td>${p.month || ''} ${p.year || ''}</td>
-                            <td class="amount-col">${formatCurrency(p.amount)}</td>
-                            <td>${p.paymentMethod || '-'}</td>
-                        </tr>`).join('')}
-                        <tr class="total-row">
-                            <td colspan="3"><strong>Total Income</strong></td>
-                            <td class="amount-col">${formatCurrency(data.payments.reduce((s, p) => s + Number(p.amount || 0), 0))}</td>
-                            <td></td>
-                        </tr>
-                    </tbody>
-                </table>`;
-        } else {
-            html += `<div class="section-title">Income / Payment Details</div><div class="no-data">No income records found.</div>`;
-        }
-        html += `</div>`;
-
-        // RIGHT: Expense
-        html += `<div style="display:table-cell;vertical-align:top;width:50%;padding-left:8px;">`;
-        if (hasExpenses) {
-            html += `
-                <div class="section-title">Expense Details</div>
-                <table>
-                    <thead><tr><th>ID</th><th>Category</th><th class="amount-col">Amount</th><th>Method</th><th>Vendor</th></tr></thead>
-                    <tbody>
-                        ${data.expenses.slice(0, 200).map(e => `
-                        <tr>
-                            <td>${e.expenseId || '-'}</td>
-                            <td>${e.category}</td>
-                            <td class="amount-col">${formatCurrency(e.amount)}</td>
-                            <td>${e.paymentMethod}</td>
-                            <td>${e.vendor || '-'}</td>
-                        </tr>`).join('')}
-                        <tr class="total-row">
-                            <td colspan="2"><strong>Total Expense</strong></td>
-                            <td class="amount-col">${formatCurrency(data.expenses.reduce((s, e) => s + Number(e.amount || 0), 0))}</td>
-                            <td colspan="2"></td>
-                        </tr>
-                    </tbody>
-                </table>`;
-        } else {
-            html += `<div class="section-title">Expense Details</div><div class="no-data">No expense records found.</div>`;
-        }
-        html += `</div>`;
-
-        html += `</div>`; // end table layout
-    }
-    
-    // Budget data
-    if (data.budgets && data.budgets.length > 0) {
+    // 3. Income / Payment Details Table (Stacked, Full Width)
+    if (hasPayments) {
+        const totalPayAmt = payments.reduce((s, p) => s + Number(p.amount || 0), 0);
         html += `
-            <div class="section-title">Budget vs Actual</div>
-            <table>
-                <thead><tr><th>Category</th><th class="amount-col">Budget</th><th class="amount-col">Actual</th><th class="amount-col">Remaining</th><th>Usage</th></tr></thead>
+        <div class="ds-section">
+            <div class="ds-section-title">
+                <h2><i class="fas fa-receipt"></i> Income &amp; Collection Details</h2>
+                <span class="ds-subtitle"><i class="fas fa-list-check"></i> ${payments.length} Total Records</span>
+            </div>
+            <table class="report-table">
+                <thead>
+                    <tr>
+                        <th style="width:4%;text-align:center;">SL</th>
+                        <th style="width:20%;">Receipt No</th>
+                        <th style="width:11%;">Date</th>
+                        <th style="width:25%;">Payer / Description</th>
+                        <th style="width:14%;">Month / Year</th>
+                        <th style="width:12%;">Method</th>
+                        <th class="num" style="width:14%;">Amount</th>
+                    </tr>
+                </thead>
                 <tbody>
-                    ${data.budgets.map(b => `<tr><td>${b.category}</td><td class="amount-col">${formatCurrency(b.amount)}</td><td class="amount-col">${formatCurrency(b.currentExpense || 0)}</td><td class="amount-col">${formatCurrency(b.remaining || 0)}</td><td>${(b.usedPercentage || 0).toFixed(1)}%</td></tr>`).join('')}
+                    ${payments.map((p, idx) => {
+                        const receiptNo = p.receiptNo || p.receipt_no || '-';
+                        const pDate = p.date ? p.date.split('T')[0] : '-';
+                        const studentName = p.source === 'Books'
+                            ? `Book Sale${p.studentName ? ' · ' + p.studentName : ''}`
+                            : p.studentName || p.student_name || '-';
+                        const monthStr = [p.month, p.year].filter(Boolean).join(' ') || '-';
+                        const method = p.paymentMethod || p.payment_method || 'Cash';
+                        const amount = Number(p.amount || 0);
+                        return `
+                        <tr>
+                            <td style="text-align:center;color:var(--text-muted);font-weight:600;">${idx + 1}</td>
+                            <td class="code-cell">${escapeHtml(receiptNo)}</td>
+                            <td class="date-cell">${escapeHtml(pDate)}</td>
+                            <td style="font-weight:600;">${escapeHtml(studentName)}</td>
+                            <td>${escapeHtml(monthStr)}</td>
+                            <td>${_getPrintMethodBadge(method)}</td>
+                            <td class="amount-cell">${formatCurrency(amount)}</td>
+                        </tr>`;
+                    }).join('')}
+                    <tr class="total-row">
+                        <td colspan="4"><strong>TOTAL INCOME (${payments.length} Transactions)</strong></td>
+                        <td colspan="2" style="text-align:right;">Total:</td>
+                        <td class="amount-cell">${formatCurrency(totalPayAmt)}</td>
+                    </tr>
                 </tbody>
             </table>
-        `;
+        </div>`;
+    } else {
+        html += `
+        <div class="ds-section">
+            <div class="ds-section-title">
+                <h2><i class="fas fa-receipt"></i> Income &amp; Collection Details</h2>
+            </div>
+            <div class="no-data">No income records found for this period.</div>
+        </div>`;
     }
-    
+
+    // 4. Expense Details Table (Stacked, Full Width)
+    if (hasExpenses) {
+        const totalExpAmt = expenses.reduce((s, e) => s + Number(e.amount || 0), 0);
+        html += `
+        <div class="ds-section">
+            <div class="ds-section-title">
+                <h2><i class="fas fa-shopping-cart"></i> Expense Details</h2>
+                <span class="ds-subtitle"><i class="fas fa-list-check"></i> ${expenses.length} Total Records</span>
+            </div>
+            <table class="report-table">
+                <thead>
+                    <tr>
+                        <th style="width:4%;text-align:center;">SL</th>
+                        <th style="width:20%;">Expense ID</th>
+                        <th style="width:11%;">Date</th>
+                        <th style="width:20%;">Category</th>
+                        <th style="width:19%;">Vendor / Description</th>
+                        <th style="width:12%;">Method</th>
+                        <th class="num" style="width:14%;">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${expenses.map((e, idx) => {
+                        const expId = e.expenseId || e.expense_id || '-';
+                        const eDate = e.date ? e.date.split('T')[0] : '-';
+                        const category = e.category || '-';
+                        const vendorDesc = e.vendor || e.description || '-';
+                        const method = e.paymentMethod || e.payment_method || 'Cash';
+                        const amount = Number(e.amount || 0);
+                        return `
+                        <tr>
+                            <td style="text-align:center;color:var(--text-muted);font-weight:600;">${idx + 1}</td>
+                            <td class="code-cell">${escapeHtml(expId)}</td>
+                            <td class="date-cell">${escapeHtml(eDate)}</td>
+                            <td style="font-weight:600;">${escapeHtml(category)}</td>
+                            <td>${escapeHtml(vendorDesc)}</td>
+                            <td>${_getPrintMethodBadge(method)}</td>
+                            <td class="amount-cell">${formatCurrency(amount)}</td>
+                        </tr>`;
+                    }).join('')}
+                    <tr class="total-row-expense">
+                        <td colspan="4"><strong>TOTAL EXPENSES (${expenses.length} Entries)</strong></td>
+                        <td colspan="2" style="text-align:right;">Total:</td>
+                        <td class="amount-cell">${formatCurrency(totalExpAmt)}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>`;
+    } else {
+        html += `
+        <div class="ds-section">
+            <div class="ds-section-title">
+                <h2><i class="fas fa-shopping-cart"></i> Expense Details</h2>
+            </div>
+            <div class="no-data">No expense records found for this period.</div>
+        </div>`;
+    }
+
+    // 5. Budget vs Actual Table (if available)
+    if (budgets.length > 0) {
+        html += `
+        <div class="ds-section">
+            <div class="ds-section-title">
+                <h2><i class="fas fa-tasks"></i> Budget vs Actual Analysis</h2>
+            </div>
+            <table class="report-table">
+                <thead>
+                    <tr>
+                        <th style="width:28%;">Category</th>
+                        <th class="num" style="width:18%;">Allocated Budget</th>
+                        <th class="num" style="width:18%;">Actual Expense</th>
+                        <th class="num" style="width:18%;">Remaining Balance</th>
+                        <th style="width:18%;text-align:center;">Utilization %</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${budgets.map(b => {
+                        const usedPct = Number(b.usedPercentage || 0);
+                        let badgeColor = '#059669';
+                        if (usedPct > 100) badgeColor = '#dc2626';
+                        else if (usedPct > 80) badgeColor = '#d97706';
+                        return `
+                        <tr>
+                            <td style="font-weight:600;">${escapeHtml(b.category)}</td>
+                            <td class="amount-cell">${formatCurrency(b.amount)}</td>
+                            <td class="amount-cell">${formatCurrency(b.currentExpense || 0)}</td>
+                            <td class="amount-cell">${formatCurrency(b.remaining || 0)}</td>
+                            <td style="text-align:center;font-weight:700;color:${badgeColor};">${usedPct.toFixed(1)}%</td>
+                        </tr>`;
+                    }).join('')}
+                </tbody>
+            </table>
+        </div>`;
+    }
+
+    // 6. UCC Style Signatures
     html += `
-        <div class="signature-section">
-            <div class="signature-box">
-                <div class="signature-line">Prepared By</div>
-                <div style="font-size:8pt;color:#6b7280;margin-top:4px;">Administrator</div>
-            </div>
-            <div class="signature-box">
-                <div class="signature-line">Approved By</div>
-                <div style="font-size:8pt;color:#6b7280;margin-top:4px;">Finance Manager</div>
-            </div>
+    <div class="ds-signatures">
+        <div class="ds-sig">
+            <div class="ds-sig-line"></div>
+            <div class="ds-sig-role">Prepared By</div>
+            <div class="ds-sig-sub">Accounts Officer / Operator</div>
         </div>
-        <div class="doc-footer">
-            <div>Generated by EduSmart Finance System on ${date} at ${time}</div>
+        <div class="ds-sig">
+            <div class="ds-sig-line"></div>
+            <div class="ds-sig-role">Verified By</div>
+            <div class="ds-sig-sub">Accountant / Finance Manager</div>
         </div>
-    </body></html>`;
-    
+        <div class="ds-sig">
+            <div class="ds-sig-line"></div>
+            <div class="ds-sig-role">Approved By</div>
+            <div class="ds-sig-sub">Director / Principal</div>
+        </div>
+    </div>
+
+    <!-- 7. Footer -->
+    <div class="ds-final-note">
+        <b>${escapeHtml(instituteName)}</b> &bull; Financial Statement &bull; Generated from EduSmart Finance System on ${date} at ${time}
+    </div>
+</body>
+</html>`;
+
     return html;
 }
 
