@@ -1,4 +1,4 @@
-name = "edusmart-sms"
+name = "aea-arifs-english-aid"
 account_id = "94cfd74b7d6b679805086b9724439a8e"
 main = "backend/worker.mjs"
 compatibility_date = "2025-09-01"
