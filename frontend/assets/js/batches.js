@@ -33,12 +33,26 @@ const API_BASE_URL = window.location.protocol === 'http:' && window.location.hos
                 batchesData = [];
             }
             
-            // Fetch students from database
-            const studentsResponse = await fetch(`${API_BASE_URL}/students?limit=1000`);
+            // Fetch every student page. The database can contain more than the
+            // first 1,000 records, which otherwise makes older batches appear empty.
+            const studentsResponse = await fetch(`${API_BASE_URL}/students?limit=1000&page=1`);
+            if (!studentsResponse.ok) throw new Error(`Students request failed (${studentsResponse.status})`);
             const studentsResult = await studentsResponse.json();
             
             if (studentsResult.success || studentsResult.students) {
                 studentsData = studentsResult.students || studentsResult.data || [];
+                const totalPages = Number(studentsResult.totalPages || 1);
+                if (totalPages > 1) {
+                    const remainingPages = await Promise.all(Array.from({ length: totalPages - 1 }, async (_, index) => {
+                        const page = index + 2;
+                        const response = await fetch(`${API_BASE_URL}/students?limit=1000&page=${page}`);
+                        if (!response.ok) throw new Error(`Students page ${page} request failed (${response.status})`);
+                        const result = await response.json();
+                        if (!result.success) throw new Error(result.message || `Students page ${page} failed`);
+                        return result.students || result.data || [];
+                    }));
+                    studentsData = studentsData.concat(...remainingPages);
+                }
             } else {
                 console.error('Failed to load students:', studentsResult.message);
                 studentsData = [];
@@ -77,7 +91,9 @@ const API_BASE_URL = window.location.protocol === 'http:' && window.location.hos
     // 3. CALCULATE BATCH STATISTICS
     // ============================================
     function getBatchStats(batchName) {
-        const batchStudents = studentsData.filter(s => s.batch === batchName);
+        const normalizeBatchName = value => String(value || '').trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+        const batchKey = normalizeBatchName(batchName);
+        const batchStudents = studentsData.filter(s => normalizeBatchName(s.batch) === batchKey);
         const studentIds = batchStudents.map(s => s.studentId);
         const batchPayments = paymentsData.filter(p => studentIds.includes(p.studentId));
         
