@@ -1,5 +1,22 @@
 const express = require('express');
 const router = express.Router();
+
+async function fetchRangeInPages(query, start, end) {
+    const rows = [];
+    let count = 0;
+    const pageSize = 1000;
+
+    for (let offset = start; offset <= end; offset += pageSize) {
+        const pageEnd = Math.min(offset + pageSize - 1, end);
+        const { data, count: pageCount, error } = await query.range(offset, pageEnd);
+        if (error) throw error;
+        if (pageCount !== null && pageCount !== undefined) count = pageCount;
+        rows.push(...(data || []));
+        if (!data || data.length < pageEnd - offset + 1) break;
+    }
+
+    return { data: rows, count };
+}
 const supabase = require('../config/supabase');
 
 function formatStudent(row) {
@@ -127,9 +144,7 @@ router.get('/', async (req, res) => {
             if (page === 1) {
                 const remainingLimit = Math.max(0, limitValue - totalExact);
                 if (remainingLimit > 0) {
-                    query = query.range(0, remainingLimit - 1);
-                    const res = await query;
-                    if (res.error) throw res.error;
+                    const res = await fetchRangeInPages(query, 0, remainingLimit - 1);
                     data = [...exactStudents, ...(res.data || [])];
                     count = (res.count || 0) + totalExact;
                 } else {
@@ -140,16 +155,12 @@ router.get('/', async (req, res) => {
                 }
             } else {
                 const generalOffset = (page - 1) * limitValue - totalExact;
-                query = query.range(generalOffset, generalOffset + limitValue - 1);
-                const res = await query;
-                if (res.error) throw res.error;
+                const res = await fetchRangeInPages(query, generalOffset, generalOffset + limitValue - 1);
                 data = res.data || [];
                 count = (res.count || 0) + totalExact;
             }
         } else {
-            query = query.range(offset, offset + limitValue - 1);
-            const res = await query;
-            if (res.error) throw res.error;
+            const res = await fetchRangeInPages(query, offset, offset + limitValue - 1);
             data = res.data || [];
             count = res.count || 0;
         }

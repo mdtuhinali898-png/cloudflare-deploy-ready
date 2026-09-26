@@ -87,18 +87,26 @@ router.get('/', async (req, res) => {
         let query = supabase
             .from('payments')
             .select('*')
-            .order('created_at', { ascending: false })
-            .limit(limit);
+            .order('created_at', { ascending: false });
 
         if (month && month !== 'all') query = query.eq('month', month);
         if (method && method !== 'all') query = query.eq('payment_method', method);
         if (status && status !== 'all') query = query.eq('status', status);
         if (studentId) query = query.eq('student_id', studentId.trim());
 
-        const { data, error } = await query;
-        if (error) throw error;
+        // PostgREST may cap a single response at 1,000 rows. Read larger
+        // requests in pages so reports can receive the full requested range.
+        const data = [];
+        const pageSize = 1000;
+        for (let offset = 0; offset < limit; offset += pageSize) {
+            const end = Math.min(offset + pageSize - 1, limit - 1);
+            const { data: page, error } = await query.range(offset, end);
+            if (error) throw error;
+            data.push(...(page || []));
+            if (!page || page.length < end - offset + 1) break;
+        }
 
-        const payments = (data || []).map(formatPayment);
+        const payments = data.map(formatPayment);
         res.json({
             success: true,
             payments,

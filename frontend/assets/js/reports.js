@@ -99,25 +99,29 @@ async function loadInstituteInfo() {
 async function loadAllData() {
     try {
         console.log('Loading data from API...');
-        
-        // Load payments
-        const paymentsResponse = await fetch('/api/payments?limit=10000');
+
+        // Load report datasets in parallel to avoid serial page-load delays.
+        const [paymentsResponse, studentsResponse, bookSalesResponse] = await Promise.all([
+            fetch('/api/payments?limit=10000'),
+            fetch('/api/students?limit=10000'),
+            fetch('/api/book-sales?limit=10000').catch(error => {
+                console.warn('Could not load book sales:', error.message);
+                return null;
+            })
+        ]);
+
         console.log('Payments response status:', paymentsResponse.status);
         if (paymentsResponse.ok) {
             const paymentsData = await paymentsResponse.json();
-            console.log('Payments data:', paymentsData);
             allPayments = paymentsData.payments || [];
             console.log('Total payments loaded:', allPayments.length);
         } else {
             console.error('Failed to load payments');
         }
-        
-        // Load students (fetch all without limit)
-        const studentsResponse = await fetch('/api/students?limit=10000');
+
         console.log('Students response status:', studentsResponse.status);
         if (studentsResponse.ok) {
             const studentsData = await studentsResponse.json();
-            console.log('Students data:', studentsData);
             allStudents = studentsData.students || [];
             console.log('Total students loaded:', allStudents.length);
         } else {
@@ -132,15 +136,10 @@ async function loadAllData() {
             console.warn('No students found, batch dropdown will be empty');
         }
 
-        // Load book sales data
-        try {
-            const bsRes  = await fetch('/api/book-sales?limit=10000');
-            if (bsRes.ok) {
-                const bsData = await bsRes.json();
-                allBookSales = bsData.sales || [];
-            }
-        } catch (bsErr) {
-            console.warn('Could not load book sales:', bsErr.message);
+        if (bookSalesResponse?.ok) {
+            const bookSalesData = await bookSalesResponse.json();
+            allBookSales = bookSalesData.sales || [];
+        } else {
             allBookSales = [];
         }
 
