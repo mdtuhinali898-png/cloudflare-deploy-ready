@@ -224,7 +224,7 @@ function switchTab(tabName) {
     document.getElementById('dueFilterBar').style.display    = isDue ? 'flex' : 'none';
 
     const renderToken = ++tabRenderToken;
-    showReportTabLoader(tabName);
+    showReportTabLoader();
 
     // Let the browser paint the loader before running the report calculations.
     requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -244,11 +244,9 @@ function switchTab(tabName) {
     }));
 }
 
-function showReportTabLoader(tabName) {
+function showReportTabLoader() {
     const loader = document.getElementById('reportTabLoader');
-    const message = document.getElementById('reportTabLoaderMessage');
     if (!loader) return;
-    if (message) message.textContent = `Loading ${reportTabLabels[tabName] || 'report'}…`;
     loader.classList.add('is-visible');
     loader.setAttribute('aria-hidden', 'false');
 }
