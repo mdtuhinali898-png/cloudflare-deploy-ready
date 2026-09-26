@@ -95,38 +95,57 @@ async function loadInstituteInfo() {
     }
 }
 
+// Read complete report datasets without asking Supabase for oversized pages.
+async function fetchAllReportPages(endpoint, collectionKey) {
+    const baseUrl = new URL(endpoint, window.location.origin);
+    const pageSize = 1000;
+
+    async function fetchPage(page) {
+        const url = new URL(baseUrl);
+        url.searchParams.set('limit', String(pageSize));
+        url.searchParams.set('page', String(page));
+        const response = await fetch(url.toString());
+        if (!response.ok) throw new Error(`Failed to load ${collectionKey} (page ${page})`);
+        return response.json();
+    }
+
+    const firstPage = await fetchPage(1);
+    const records = [...(firstPage[collectionKey] || [])];
+    const totalPages = Math.max(1, Number(firstPage.totalPages) || 1);
+
+    // Fetch a few pages concurrently to keep large reports responsive without
+    // sending an unbounded burst of requests to Supabase.
+    for (let firstPageNumber = 2; firstPageNumber <= totalPages; firstPageNumber += 5) {
+        const pageNumbers = Array.from(
+            { length: Math.min(5, totalPages - firstPageNumber + 1) },
+            (_, index) => firstPageNumber + index
+        );
+        const pages = await Promise.all(pageNumbers.map(fetchPage));
+        for (const page of pages) records.push(...(page[collectionKey] || []));
+    }
+
+    return records;
+}
+
 // Load all necessary data
 async function loadAllData() {
     try {
         console.log('Loading data from API...');
 
         // Load report datasets in parallel to avoid serial page-load delays.
-        const [paymentsResponse, studentsResponse, bookSalesResponse] = await Promise.all([
-            fetch('/api/payments?limit=10000'),
-            fetch('/api/students?limit=10000'),
+        const [payments, students, bookSalesResponse] = await Promise.all([
+            fetchAllReportPages('/api/payments', 'payments'),
+            fetchAllReportPages('/api/students', 'students'),
             fetch('/api/book-sales?limit=10000').catch(error => {
                 console.warn('Could not load book sales:', error.message);
                 return null;
             })
         ]);
 
-        console.log('Payments response status:', paymentsResponse.status);
-        if (paymentsResponse.ok) {
-            const paymentsData = await paymentsResponse.json();
-            allPayments = paymentsData.payments || [];
-            console.log('Total payments loaded:', allPayments.length);
-        } else {
-            console.error('Failed to load payments');
-        }
-
-        console.log('Students response status:', studentsResponse.status);
-        if (studentsResponse.ok) {
-            const studentsData = await studentsResponse.json();
-            allStudents = studentsData.students || [];
-            console.log('Total students loaded:', allStudents.length);
-        } else {
-            console.error('Failed to load students');
-        }
+        allPayments = payments;
+        allStudents = students;
+        console.log('Total payments loaded:', allPayments.length);
+        console.log('Total students loaded:', allStudents.length);
         
         // Populate batch dropdowns after loading students
         if (allStudents.length > 0) {

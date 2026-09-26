@@ -78,7 +78,10 @@ function toPaymentRow(data) {
 // @access  Public
 router.get('/', async (req, res) => {
     try {
-        const limit = parseInt(req.query.limit) || 1000;
+        const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+        const requestedLimit = Math.max(1, parseInt(req.query.limit, 10) || 1000);
+        const limit = Math.min(requestedLimit, 1000);
+        const offset = (page - 1) * limit;
         const month = req.query.month;
         const method = req.query.method;
         const status = req.query.status;
@@ -86,7 +89,7 @@ router.get('/', async (req, res) => {
 
         let query = supabase
             .from('payments')
-            .select('*')
+            .select('*', { count: 'exact' })
             .order('created_at', { ascending: false });
 
         if (month && month !== 'all') query = query.eq('month', month);
@@ -94,23 +97,19 @@ router.get('/', async (req, res) => {
         if (status && status !== 'all') query = query.eq('status', status);
         if (studentId) query = query.eq('student_id', studentId.trim());
 
-        // PostgREST may cap a single response at 1,000 rows. Read larger
-        // requests in pages so reports can receive the full requested range.
-        const data = [];
-        const pageSize = 1000;
-        for (let offset = 0; offset < limit; offset += pageSize) {
-            const end = Math.min(offset + pageSize - 1, limit - 1);
-            const { data: page, error } = await query.range(offset, end);
-            if (error) throw error;
-            data.push(...(page || []));
-            if (!page || page.length < end - offset + 1) break;
-        }
+        // Return one PostgREST-sized page with a total so clients can request
+        // every page without relying on a single large response.
+        const { data, count, error } = await query.range(offset, offset + limit - 1);
+        if (error) throw error;
 
-        const payments = data.map(formatPayment);
+        const payments = (data || []).map(formatPayment);
+        const total = count || payments.length;
         res.json({
             success: true,
             payments,
-            total: payments.length
+            total,
+            page,
+            totalPages: Math.ceil(total / limit)
         });
     } catch (error) {
         console.error('Error fetching payments:', error);

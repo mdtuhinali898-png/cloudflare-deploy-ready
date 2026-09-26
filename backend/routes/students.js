@@ -91,7 +91,9 @@ router.get('/', async (req, res) => {
             ? 'id, student_id, roll, name, phone, batch, admission_date, fee, status, photo'
             : '*';
 
-        const limitValue = limit > 1000 ? 10000 : limit;
+        // Keep each request within the Supabase response cap; callers can use
+        // page/totalPages to retrieve datasets of any size.
+        const limitValue = Math.min(Math.max(1, limit), 1000);
         const offset = (page - 1) * limitValue;
 
         let query = supabase.from('students').select(selectColumns, { count: 'exact' });
