@@ -49,6 +49,45 @@ function formatStudent(row) {
     };
 }
 
+async function getNextStudentIdForBatch(batch) {
+    const { count: totalCount, error: countError } = await supabase
+        .from('students')
+        .select('id', { count: 'exact', head: true });
+    if (countError) throw countError;
+
+    const students = await getAllRows('students', 'id, student_id, roll, batch', totalCount || 0);
+    const normalizeBatchName = value => String(value || '').trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+    const batchKey = normalizeBatchName(batch.name);
+    const batchStudents = students.filter(student => normalizeBatchName(student.batch) === batchKey);
+
+    let prefix = String(batch.prefix || '').toUpperCase().trim();
+    let padLength = 1;
+    let hasHyphen = false;
+    let maxNum = 0;
+
+    for (const student of batchStudents) {
+        const idStr = String(student.student_id || student.roll || '').trim();
+        const match = idStr.match(/^([A-Za-z]+)(-?)(\d+)$/);
+        if (!match) continue;
+        if (!prefix) prefix = match[1].toUpperCase();
+        if (match[2] === '-') hasHyphen = true;
+        if (match[3].length > 1 && match[3].startsWith('0')) {
+            padLength = Math.max(padLength, match[3].length);
+        }
+        const number = parseInt(match[3], 10);
+        if (!Number.isNaN(number) && number > maxNum) maxNum = number;
+    }
+
+    if (!prefix) {
+        prefix = batch.name.split(/\s+/).map(word => word[0]).join('').toUpperCase().slice(0, 4) || 'STU';
+    }
+    if (padLength <= 1 && Number(batch.year) >= 2028) padLength = 3;
+
+    const nextNumber = maxNum > 0 ? maxNum + 1 : batchStudents.length + 1;
+    const numberText = padLength > 1 ? String(nextNumber).padStart(padLength, '0') : String(nextNumber);
+    return hasHyphen ? `${prefix}-${numberText}` : `${prefix}${numberText}`;
+}
+
 async function getAllRows(table, columns, totalCount) {
     const pageSize = 1000;
     const pageCount = Math.ceil((totalCount || 0) / pageSize);
@@ -203,34 +242,18 @@ router.get('/transfers/recent', async (req, res) => {
 });
 
 // @route   GET /api/batches/:batchName/next-student-id
-// @desc    Preview the next student ID using the current database count
+// @desc    Preview the next student ID using the same sequence as admission
 router.get('/:batchName/next-student-id', async (req, res) => {
     try {
         const batchName = decodeURIComponent(req.params.batchName);
         const { data: batch, error: batchError } = await supabase
             .from('batches')
-            .select('name, prefix')
+            .select('name, prefix, year')
             .eq('name', batchName)
             .single();
         if (batchError || !batch) return res.status(404).json({ success: false, message: 'Batch not found' });
-
-        const { count, error: countError } = await supabase
-            .from('students')
-            .select('id', { count: 'exact', head: true })
-            .eq('batch', batch.name);
-        if (countError) throw countError;
-
-        let prefix = batch.prefix || '';
-        if (!prefix) {
-            const words = batch.name.split(' ');
-            if (words.length >= 2) {
-                prefix = words[0].substring(0, Math.min(2, words[0].length)).toUpperCase() + words[words.length - 1].substring(2);
-            } else {
-                prefix = batch.name.substring(0, 3).toUpperCase();
-            }
-        }
-
-        res.json({ success: true, studentId: `${prefix}${String((count || 0) + 1).padStart(3, '0')}` });
+        const studentId = await getNextStudentIdForBatch(batch);
+        res.json({ success: true, studentId });
     } catch (error) {
         console.error('Error previewing next student ID:', error);
         res.status(500).json({ success: false, message: 'Could not get the next student ID.' });
@@ -472,26 +495,7 @@ router.post('/transfer', async (req, res) => {
         const previousStudentId = student.student_id;
 
         // Generate new student ID for target batch
-        const { count: batchCount, error: countError } = await supabase
-            .from('students')
-            .select('*', { count: 'exact', head: true })
-            .eq('batch', targetBatch);
-        if (countError) throw countError;
-
-        const nextNumber = (batchCount || 0) + 1;
-
-        let prefix = batch.prefix || '';
-        if (!prefix) {
-            const words = targetBatch.split(' ');
-            if (words.length >= 2) {
-                const firstPart = words[0].substring(0, Math.min(2, words[0].length)).toUpperCase();
-                const lastPart = words[words.length - 1].substring(2);
-                prefix = firstPart + lastPart;
-            } else {
-                prefix = targetBatch.substring(0, 3).toUpperCase();
-            }
-        }
-        const newStudentId = `${prefix}${String(nextNumber).padStart(3, '0')}`;
+        const newStudentId = await getNextStudentIdForBatch(batch);
 
         // Transfer note
         const transferNote = `[Batch Transfer] From "${previousBatch}" (ID: ${previousStudentId}) → To "${targetBatch}" (ID: ${newStudentId})${transferFee ? ` | Transfer Fee: ৳${transferFee}` : ''}${notes ? ` | Notes: ${notes}` : ''} | Date: ${new Date().toLocaleDateString('en-GB')}`;
