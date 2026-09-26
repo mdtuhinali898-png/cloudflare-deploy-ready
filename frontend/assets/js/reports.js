@@ -6,8 +6,6 @@ let allBookSales = [];   // ← Book Sale data
 let charts = {};
 let multiMonthPaymentStatusReport = null;
 let tabRenderToken = 0;
-let reportTabLoaderShownAt = 0;
-let reportTabLoaderHideTimer = null;
 
 const reportTabLabels = {
     collection: 'Collection report',
@@ -210,6 +208,8 @@ function refreshCurrentTab() {
 // Tab switching
 function switchTab(tabName) {
     currentTab = tabName;
+    const renderToken = ++tabRenderToken;
+    showReportTabLoader();
 
     // Update tab buttons
     document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
@@ -225,35 +225,28 @@ function switchTab(tabName) {
     document.getElementById('dateRangeFilter').style.display = (isDue || isBookSale) ? 'none' : 'flex';
     document.getElementById('dueFilterBar').style.display    = isDue ? 'flex' : 'none';
 
-    const renderToken = ++tabRenderToken;
-    showReportTabLoader();
-
-    // Let the browser paint the loader before running the report calculations.
-    requestAnimationFrame(() => requestAnimationFrame(() => {
+    // Allow the browser to paint the overlay first, then start report work.
+    requestAnimationFrame(() => setTimeout(() => {
         if (renderToken !== tabRenderToken) return;
         try {
             updateSummaryCards();
-            const renderResult = refreshCurrentTab();
-            Promise.resolve(renderResult).catch(error => {
-                console.error('Could not render report tab:', error);
-            }).finally(() => {
-                if (renderToken === tabRenderToken) hideReportTabLoader();
-            });
+            Promise.resolve(refreshCurrentTab())
+                .catch(error => {
+                    console.error('Could not render report tab:', error);
+                })
+                .finally(() => {
+                    if (renderToken === tabRenderToken) hideReportTabLoader();
+                });
         } catch (error) {
             console.error('Could not render report tab:', error);
             if (renderToken === tabRenderToken) hideReportTabLoader();
         }
-    }));
+    }, 0));
 }
 
 function showReportTabLoader() {
     const loader = document.getElementById('reportTabLoader');
     if (!loader) return;
-    if (reportTabLoaderHideTimer) {
-        clearTimeout(reportTabLoaderHideTimer);
-        reportTabLoaderHideTimer = null;
-    }
-    reportTabLoaderShownAt = Date.now();
     loader.classList.add('is-visible');
     loader.setAttribute('aria-hidden', 'false');
 }
@@ -261,16 +254,6 @@ function showReportTabLoader() {
 function hideReportTabLoader() {
     const loader = document.getElementById('reportTabLoader');
     if (!loader) return;
-    const minimumVisibleMs = 1000;
-    const remainingMs = minimumVisibleMs - (Date.now() - reportTabLoaderShownAt);
-    if (remainingMs > 0) {
-        if (reportTabLoaderHideTimer) clearTimeout(reportTabLoaderHideTimer);
-        reportTabLoaderHideTimer = setTimeout(() => {
-            reportTabLoaderHideTimer = null;
-            hideReportTabLoader();
-        }, remainingMs);
-        return;
-    }
     loader.classList.remove('is-visible');
     loader.setAttribute('aria-hidden', 'true');
 }
