@@ -49,6 +49,40 @@ function formatStudent(row) {
     };
 }
 
+async function getAllRows(table, columns, totalCount) {
+    const pageSize = 1000;
+    const pageCount = Math.ceil((totalCount || 0) / pageSize);
+    if (pageCount === 0) return [];
+
+    const pages = await Promise.all(Array.from({ length: pageCount }, (_, page) =>
+        supabase.from(table)
+            .select(columns)
+            .order('id', { ascending: true })
+            .range(page * pageSize, (page + 1) * pageSize - 1)
+    ));
+    const failedPage = pages.find(page => page.error);
+    if (failedPage) throw failedPage.error;
+    return pages.flatMap(page => page.data || []);
+}
+
+function monthAndYear(value) {
+    if (!value) return null;
+    const text = String(value).trim();
+    const numericDate = text.match(/^(\d{4})[-/](\d{1,2})/);
+    if (numericDate) {
+        const month = Number(numericDate[2]) - 1;
+        return month >= 0 && month < 12 ? { year: Number(numericDate[1]), month } : null;
+    }
+    const monthNames = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+    const month = monthNames.findIndex(name => name === text.toLowerCase() || name.startsWith(text.toLowerCase()));
+    if (month >= 0) {
+        const yearMatch = text.match(/\b(\d{4})\b/);
+        return { year: yearMatch ? Number(yearMatch[1]) : null, month };
+    }
+    const date = new Date(text);
+    return Number.isNaN(date.getTime()) ? null : { year: date.getFullYear(), month: date.getMonth() };
+}
+
 // @route   GET /api/batches
 // @desc    Get all batches
 // @access  Public
@@ -73,43 +107,55 @@ router.get('/', async (req, res) => {
 // @access  Public
 router.get('/stats/overview', async (req, res) => {
     try {
-        const [
-            { count: totalBatches },
-            { count: totalStudents },
-            { data: activeStudents },
-            { data: allPayments }
-        ] = await Promise.all([
-            supabase.from('batches').select('*', { count: 'exact', head: true }),
-            supabase.from('students').select('*', { count: 'exact', head: true }),
-            supabase.from('students').select('student_id, fee').eq('status', 'Active'),
-            supabase.from('payments').select('student_id, amount, month')
+        const [batchCountResult, studentCountResult, activeStudentCountResult, paymentCountResult] = await Promise.all([
+            supabase.from('batches').select('id', { count: 'exact', head: true }),
+            supabase.from('students').select('id', { count: 'exact', head: true }),
+            supabase.from('students').select('id', { count: 'exact', head: true }).eq('status', 'Active'),
+            supabase.from('payments').select('id', { count: 'exact', head: true })
+        ]);
+        for (const result of [batchCountResult, studentCountResult, activeStudentCountResult, paymentCountResult]) {
+            if (result.error) throw result.error;
+        }
+
+        const [activeStudents, allPayments] = await Promise.all([
+            getAllRows('students', 'student_id, fee, start_month, admission_date', activeStudentCountResult.count),
+            getAllRows('payments', 'student_id, amount, month, year, date, type', paymentCountResult.count)
         ]);
 
-        const totalCollection = (allPayments || []).reduce((sum, p) => sum + Number(p.amount || 0), 0);
+        const totalCollection = allPayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth();
+        const monthlyPayments = new Map();
+        for (const payment of allPayments) {
+            if (!payment.student_id || payment.type === 'Admission') continue;
+            const period = monthAndYear(payment.month) || monthAndYear(payment.date);
+            const paymentYear = Number(payment.year) || period?.year;
+            const paymentMonth = period?.month;
+            if (paymentYear !== currentYear || paymentMonth === undefined || paymentMonth > currentMonth) continue;
+            const studentMonths = monthlyPayments.get(payment.student_id) || new Map();
+            studentMonths.set(paymentMonth, (studentMonths.get(paymentMonth) || 0) + Number(payment.amount || 0));
+            monthlyPayments.set(payment.student_id, studentMonths);
+        }
 
-        // Calculate total due
         let totalDue = 0;
-        const paymentsByStudent = new Map();
-        (allPayments || []).forEach(p => {
-            const list = paymentsByStudent.get(p.student_id) || [];
-            list.push(p);
-            paymentsByStudent.set(p.student_id, list);
-        });
-
-        for (const student of (activeStudents || [])) {
-            const studentPayments = paymentsByStudent.get(student.student_id) || [];
-            const paidMonths = new Set(studentPayments.map(p => p.month));
-            const dueMonths = Math.max(0, 3 - paidMonths.size);
-            const totalPaid = studentPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
-            const totalStudentDue = (Number(student.fee || 0) * dueMonths) - totalPaid;
-            totalDue += Math.max(0, totalStudentDue);
+        for (const student of activeStudents) {
+            const fee = Number(student.fee || 0);
+            if (fee <= 0) continue;
+            const start = monthAndYear(student.start_month) || monthAndYear(student.admission_date);
+            if (start?.year && start.year > currentYear) continue;
+            const firstDueMonth = start?.year === currentYear ? start.month : (start ? start.month : 0);
+            const paidByMonth = monthlyPayments.get(student.student_id) || new Map();
+            for (let month = firstDueMonth; month <= currentMonth; month++) {
+                totalDue += Math.max(0, fee - (paidByMonth.get(month) || 0));
+            }
         }
 
         res.json({
             success: true,
             data: {
-                totalBatches: totalBatches || 0,
-                totalStudents: totalStudents || 0,
+                totalBatches: batchCountResult.count || 0,
+                totalStudents: studentCountResult.count || 0,
                 totalCollection,
                 totalDue
             }

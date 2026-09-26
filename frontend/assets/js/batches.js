@@ -13,6 +13,7 @@ const API_BASE_URL = window.location.protocol === 'http:' && window.location.hos
     let batchesData = [];
     let studentsData = [];
     let paymentsData = [];
+    let overviewStats = null;
     let editingBatchId = null;
     let charts = {};
 
@@ -51,6 +52,15 @@ const API_BASE_URL = window.location.protocol === 'http:' && window.location.hos
             } catch (paymentError) {
                 console.log('Payment collection not available yet:', paymentError.message);
                 paymentsData = [];
+            }
+
+            try {
+                const statsResponse = await fetch(`${API_BASE_URL}/batches/stats/overview`);
+                const statsResult = await statsResponse.json();
+                overviewStats = statsResponse.ok && statsResult.success ? statsResult.data : null;
+            } catch (statsError) {
+                console.error('Failed to load exact batch summary:', statsError);
+                overviewStats = null;
             }
             
             updateStats();
@@ -104,21 +114,24 @@ const API_BASE_URL = window.location.protocol === 'http:' && window.location.hos
     // 4. UPDATE STATISTICS CARDS
     // ============================================
     function updateStats() {
-        const totalBatches = batchesData.length;
-        const totalStudents = studentsData.length;
-        const totalCollection = paymentsData.reduce((sum, p) => sum + (p.amount || 0), 0);
+        const totalBatches = overviewStats?.totalBatches ?? batchesData.length;
+        const totalStudents = overviewStats?.totalStudents ?? studentsData.length;
+        const totalCollection = overviewStats?.totalCollection ?? paymentsData.reduce((sum, p) => sum + Number(p.amount || 0), 0);
         
         // Calculate total due
-        let totalDue = 0;
-        batchesData.forEach(batch => {
-            const stats = getBatchStats(batch.name);
-            totalDue += stats.due;
-        });
+        let totalDue = overviewStats?.totalDue;
+        if (totalDue === undefined) {
+            totalDue = 0;
+            batchesData.forEach(batch => {
+                const stats = getBatchStats(batch.name);
+                totalDue += stats.due;
+            });
+        }
         
         document.getElementById('totalBatches').innerText = totalBatches;
         document.getElementById('totalStudentsInBatches').innerText = totalStudents;
-        document.getElementById('totalCollection').innerText = '৳' + totalCollection.toLocaleString();
-        document.getElementById('totalDue').innerText = '৳' + totalDue.toLocaleString();
+        document.getElementById('totalCollection').innerText = '৳' + Number(totalCollection).toLocaleString();
+        document.getElementById('totalDue').innerText = '৳' + Number(totalDue).toLocaleString();
     }
 
     // ============================================
