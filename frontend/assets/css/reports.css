@@ -949,7 +949,9 @@
     align-items: center;
     justify-content: center;
     padding: 20px;
-    background: rgba(255, 255, 255, 0.56);
+    background: rgba(255, 255, 255, 0.42);
+    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(4px);
     opacity: 0;
     visibility: hidden;
     pointer-events: none;
@@ -966,8 +968,8 @@
     --loader-size: 1px;
     width: calc(48 * var(--loader-size));
     height: calc(48 * var(--loader-size));
-    border: calc(5 * var(--loader-size)) solid #e8edf5;
-    border-bottom-color: var(--primary, #4e73df);
+    border: calc(5 * var(--loader-size)) solid #fff;
+    border-bottom-color: #ff3d00;
     border-radius: 50%;
     display: inline-block;
     box-sizing: border-box;
