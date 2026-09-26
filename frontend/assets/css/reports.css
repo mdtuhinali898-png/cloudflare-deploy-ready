@@ -940,6 +940,64 @@
     }
 }
 
+/* Loading feedback while a report tab recalculates */
+.report-tab-loader {
+    position: fixed;
+    inset: 0;
+    z-index: 11000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(248, 250, 255, 0.62);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 160ms ease, visibility 160ms ease;
+}
+
+.report-tab-loader.is-visible {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: all;
+}
+
+.report-tab-loader__card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 22px;
+    border: 1px solid rgba(78, 115, 223, 0.14);
+    border-radius: 14px;
+    background: #fff;
+    color: #344767;
+    font-size: 15px;
+    font-weight: 600;
+    box-shadow: 0 12px 36px rgba(31, 45, 61, 0.16);
+}
+
+.report-tab-loader__spinner {
+    width: 22px;
+    height: 22px;
+    flex: 0 0 22px;
+    border: 3px solid #dce5ff;
+    border-top-color: var(--primary, #4e73df);
+    border-radius: 50%;
+    animation: report-loader-spin 700ms linear infinite;
+}
+
+@keyframes report-loader-spin {
+    to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .report-tab-loader,
+    .report-tab-loader__spinner {
+        transition: none;
+        animation-duration: 1.8s;
+    }
+}
+
 /* ============================================
    DAILY ACTIVITY SUMMARY
    ============================================ */

@@ -5,6 +5,16 @@ let allStudents  = [];
 let allBookSales = [];   // ← Book Sale data
 let charts = {};
 let multiMonthPaymentStatusReport = null;
+let tabRenderToken = 0;
+
+const reportTabLabels = {
+    collection: 'Collection report',
+    due: 'Due report',
+    batch: 'Batch-wise report',
+    method: 'Payment method report',
+    student: 'Student-wise report',
+    booksales: 'Book sales report'
+};
 
 const studentKey = student => student.studentId || student.id;
 const findStudent = payment => allStudents.find(student => studentKey(student) === payment.studentId);
@@ -178,12 +188,11 @@ function refreshCurrentTab() {
         case 'due':
             // Only auto-load if month already selected; otherwise show placeholder
             if (document.getElementById('dueMonth')?.value) {
-                loadDueReport();
+                return loadDueReport();
             }
             break;
         case 'batch':
-            loadBatchReport();
-            break;
+            return loadBatchReport();
         case 'method':
             loadMethodReport();
             break;
@@ -214,11 +223,41 @@ function switchTab(tabName) {
     document.getElementById('dateRangeFilter').style.display = (isDue || isBookSale) ? 'none' : 'flex';
     document.getElementById('dueFilterBar').style.display    = isDue ? 'flex' : 'none';
 
-    // Always update the 4 summary cards on every tab switch
-    updateSummaryCards();
+    const renderToken = ++tabRenderToken;
+    showReportTabLoader(tabName);
 
-    // Refresh data for the tab
-    refreshCurrentTab();
+    // Let the browser paint the loader before running the report calculations.
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+        if (renderToken !== tabRenderToken) return;
+        try {
+            updateSummaryCards();
+            const renderResult = refreshCurrentTab();
+            Promise.resolve(renderResult).catch(error => {
+                console.error('Could not render report tab:', error);
+            }).finally(() => {
+                if (renderToken === tabRenderToken) hideReportTabLoader();
+            });
+        } catch (error) {
+            console.error('Could not render report tab:', error);
+            if (renderToken === tabRenderToken) hideReportTabLoader();
+        }
+    }));
+}
+
+function showReportTabLoader(tabName) {
+    const loader = document.getElementById('reportTabLoader');
+    const message = document.getElementById('reportTabLoaderMessage');
+    if (!loader) return;
+    if (message) message.textContent = `Loading ${reportTabLabels[tabName] || 'report'}…`;
+    loader.classList.add('is-visible');
+    loader.setAttribute('aria-hidden', 'false');
+}
+
+function hideReportTabLoader() {
+    const loader = document.getElementById('reportTabLoader');
+    if (!loader) return;
+    loader.classList.remove('is-visible');
+    loader.setAttribute('aria-hidden', 'true');
 }
 
 // Set today's filter
@@ -671,7 +710,7 @@ function loadBatchReport() {
     loadBatchChart();
     loadBatchCollectionChart();
     loadBatchTable();
-    loadBatchMonthlyStatus();
+    return loadBatchMonthlyStatus();
 }
 
 function loadBatchChart() {
