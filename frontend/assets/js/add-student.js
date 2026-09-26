@@ -12,19 +12,43 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadBatches() {
         batchSelect.innerHTML = '<option value="">Loading batches...</option>';
         try {
-            const [batchResponse, studentResponse] = await Promise.all([
-                fetch(`${apiBase}/batches`), fetch(`${apiBase}/students?limit=1000`)
+            const [batchResponse, studentsAll] = await Promise.all([
+                fetch(`${apiBase}/batches`), fetchAllStudents()
             ]);
             const batchData = await batchResponse.json();
-            const studentData = await studentResponse.json();
             if (!batchData.success) throw new Error(batchData.message || 'Could not load batches');
             batches = (batchData.data || []).filter(batch => batch.status === 'Active');
-            students = studentData.students || [];
+            students = studentsAll;
             renderBatches();
         } catch (error) {
             console.error('Batch load error:', error);
             loadLocalBatches();
         }
+    }
+
+    async function fetchAllStudents() {
+        const limit = 1000;
+        const firstResponse = await fetch(`${apiBase}/students?limit=${limit}&page=1`);
+        if (!firstResponse.ok) throw new Error(`Could not load students (${firstResponse.status})`);
+        const firstPage = await firstResponse.json();
+        if (!firstPage.success && !Array.isArray(firstPage.students) && !Array.isArray(firstPage.data)) {
+            throw new Error(firstPage.message || 'Could not load students');
+        }
+
+        const allStudents = firstPage.students || firstPage.data || [];
+        const totalPages = Math.max(1, Number(firstPage.totalPages) || 1);
+        if (totalPages === 1) return allStudents;
+
+        const remainingPages = await Promise.all(Array.from({ length: totalPages - 1 }, async (_, index) => {
+            const page = index + 2;
+            const response = await fetch(`${apiBase}/students?limit=${limit}&page=${page}`);
+            if (!response.ok) throw new Error(`Could not load students page ${page} (${response.status})`);
+            const result = await response.json();
+            if (!result.success) throw new Error(result.message || `Could not load students page ${page}`);
+            return result.students || result.data || [];
+        }));
+
+        return allStudents.concat(...remainingPages);
     }
 
     function loadLocalBatches() {
@@ -82,7 +106,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function createStudentId(batchName) {
         const batch = batches.find(b => b.name === batchName);
-        const batchStudents = students.filter(student => student.batch === batchName);
+        const normalizeBatchName = value => String(value || '').trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+        const batchKey = normalizeBatchName(batchName);
+        const batchStudents = students.filter(student => normalizeBatchName(student.batch) === batchKey);
         
         let prefix = (batch && batch.prefix) ? batch.prefix.toUpperCase().trim() : '';
         let padLength = 1;
