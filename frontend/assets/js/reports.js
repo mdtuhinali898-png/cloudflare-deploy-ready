@@ -261,7 +261,7 @@ function showReportTabLoader() {
 function hideReportTabLoader() {
     const loader = document.getElementById('reportTabLoader');
     if (!loader) return;
-    const minimumVisibleMs = 500;
+    const minimumVisibleMs = 1000;
     const remainingMs = minimumVisibleMs - (Date.now() - reportTabLoaderShownAt);
     if (remainingMs > 0) {
         if (reportTabLoaderHideTimer) clearTimeout(reportTabLoaderHideTimer);
