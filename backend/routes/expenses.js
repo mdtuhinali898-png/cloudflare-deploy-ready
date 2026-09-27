@@ -197,14 +197,40 @@ router.get('/summary', async (req, res) => {
 function normalizeExpenseSubCategories(subCategories) {
     if (!Array.isArray(subCategories)) return [];
 
-    return subCategories.map(item => {
-        const value = typeof item === 'string'
-            ? item
-            : item?.name ?? item?.label ?? item?.title ?? item?.value
-                ?? item?.subCategory ?? item?.sub_category ?? item?.subcategory;
-        const name = value == null ? '' : String(value).trim();
-        return name ? { name } : null;
-    }).filter(Boolean);
+    function getSubCategoryName(item, depth = 0) {
+        if (depth > 5 || item == null) return '';
+        if (typeof item === 'string') {
+            const text = item.trim();
+            if (!text) return '';
+
+            // Older rows may contain serialized JSON in a text array, e.g.
+            // '{"name":"Electricity Bill"}'. Parse it before treating the
+            // value as a plain subcategory label.
+            if (text.startsWith('{') || text.startsWith('[') || text.startsWith('"')) {
+                try {
+                    const parsed = JSON.parse(text);
+                    if (parsed !== text) return getSubCategoryName(parsed, depth + 1);
+                } catch (_) {
+                    // Keep malformed or ordinary text as its literal label.
+                }
+            }
+            return text;
+        }
+        if (Array.isArray(item)) {
+            return item.map(value => getSubCategoryName(value, depth + 1)).find(Boolean) || '';
+        }
+        if (typeof item === 'object') {
+            const value = item.name ?? item.label ?? item.title ?? item.value
+                ?? item.subCategory ?? item.sub_category ?? item.subcategory;
+            return getSubCategoryName(value, depth + 1);
+        }
+        return String(item).trim();
+    }
+
+    return subCategories
+        .map(item => getSubCategoryName(item))
+        .filter(Boolean)
+        .map(name => ({ name }));
 }
 
 router.get('/categories/all', async (req, res) => {
