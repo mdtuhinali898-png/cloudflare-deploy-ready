@@ -86,11 +86,17 @@ router.get('/', async (req, res) => {
         const method = req.query.method;
         const status = req.query.status;
         const studentId = req.query.studentId;
+        const reportView = req.query.view === 'report';
+        const includeCount = req.query.includeCount !== 'false';
+        const selectColumns = reportView
+            ? 'id,receipt_no,student_id,student_name,month,year,fee,amount,payment_method,type,status,date,created_at'
+            : '*';
 
         let query = supabase
             .from('payments')
-            .select('*', { count: 'exact' })
-            .order('created_at', { ascending: false });
+            .select(selectColumns, includeCount ? { count: 'exact' } : undefined)
+            .order('created_at', { ascending: false })
+            .order('id', { ascending: false });
 
         if (month && month !== 'all') query = query.eq('month', month);
         if (method && method !== 'all') query = query.eq('payment_method', method);
@@ -103,13 +109,13 @@ router.get('/', async (req, res) => {
         if (error) throw error;
 
         const payments = (data || []).map(formatPayment);
-        const total = count || payments.length;
+        const total = count ?? (includeCount ? payments.length : null);
         res.json({
             success: true,
             payments,
             total,
             page,
-            totalPages: Math.ceil(total / limit)
+            totalPages: includeCount ? Math.ceil(total / limit) : null
         });
     } catch (error) {
         console.error('Error fetching payments:', error);

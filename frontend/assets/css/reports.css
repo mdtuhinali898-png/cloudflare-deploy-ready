@@ -1039,6 +1039,30 @@
     to { transform: rotate(360deg); }
 }
 
+.report-tab-load-error {
+    max-width: min(420px, 100%);
+    padding: 22px 24px;
+    border: 1px solid #fecaca;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 16px 45px rgba(15, 23, 42, .18);
+    color: #334155;
+    text-align: center;
+}
+.report-tab-load-error strong,
+.report-tab-load-error span { display: block; }
+.report-tab-load-error strong { color: #b91c1c; margin-bottom: 6px; }
+.report-tab-load-error span { font-size: 13px; margin-bottom: 14px; }
+.report-tab-load-error button {
+    border: 0;
+    border-radius: 8px;
+    background: #1d4ed8;
+    color: #fff;
+    padding: 8px 16px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
 @media (prefers-reduced-motion: reduce) {
     .report-tab-loader,
     .report-tab-loader__spinner {
@@ -1865,6 +1889,26 @@
     color: #f97316;
 }
 
+.report-table-pager {
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 2px;
+    color: #64748b;
+    font-size: 13px;
+}
+.report-table-pager > div { display: flex; gap: 8px; }
+.report-table-pager button {
+    border: 1px solid #dbe2ea;
+    border-radius: 7px;
+    background: #fff;
+    color: #334155;
+    padding: 6px 12px;
+    cursor: pointer;
+}
+.report-table-pager button:hover:not(:disabled) { border-color: #4e73df; color: #3658c8; }
+.report-table-pager button:disabled { cursor: default; opacity: .45; }
+
 /* ── Responsive ── */
 @media (max-width: 992px) {
     .booksale-summary-cards { grid-template-columns: repeat(2, 1fr); }
@@ -1875,6 +1919,7 @@
 
 /* ── Print: Book Sales Tab ── */
 @media print {
+    .report-table-pager { display: none !important; }
     /* When printing book sales tab */
     body.printing-booksale .print-report-header { display: none !important; }
 

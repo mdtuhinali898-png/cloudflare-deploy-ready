@@ -87,16 +87,20 @@ router.get('/', async (req, res) => {
         const status = req.query.status;
         const search = req.query.search;
         const directoryView = req.query.view === 'directory';
+        const reportView = req.query.view === 'report';
+        const includeCount = req.query.includeCount !== 'false';
         const selectColumns = directoryView
             ? 'id, student_id, roll, name, phone, batch, admission_date, fee, status, photo'
-            : '*';
+            : reportView
+                ? 'id, student_id, name, phone, batch, fee, status'
+                : '*';
 
         // Keep each request within the Supabase response cap; callers can use
         // page/totalPages to retrieve datasets of any size.
         const limitValue = Math.min(Math.max(1, limit), 1000);
         const offset = (page - 1) * limitValue;
 
-        let query = supabase.from('students').select(selectColumns, { count: 'exact' });
+        let query = supabase.from('students').select(selectColumns, includeCount ? { count: 'exact' } : undefined);
 
         if (batch && batch !== 'all') {
             query = query.eq('batch', batch);
@@ -148,27 +152,27 @@ router.get('/', async (req, res) => {
                 if (remainingLimit > 0) {
                     const res = await fetchRangeInPages(query, 0, remainingLimit - 1);
                     data = [...exactStudents, ...(res.data || [])];
-                    count = (res.count || 0) + totalExact;
+                    count = includeCount ? (res.count || 0) + totalExact : null;
                 } else {
                     const { count: c, error: cErr } = await query.range(0, 0);
                     if (cErr) throw cErr;
                     data = exactStudents.slice(0, limitValue);
-                    count = (c || 0) + totalExact;
+                    count = includeCount ? (c || 0) + totalExact : null;
                 }
             } else {
                 const generalOffset = (page - 1) * limitValue - totalExact;
                 const res = await fetchRangeInPages(query, generalOffset, generalOffset + limitValue - 1);
                 data = res.data || [];
-                count = (res.count || 0) + totalExact;
+                count = includeCount ? (res.count || 0) + totalExact : null;
             }
         } else {
             const res = await fetchRangeInPages(query, offset, offset + limitValue - 1);
             data = res.data || [];
-            count = res.count || 0;
+            count = includeCount ? (res.count || 0) : null;
         }
 
-        const total = count || 0;
-        const totalPages = Math.ceil(total / limitValue);
+        const total = count ?? (includeCount ? data.length : null);
+        const totalPages = includeCount ? Math.ceil(total / limitValue) : null;
 
         res.json({
             success: true,

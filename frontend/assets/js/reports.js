@@ -3,10 +3,87 @@ let currentTab = 'collection';
 let allPayments  = [];
 let allStudents  = [];
 let allBookSales = [];   // ← Book Sale data
+let allBookSalesSummary = [];
+let allBookSalesLoaded = false;
+let bookSalesDetailsPromise = null;
 let charts = {};
 let multiMonthPaymentStatusReport = null;
 let tabRenderToken = 0;
 let reportDataPromise = Promise.resolve();
+let reportLoadFailed = false;
+let reportIndexes = {
+    studentsById: new Map(),
+    paymentsByStudent: new Map(),
+    paymentsByBatch: new Map(),
+    paymentBatchByRecord: new WeakMap(),
+    monthlyPaidByStudent: new Map()
+};
+let dueDataCache = null;
+const REPORT_TABLE_PAGE_SIZE = 100;
+const reportTablePagers = new Map();
+
+function renderReportTablePage(state, showAll = false) {
+    const start = showAll ? 0 : (state.page - 1) * state.pageSize;
+    const end = showAll ? state.rows.length : Math.min(start + state.pageSize, state.rows.length);
+    const pageRows = state.rows.slice(start, end).map(row => {
+        if (typeof row === 'function') return row();
+        if (row instanceof HTMLTableRowElement) return row;
+        const template = document.createElement('template');
+        template.innerHTML = String(row).trim();
+        return template.content.firstElementChild;
+    }).filter(Boolean);
+    state.tbody.replaceChildren(...pageRows);
+    if (!state.controls) return;
+
+    const pageCount = Math.max(1, Math.ceil(state.rows.length / state.pageSize));
+    state.label.textContent = state.rows.length
+        ? `${start + 1}–${end} / ${state.rows.length}`
+        : '0 records';
+    state.previous.disabled = showAll || state.page <= 1;
+    state.next.disabled = showAll || state.page >= pageCount;
+    state.controls.style.display = state.rows.length > state.pageSize ? 'flex' : 'none';
+}
+
+function renderPagedReportRows(tbodyId, rows, pageSize = REPORT_TABLE_PAGE_SIZE) {
+    const tbody = document.getElementById(tbodyId);
+    if (!tbody) return;
+
+    let controls = document.getElementById(`${tbodyId}Pager`);
+    if (!controls) {
+        controls = document.createElement('div');
+        controls.id = `${tbodyId}Pager`;
+        controls.className = 'report-table-pager';
+        controls.innerHTML = '<span class="report-table-pager__label" aria-live="polite"></span><div><button type="button" class="report-table-pager__previous">Previous</button><button type="button" class="report-table-pager__next">Next</button></div>';
+        const tableWrap = tbody.closest('.table-responsive');
+        if (tableWrap) tableWrap.insertAdjacentElement('afterend', controls);
+    }
+
+    const state = {
+        tbody,
+        controls,
+        label: controls.querySelector('.report-table-pager__label'),
+        previous: controls.querySelector('.report-table-pager__previous'),
+        next: controls.querySelector('.report-table-pager__next'),
+        rows,
+        pageSize,
+        page: 1
+    };
+    state.previous.onclick = () => {
+        if (state.page > 1) { state.page--; renderReportTablePage(state); }
+    };
+    state.next.onclick = () => {
+        if (state.page < Math.ceil(state.rows.length / state.pageSize)) { state.page++; renderReportTablePage(state); }
+    };
+    reportTablePagers.set(tbodyId, state);
+    renderReportTablePage(state);
+}
+
+window.addEventListener('beforeprint', () => {
+    reportTablePagers.forEach(state => renderReportTablePage(state, true));
+});
+window.addEventListener('afterprint', () => {
+    reportTablePagers.forEach(state => renderReportTablePage(state));
+});
 
 const reportTabLabels = {
     collection: 'Collection report',
@@ -18,20 +95,58 @@ const reportTabLabels = {
 };
 
 const studentKey = student => student.studentId || student.id;
-const findStudent = payment => allStudents.find(student => studentKey(student) === payment.studentId);
-const paymentBatch = payment => payment.batch || findStudent(payment)?.batch || 'Unassigned';
+const findStudent = payment => reportIndexes.studentsById.get(payment.studentId);
+const paymentBatch = payment => payment.batch || reportIndexes.paymentBatchByRecord.get(payment)
+    || reportIndexes.studentsById.get(payment.studentId)?.batch || 'Unassigned';
+
+function rebuildReportIndexes() {
+    const studentsById = new Map();
+    const paymentsByStudent = new Map();
+    const paymentsByBatch = new Map();
+    const paymentBatchByRecord = new WeakMap();
+    const monthlyPaidByStudent = new Map();
+
+    for (const student of allStudents) {
+        const id = studentKey(student);
+        if (id != null) studentsById.set(id, student);
+    }
+
+    for (const payment of allPayments) {
+        const id = payment.studentId;
+        if (!paymentsByStudent.has(id)) paymentsByStudent.set(id, []);
+        paymentsByStudent.get(id).push(payment);
+
+        const batch = payment.batch || studentsById.get(id)?.batch || 'Unassigned';
+        paymentBatchByRecord.set(payment, batch);
+        if (!paymentsByBatch.has(batch)) paymentsByBatch.set(batch, []);
+        paymentsByBatch.get(batch).push(payment);
+
+        if (payment.type !== 'Admission') {
+            if (!monthlyPaidByStudent.has(id)) monthlyPaidByStudent.set(id, new Map());
+            const monthKey = `${String(payment.year)}\u0000${payment.month}`;
+            const months = monthlyPaidByStudent.get(id);
+            months.set(monthKey, (months.get(monthKey) || 0) + Number(payment.amount || 0));
+        }
+    }
+
+    reportIndexes = { studentsById, paymentsByStudent, paymentsByBatch, paymentBatchByRecord, monthlyPaidByStudent };
+    dueDataCache = null;
+}
 
 function getFilteredPayments() {
     const fromDate = document.getElementById('fromDate').value;
     const toDate = document.getElementById('toDate').value;
     const batch = document.getElementById('filterBatch').value;
     const status = document.getElementById('filterStatus').value;
-    return allPayments.filter(payment =>
-        (!fromDate || payment.date >= fromDate) &&
-        (!toDate || payment.date <= toDate) &&
-        (batch === 'all' || paymentBatch(payment) === batch) &&
-        (status === 'all' || payment.status === status)
-    );
+    const filtered = [];
+    for (const payment of allPayments) {
+        if (fromDate && payment.date < fromDate) continue;
+        if (toDate && payment.date > toDate) continue;
+        if (batch !== 'all' && paymentBatch(payment) !== batch) continue;
+        if (status !== 'all' && payment.status !== status) continue;
+        filtered.push(payment);
+    }
+    return filtered;
 }
 
 function renderChart(name, canvas, config) {
@@ -54,19 +169,22 @@ function renderChart(name, canvas, config) {
 }
 
 function getDueData() {
+    if (dueDataCache) return dueDataCache;
     const now = new Date();
     const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-    return allStudents.filter(student => student.status === 'Active').map(student => {
+    dueDataCache = allStudents.filter(student => student.status === 'Active').map(student => {
         const fee = Number(student.fee || 0);
         let expected = 0, paid = 0, dueMonths = 0;
         for (let offset = 0; offset < 12; offset++) {
             const date = new Date(now.getFullYear(), now.getMonth() - offset, 1);
-            const monthlyPaid = allPayments.filter(payment => payment.studentId === studentKey(student) && payment.type !== 'Admission' && payment.month === months[date.getMonth()] && Number(payment.year) === date.getFullYear()).reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+            const monthKey = `${date.getFullYear()}\u0000${months[date.getMonth()]}`;
+            const monthlyPaid = reportIndexes.monthlyPaidByStudent.get(studentKey(student))?.get(monthKey) || 0;
             expected += fee; paid += monthlyPaid;
             if (monthlyPaid < fee) dueMonths++;
         }
         return { ...student, dueAmount: Math.max(0, expected - paid), dueMonths, totalPaid: paid };
     });
+    return dueDataCache;
 }
 
 // Initialize reports page
@@ -85,14 +203,14 @@ function initializeReports() {
     showReportTabLoader();
     const initialRenderToken = tabRenderToken;
     reportDataPromise = loadAllData();
-    reportDataPromise.then(() => {
+    reportDataPromise.then(async () => {
         // A tab click during the initial fetch owns rendering and loader cleanup.
         if (initialRenderToken !== tabRenderToken) return;
-        return Promise.resolve(refreshCurrentTab())
-            .catch(error => console.error('Could not render initial report:', error))
-            .finally(() => {
-                if (initialRenderToken === tabRenderToken) hideReportTabLoader();
-            });
+        await refreshCurrentTab();
+        if (initialRenderToken === tabRenderToken) hideReportTabLoader();
+    }).catch(error => {
+        console.error('Could not load the complete initial report:', error);
+        if (initialRenderToken === tabRenderToken) showReportLoadError();
     });
 }
 
@@ -122,78 +240,88 @@ async function fetchAllReportPages(endpoint, collectionKey) {
     const baseUrl = new URL(endpoint, window.location.origin);
     const pageSize = 1000;
 
-    async function fetchPage(page) {
+    async function fetchPage(page, includeCount = true) {
         const url = new URL(baseUrl);
         url.searchParams.set('limit', String(pageSize));
         url.searchParams.set('page', String(page));
+        if (!includeCount) url.searchParams.set('includeCount', 'false');
         const response = await fetch(url.toString());
         if (!response.ok) throw new Error(`Failed to load ${collectionKey} (page ${page})`);
-        return response.json();
+        const result = await response.json();
+        if (result.success === false || !Array.isArray(result[collectionKey])) {
+            throw new Error(`Invalid ${collectionKey} response (page ${page})`);
+        }
+        return result;
     }
 
     const firstPage = await fetchPage(1);
     const records = [...(firstPage[collectionKey] || [])];
-    const totalPages = Math.max(1, Number(firstPage.totalPages) || 1);
+    const total = Number(firstPage.total);
+    if (firstPage.total === null || firstPage.total === undefined || firstPage.total === ''
+        || !Number.isFinite(total) || total < records.length) {
+        throw new Error(`Could not confirm the complete ${collectionKey} count`);
+    }
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
     // Fetch a few pages concurrently to keep large reports responsive without
-    // sending an unbounded burst of requests to Supabase.
+    // repeating exact-count queries or sending an unbounded burst to Supabase.
     for (let firstPageNumber = 2; firstPageNumber <= totalPages; firstPageNumber += 5) {
         const pageNumbers = Array.from(
             { length: Math.min(5, totalPages - firstPageNumber + 1) },
             (_, index) => firstPageNumber + index
         );
-        const pages = await Promise.all(pageNumbers.map(fetchPage));
+        const pages = await Promise.all(pageNumbers.map(page => fetchPage(page, false)));
         for (const page of pages) records.push(...(page[collectionKey] || []));
     }
 
+    if (records.length !== total) {
+        throw new Error(`Incomplete ${collectionKey} report: received ${records.length} of ${total}`);
+    }
     return records;
 }
 
 // Load all necessary data
 async function loadAllData() {
-    try {
-        console.log('Loading data from API...');
+    console.log('Loading data from API...');
+    const [payments, students, bookSalesSummary] = await Promise.all([
+        fetchAllReportPages('/api/payments?view=report', 'payments'),
+        fetchAllReportPages('/api/students?view=report', 'students'),
+        fetchAllReportPages('/api/book-sales?view=summary', 'sales')
+    ]);
 
-        // Load report datasets in parallel to avoid serial page-load delays.
-        const [payments, students, bookSalesResponse] = await Promise.all([
-            fetchAllReportPages('/api/payments', 'payments'),
-            fetchAllReportPages('/api/students', 'students'),
-            fetch('/api/book-sales?limit=10000').catch(error => {
-                console.warn('Could not load book sales:', error.message);
-                return null;
+    allPayments = payments;
+    allStudents = students;
+    allBookSalesSummary = bookSalesSummary;
+    allBookSales = [];
+    allBookSalesLoaded = false;
+    bookSalesDetailsPromise = null;
+    rebuildReportIndexes();
+    console.log('Report records loaded:', { payments: allPayments.length, students: allStudents.length, bookSales: allBookSalesSummary.length });
+    populateBatchDropdowns();
+}
+
+async function ensureBookSalesDetails() {
+    if (allBookSalesLoaded) return allBookSales;
+    if (!bookSalesDetailsPromise) {
+        bookSalesDetailsPromise = fetchAllReportPages('/api/book-sales', 'sales')
+            .then(sales => {
+                allBookSales = sales;
+                allBookSalesLoaded = true;
+                return sales;
             })
-        ]);
-
-        allPayments = payments;
-        allStudents = students;
-        console.log('Total payments loaded:', allPayments.length);
-        console.log('Total students loaded:', allStudents.length);
-        
-        // Populate batch dropdowns after loading students
-        if (allStudents.length > 0) {
-            populateBatchDropdowns();
-            console.log('Batch dropdowns populated');
-        } else {
-            console.warn('No students found, batch dropdown will be empty');
-        }
-
-        if (bookSalesResponse?.ok) {
-            const bookSalesData = await bookSalesResponse.json();
-            allBookSales = bookSalesData.sales || [];
-        } else {
-            allBookSales = [];
-        }
-
-    } catch (error) {
-        console.error('Error loading data:', error);
+            .catch(error => {
+                bookSalesDetailsPromise = null;
+                throw error;
+            });
     }
+    return bookSalesDetailsPromise;
 }
 
 // Refresh current tab data
-function refreshCurrentTab() {
+function refreshCurrentTab(summaryAlreadyUpdated = false) {
     switch(currentTab) {
         case 'collection':
-            loadCollectionReport();
+            loadCollectionReport(summaryAlreadyUpdated);
             break;
         case 'due':
             // Only auto-load if month already selected; otherwise show placeholder
@@ -243,11 +371,12 @@ function switchTab(tabName) {
             await reportDataPromise;
             if (renderToken !== tabRenderToken) return;
             updateSummaryCards();
-            await refreshCurrentTab();
+            await refreshCurrentTab(true);
         } catch (error) {
             console.error('Could not render report tab:', error);
+            showReportLoadError();
         } finally {
-            if (renderToken === tabRenderToken) hideReportTabLoader();
+            if (renderToken === tabRenderToken && !reportLoadFailed) hideReportTabLoader();
         }
     }, 0));
 }
@@ -255,6 +384,23 @@ function switchTab(tabName) {
 function showReportTabLoader() {
     const loader = document.getElementById('reportTabLoader');
     if (!loader) return;
+    reportLoadFailed = false;
+    const spinner = loader.querySelector('.report-tab-loader__spinner');
+    const error = document.getElementById('reportTabLoadError');
+    if (spinner) spinner.style.display = 'inline-block';
+    if (error) error.style.display = 'none';
+    loader.classList.add('is-visible');
+    loader.setAttribute('aria-hidden', 'false');
+}
+
+function showReportLoadError() {
+    const loader = document.getElementById('reportTabLoader');
+    if (!loader) return;
+    reportLoadFailed = true;
+    const spinner = loader.querySelector('.report-tab-loader__spinner');
+    const error = document.getElementById('reportTabLoadError');
+    if (spinner) spinner.style.display = 'none';
+    if (error) error.style.display = 'block';
     loader.classList.add('is-visible');
     loader.setAttribute('aria-hidden', 'false');
 }
@@ -262,8 +408,23 @@ function showReportTabLoader() {
 function hideReportTabLoader() {
     const loader = document.getElementById('reportTabLoader');
     if (!loader) return;
+    reportLoadFailed = false;
     loader.classList.remove('is-visible');
     loader.setAttribute('aria-hidden', 'true');
+}
+
+async function retryReportLoad() {
+    showReportTabLoader();
+    try {
+        reportDataPromise = loadAllData();
+        await reportDataPromise;
+        updateSummaryCards();
+        await refreshCurrentTab(true);
+        hideReportTabLoader();
+    } catch (error) {
+        console.error('Could not reload complete report data:', error);
+        showReportLoadError();
+    }
 }
 
 // Set today's filter
@@ -335,8 +496,8 @@ function populateYearDropdown() {
 }
 
 // Collection Report
-function loadCollectionReport() {
-    updateSummaryCards();
+function loadCollectionReport(summaryAlreadyUpdated = false) {
+    if (!summaryAlreadyUpdated) updateSummaryCards();
     loadDailyActivitySummary();
     loadCollectionCharts();
     loadDailyCollectionSummary();
@@ -346,17 +507,23 @@ function loadCollectionReport() {
 function loadCollectionCharts() {
     const payments = getFilteredPayments();
     const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-    const monthlyTotals = months.map(month => payments.filter(payment => payment.month === month).reduce((sum, payment) => sum + Number(payment.amount || 0), 0));
+    const monthlyTotalsByName = new Map(months.map(month => [month, 0]));
+    const dailyTotalsByDate = new Map();
+    for (const payment of payments) {
+        monthlyTotalsByName.set(payment.month, (monthlyTotalsByName.get(payment.month) || 0) + Number(payment.amount || 0));
+        dailyTotalsByDate.set(payment.date, (dailyTotalsByDate.get(payment.date) || 0) + Number(payment.amount || 0));
+    }
+    const monthlyTotals = months.map(month => monthlyTotalsByName.get(month) || 0);
     renderChart('collection', document.getElementById('collectionChart'), {
         type: 'line',
         data: { labels: months.map(month => month.slice(0, 3)), datasets: [{ label: 'Collection', data: monthlyTotals, borderColor: '#1cc88a', backgroundColor: 'rgba(28,200,138,.12)', fill: true, tension: .35 }] },
         options: { responsive: true, maintainAspectRatio: false }
     });
 
-    const dates = [...new Set(payments.map(payment => payment.date))].sort().slice(-14);
+    const dates = [...dailyTotalsByDate.keys()].sort().slice(-14);
     renderChart('daily', document.getElementById('dailyChart'), {
         type: 'bar',
-        data: { labels: dates, datasets: [{ label: 'Daily collection', data: dates.map(date => payments.filter(payment => payment.date === date).reduce((sum, payment) => sum + Number(payment.amount || 0), 0)), backgroundColor: '#4e73df' }] },
+        data: { labels: dates, datasets: [{ label: 'Daily collection', data: dates.map(date => dailyTotalsByDate.get(date) || 0), backgroundColor: '#4e73df' }] },
         options: { responsive: true, maintainAspectRatio: false }
     });
 }
@@ -396,7 +563,7 @@ function loadDailyActivitySummary() {
     const paymentAmount = generalPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 
     // ── Book Sale data (filtered by same date range) ──
-    let filteredBookSales = allBookSales;
+    let filteredBookSales = allBookSalesSummary;
     if (fromDate) filteredBookSales = filteredBookSales.filter(s => s.saleDate >= fromDate);
     if (toDate)   filteredBookSales = filteredBookSales.filter(s => s.saleDate <= toDate);
     const bookSaleCount  = filteredBookSales.length;
@@ -456,7 +623,7 @@ function loadDailyCollectionSummary() {
     });
 
     // ── Merge book sales grouped by date ──
-    let filteredBS = allBookSales;
+    let filteredBS = allBookSalesSummary;
     if (fromDate) filteredBS = filteredBS.filter(s => s.saleDate >= fromDate);
     if (toDate)   filteredBS = filteredBS.filter(s => s.saleDate <= toDate);
 
@@ -505,8 +672,7 @@ function loadDailyCollectionSummary() {
 
 // Load collection details
 function loadCollectionDetails() {
-    const tbody = document.getElementById('collectionTableBody');
-    tbody.innerHTML = '';
+    const rows = [];
     
     const fromDate = document.getElementById('fromDate').value;
     const toDate = document.getElementById('toDate').value;
@@ -518,25 +684,27 @@ function loadCollectionDetails() {
     filtered.sort((a, b) => b.date.localeCompare(a.date));
     
     filtered.forEach(p => {
-        const student = findStudent(p);
-        const sid = student ? studentKey(student) : (p.studentId || 'N/A');
-        const statusClass = p.status === 'Paid' ? 'status-paid' : (p.status === 'Due' ? 'status-due' : 'status-partial');
-        
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${p.date}</td>
-            <td><a href="#" class="btn-view-sm">${p.receiptNo}</a></td>
-            <td><strong>${sid}</strong></td>
-            <td>${student ? student.name : 'N/A'}</td>
-            <td>${paymentBatch(p)}</td>
-            <td>${p.month}</td>
-            <td>৳${p.fee?.toLocaleString() || '0'}</td>
-            <td>৳${p.amount?.toLocaleString() || '0'}</td>
-            <td>${p.paymentMethod || 'N/A'}</td>
-            <td><span class="status-badge ${statusClass}">${p.status}</span></td>
-        `;
-        tbody.appendChild(row);
+        rows.push(() => {
+            const student = findStudent(p);
+            const sid = student ? studentKey(student) : (p.studentId || 'N/A');
+            const statusClass = p.status === 'Paid' ? 'status-paid' : (p.status === 'Due' ? 'status-due' : 'status-partial');
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${p.date}</td>
+                <td><a href="#" class="btn-view-sm">${p.receiptNo}</a></td>
+                <td><strong>${sid}</strong></td>
+                <td>${student ? student.name : 'N/A'}</td>
+                <td>${paymentBatch(p)}</td>
+                <td>${p.month}</td>
+                <td>৳${p.fee?.toLocaleString() || '0'}</td>
+                <td>৳${p.amount?.toLocaleString() || '0'}</td>
+                <td>${p.paymentMethod || 'N/A'}</td>
+                <td><span class="status-badge ${statusClass}">${p.status}</span></td>
+            `;
+            return row;
+        });
     });
+    renderPagedReportRows('collectionTableBody', rows);
 }
 
 // Due Report
@@ -564,15 +732,15 @@ function loadDueReport() {
         const fee = Number(student.fee || 0);
 
         // Find monthly fee payments only (exclude Admission type) for selected month+year
-        const monthPayments = allPayments.filter(p =>
-            p.studentId === sid &&
+        const monthPayments = (reportIndexes.paymentsByStudent.get(sid) || []).filter(p =>
             p.month     === month &&
             String(p.year) === String(year) &&
             (p.type !== 'Admission')
         );
 
         const totalPaid = monthPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
-        const lastP     = [...monthPayments].sort((a, b) => b.date.localeCompare(a.date))[0];
+        const lastP     = monthPayments.reduce((latest, payment) =>
+            !latest || payment.date > latest.date ? payment : latest, null);
 
         // Paid = has any payment this month, OR paid amount >= fee (if fee set)
         const isPaid = monthPayments.length > 0 && (fee === 0 || totalPaid >= fee);
@@ -607,8 +775,7 @@ function loadDueReport() {
     document.getElementById('dueUnpaidBadge').textContent     = unpaidCount;
 
     // Render paid list
-    const paidBody = document.getElementById('duePaidBody');
-    paidBody.innerHTML = paidStudents.length
+    const sortedPaid = paidStudents.length
         ? paidStudents
             .sort((a, b) => String(a.studentId || '').localeCompare(String(b.studentId || ''), undefined, { numeric: true }))
             .map(s => `<tr>
@@ -619,12 +786,12 @@ function loadDueReport() {
                 <td>৳${Number(s.paidAmount).toLocaleString()}</td>
                 <td>${s.paymentDate}</td>
                 <td>${s.method}</td>
-            </tr>`).join('')
-        : '<tr><td colspan="7" class="empty-msg">No paid students found.</td></tr>';
+            </tr>`)
+        : ['<tr><td colspan="7" class="empty-msg">No paid students found.</td></tr>'];
+    renderPagedReportRows('duePaidBody', sortedPaid);
 
     // Render due/unpaid list
-    const unpaidBody = document.getElementById('dueUnpaidBody');
-    unpaidBody.innerHTML = unpaidStudents.length
+    const sortedUnpaid = unpaidStudents.length
         ? unpaidStudents
             .sort((a, b) => String(a.studentId || '').localeCompare(String(b.studentId || ''), undefined, { numeric: true }))
             .map(s => `<tr>
@@ -634,8 +801,9 @@ function loadDueReport() {
                 <td>${s.batch}</td>
                 <td>৳${Number(s.fee).toLocaleString()}</td>
                 <td><button class="btn-view-sm" onclick="collectDue('${studentKey(s)}')">Collect</button></td>
-            </tr>`).join('')
-        : '<tr><td colspan="6" class="empty-msg">No due students. All paid!</td></tr>';
+            </tr>`)
+        : ['<tr><td colspan="6" class="empty-msg">No due students. All paid!</td></tr>'];
+    renderPagedReportRows('dueUnpaidBody', sortedUnpaid);
 }
 
 function resetDueFilter() {
@@ -668,7 +836,7 @@ function loadDueTable() {
         const fee = Number(student.fee || 0);
 
         // all payments for this student (optionally date-filtered)
-        let studentPayments = allPayments.filter(p => p.studentId === studentKey(student));
+        let studentPayments = [...(reportIndexes.paymentsByStudent.get(studentKey(student)) || [])];
         if (fromDate) studentPayments = studentPayments.filter(p => p.date >= fromDate);
         if (toDate)   studentPayments = studentPayments.filter(p => p.date <= toDate);
 
@@ -684,7 +852,8 @@ function loadDueTable() {
             return sum + Math.max(0, shortfall);
         }, 0);
 
-        const lastPayment = [...studentPayments].sort((a, b) => b.date.localeCompare(a.date))[0];
+        const lastPayment = studentPayments.reduce((latest, payment) =>
+            !latest || payment.date > latest.date ? payment : latest, null);
 
         return { ...student, dueAmount, dueMonths, totalPaid, lastPayment };
     }).filter(s => s.dueAmount > 0);
@@ -723,8 +892,13 @@ function loadBatchChart() {
     const ctx = document.getElementById('batchStudentsChart');
     if (!ctx) return;
     
-    const batches = [...new Set(allStudents.map(s => s.batch))];
-    const studentCounts = batches.map(batch => allStudents.filter(s => s.batch === batch).length);
+    const studentsByBatch = new Map();
+    for (const student of allStudents) {
+        if (!studentsByBatch.has(student.batch)) studentsByBatch.set(student.batch, 0);
+        studentsByBatch.set(student.batch, studentsByBatch.get(student.batch) + 1);
+    }
+    const batches = [...studentsByBatch.keys()];
+    const studentCounts = batches.map(batch => studentsByBatch.get(batch));
     
     renderChart('batchStudents', ctx, {
         type: 'doughnut',
@@ -743,11 +917,9 @@ function loadBatchCollectionChart() {
     if (!ctx) return;
     
     const batches = [...new Set(allStudents.map(s => s.batch))];
-    const collectionData = batches.map(batch => {
-        return allPayments
-            .filter(p => paymentBatch(p) === batch)
-            .reduce((sum, p) => sum + (p.amount || 0), 0);
-    });
+    const collectionData = batches.map(batch =>
+        (reportIndexes.paymentsByBatch.get(batch) || []).reduce((sum, p) => sum + Number(p.amount || 0), 0)
+    );
     
     renderChart('batchCollection', ctx, {
         type: 'bar',
@@ -766,11 +938,17 @@ function loadBatchTable() {
     const tbody = document.getElementById('batchTableBody');
     tbody.innerHTML = '';
     
-    const batches = [...new Set(allStudents.map(s => s.batch))].filter(Boolean).sort();
+    const studentsByBatch = new Map();
+    for (const student of allStudents) {
+        if (!student.batch) continue;
+        if (!studentsByBatch.has(student.batch)) studentsByBatch.set(student.batch, []);
+        studentsByBatch.get(student.batch).push(student);
+    }
+    const batches = [...studentsByBatch.keys()].sort();
     
     batches.forEach(batch => {
-        const students  = allStudents.filter(s => s.batch === batch);
-        const payments  = allPayments.filter(p => paymentBatch(p) === batch);
+        const students  = studentsByBatch.get(batch);
+        const payments  = reportIndexes.paymentsByBatch.get(batch) || [];
         
         const totalStudents   = students.length;
         const activeStudents  = students.filter(s => s.status === 'Active').length;
@@ -803,7 +981,7 @@ function loadBatchTable() {
 // Show batch details panel
 function showBatchDetails(batch) {
     const students = allStudents.filter(s => s.batch === batch);
-    const payments = allPayments.filter(p => paymentBatch(p) === batch);
+    const payments = reportIndexes.paymentsByBatch.get(batch) || [];
 
     // Title
     document.getElementById('batchDetailTitle').textContent = batch;
@@ -886,8 +1064,7 @@ function closeBatchDetails() {
 
 // ── Render student rows (shared by showBatchDetails + search) ────────────────
 function renderBatchStudentRows(students) {
-    const tbody = document.getElementById('batchDetailStudents');
-    tbody.innerHTML = students.length
+    const rows = students.length
         ? students.map(s => {
             const sid = studentKey(s);
             const statusClass = s.status === 'Active' ? 'status-paid' : 'status-due';
@@ -905,8 +1082,9 @@ function renderBatchStudentRows(students) {
                     </button>
                 </td>
             </tr>`;
-          }).join('')
-        : '<tr><td colspan="6" class="empty-msg">No students found.</td></tr>';
+          })
+        : ['<tr><td colspan="6" class="empty-msg">No students found.</td></tr>'];
+    renderPagedReportRows('batchDetailStudents', rows);
 }
 
 // ── Search in Batch Summary: find student by ID/Name/Phone, show their details ──
@@ -1049,6 +1227,7 @@ async function saveEditStudent() {
         if (idx !== -1) {
             allStudents[idx] = { ...allStudents[idx], name, phone, fee, status };
         }
+        rebuildReportIndexes();
 
         // Update _currentBatchStudents cache
         const cidx = (window._currentBatchStudents || []).findIndex(s => studentKey(s) === sid);
@@ -1131,31 +1310,32 @@ function loadMethodTable() {
 
 // Student Report
 function loadStudentReport() {
-    const tbody = document.getElementById('studentTableBody');
-    tbody.innerHTML = '';
+    const rows = [];
     
     getDueData().forEach(student => {
-        const studentPayments = allPayments.filter(p => p.studentId === studentKey(student));
-        const totalPaid = studentPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
-        const totalDue = student.dueAmount;
-        const paymentCount = studentPayments.length;
-        const lastPayment = studentPayments.sort((a, b) => b.date.localeCompare(a.date))[0];
-        
-        const statusClass = totalDue > 0 ? 'status-due' : 'status-paid';
-        
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${studentKey(student)}</td>
-            <td>${student.name}</td>
-            <td>${student.batch}</td>
-            <td>৳${totalPaid.toLocaleString()}</td>
-            <td>৳${totalDue.toLocaleString()}</td>
-            <td>${paymentCount}</td>
-            <td>${lastPayment ? lastPayment.date : 'N/A'}</td>
-            <td><span class="status-badge ${statusClass}">${totalDue > 0 ? 'Due' : 'Paid'}</span></td>
-        `;
-        tbody.appendChild(row);
+        rows.push(() => {
+            const studentPayments = reportIndexes.paymentsByStudent.get(studentKey(student)) || [];
+            const totalPaid = studentPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+            const totalDue = student.dueAmount;
+            const paymentCount = studentPayments.length;
+            const lastPayment = studentPayments.reduce((latest, payment) =>
+                !latest || payment.date > latest.date ? payment : latest, null);
+            const statusClass = totalDue > 0 ? 'status-due' : 'status-paid';
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${studentKey(student)}</td>
+                <td>${student.name}</td>
+                <td>${student.batch}</td>
+                <td>৳${totalPaid.toLocaleString()}</td>
+                <td>৳${totalDue.toLocaleString()}</td>
+                <td>${paymentCount}</td>
+                <td>${lastPayment ? lastPayment.date : 'N/A'}</td>
+                <td><span class="status-badge ${statusClass}">${totalDue > 0 ? 'Due' : 'Paid'}</span></td>
+            `;
+            return row;
+        });
     });
+    renderPagedReportRows('studentTableBody', rows);
 }
 
 // Batch-wise Monthly Status
@@ -1264,7 +1444,7 @@ async function loadMultiMonthPaymentStatus() {
                 { numeric: true, sensitivity: 'base' }
             )).map(student => ({
                 ...student,
-                phone: student.phone || allStudents.find(s => studentKey(s) === student.id)?.phone || 'N/A'
+                phone: student.phone || reportIndexes.studentsById.get(student.id)?.phone || 'N/A'
             }))
         };
         data.students = multiMonthPaymentStatusReport.students;
@@ -1273,7 +1453,7 @@ async function loadMultiMonthPaymentStatus() {
         const tbody = document.getElementById('multiMonthTableBody');
         tbody.innerHTML = multiMonthPaymentStatusReport.students.length
             ? data.students.map(student => {
-                const phone = student.phone || allStudents.find(s => studentKey(s) === student.id)?.phone || 'N/A';
+                const phone = student.phone || reportIndexes.studentsById.get(student.id)?.phone || 'N/A';
                 return `<tr><td>${student.id}</td><td>${student.name}</td><td>${phone}</td><td>${student.batch}</td><td>৳${Number(student.fee).toLocaleString()}</td>${data.months.map(month => { const status = student.monthlyStatus[month]; const statusClass = status === 'Unpaid' ? 'status-due' : `status-${status.toLowerCase()}`; return `<td><span class="status-badge ${statusClass}">${status}</span></td>`; }).join('')}</tr>`;
               }).join('')
             : `<tr><td colspan="${5 + data.months.length}" class="empty-msg">No students found in this batch.</td></tr>`;
@@ -1401,7 +1581,7 @@ function handlePrintReport() {
         // ── Book sale summary line for print header ──
         const fromDateVal = document.getElementById('fromDate').value;
         const toDateVal   = document.getElementById('toDate').value;
-        let bsFiltered = allBookSales;
+        let bsFiltered = allBookSalesSummary;
         if (fromDateVal) bsFiltered = bsFiltered.filter(s => s.saleDate >= fromDateVal);
         if (toDateVal)   bsFiltered = bsFiltered.filter(s => s.saleDate <= toDateVal);
         const bsTotal = bsFiltered.reduce((s, x) => s + (x.netAmount || 0), 0);
@@ -1542,7 +1722,7 @@ function exportBatchToExcel() {
     batches.forEach(batch => {
         const students = allStudents.filter(student => student.batch === batch);
         const fee = Number(students[0]?.fee || 0);
-        const collected = allPayments.filter(payment => paymentBatch(payment) === batch).reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+        const collected = (reportIndexes.paymentsByBatch.get(batch) || []).reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
         const expected = students.length * fee;
         rows.push([batch, students.length, students.filter(student => student.status === 'Active').length, fee, expected, collected, Math.max(0, expected - collected), expected ? ((collected / expected) * 100).toFixed(1) + '%' : '0%']);
     });
@@ -1600,7 +1780,8 @@ function resetBsFilter() {
     loadBookSalesTab();
 }
 
-function loadBookSalesTab() {
+async function loadBookSalesTab() {
+    await ensureBookSalesDetails();
     const fromDate  = document.getElementById('bsFromDate')?.value  || '';
     const toDate    = document.getElementById('bsToDate')?.value    || '';
     const buyerType = document.getElementById('bsBuyerType')?.value || 'all';
@@ -1670,14 +1851,8 @@ function loadBookSalesTab() {
     const tbody = document.getElementById('bsrTableBody');
     if (!tbody) return;
 
-    if (sales.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:30px;color:#6c757d;font-style:italic;">কোনো বিক্রির রেকর্ড পাওয়া যায়নি।</td></tr>`;
-        return;
-    }
-
     const sorted = [...sales].sort((a, b) => b.saleDate.localeCompare(a.saleDate));
-
-    tbody.innerHTML = sorted.map(s => {
+    const rows = sorted.map(s => {
         const btBadge = s.buyerType === 'Student'
             ? `<span class="status-badge" style="background:#dbeafe;color:#1e40af;">Student</span>`
             : `<span class="status-badge" style="background:#ede9fe;color:#5b21b6;">External</span>`;
@@ -1694,7 +1869,11 @@ function loadBookSalesTab() {
             <td>${s.paymentMethod || '—'}</td>
             <td>${psBadge}</td>
         </tr>`;
-    }).join('');
+    });
+    if (rows.length === 0) {
+        rows.push('<tr><td colspan="8" style="text-align:center;padding:30px;color:#6c757d;font-style:italic;">কোনো বিক্রির রেকর্ড পাওয়া যায়নি।</td></tr>');
+    }
+    renderPagedReportRows('bsrTableBody', rows);
 }
 
 // Print book sales report

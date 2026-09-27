@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="assets/css/dashboard.css">
     <link rel="stylesheet" href="assets/css/reports.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
 </head>
 <body>
 
@@ -186,6 +186,11 @@
 
         <div id="reportTabLoader" class="report-tab-loader" aria-hidden="true" role="status" aria-label="Loading">
             <span class="report-tab-loader__spinner" aria-hidden="true"></span>
+            <div id="reportTabLoadError" class="report-tab-load-error" role="alert" style="display:none;">
+                <strong>Report data could not be loaded completely.</strong>
+                <span>Please check your connection and try again.</span>
+                <button type="button" onclick="retryReportLoad()">Retry</button>
+            </div>
         </div>
 
         <!-- Summary Cards -->

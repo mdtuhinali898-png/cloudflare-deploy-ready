@@ -197,8 +197,11 @@ router.post('/', async (req, res) => {
 // ─── GET /api/book-sales ──────────────────────────────────────────────────────
 router.get('/', async (req, res) => {
     try {
-        const { date, fromDate, toDate, buyerType, paymentStatus, studentId, limit } = req.query;
-        let query = supabase.from('book_sales').select('*');
+        const { date, fromDate, toDate, buyerType, paymentStatus, studentId, limit, page, view, includeCount } = req.query;
+        const paginated = page !== undefined;
+        const shouldCount = paginated && includeCount !== 'false';
+        const columns = view === 'summary' ? 'sale_date,net_amount' : '*';
+        let query = supabase.from('book_sales').select(columns, shouldCount ? { count: 'exact' } : undefined);
 
         if (date) query = query.eq('sale_date', date);
         else {
@@ -210,14 +213,33 @@ router.get('/', async (req, res) => {
         if (paymentStatus && paymentStatus !== 'all') query = query.eq('payment_status', paymentStatus);
         if (studentId) query = query.eq('student_id', studentId);
 
-        const lim = parseInt(limit) || 1000;
-        query = query.order('created_at', { ascending: false }).limit(lim);
+        const lim = Math.min(1000, Math.max(1, parseInt(limit, 10) || 1000));
+        query = query.order('created_at', { ascending: false }).order('id', { ascending: false });
+        if (paginated) {
+            const pageNumber = Math.max(1, parseInt(page, 10) || 1);
+            const offset = (pageNumber - 1) * lim;
+            query = query.range(offset, offset + lim - 1);
+        } else {
+            // Preserve the existing non-paginated behavior for other callers.
+            query = query.limit(parseInt(limit, 10) || 1000);
+        }
 
-        const { data: sales, error } = await query;
+        const { data: sales, count, error } = await query;
         if (error) throw error;
 
         const formatted = (sales || []).map(formatBookSale);
-        res.json({ success: true, sales: formatted, total: formatted.length });
+        if (!paginated) {
+            return res.json({ success: true, sales: formatted, total: formatted.length });
+        }
+
+        const pageNumber = Math.max(1, parseInt(page, 10) || 1);
+        res.json({
+            success: true,
+            sales: formatted,
+            total: shouldCount ? (count || 0) : null,
+            page: pageNumber,
+            totalPages: shouldCount ? Math.ceil((count || 0) / lim) : null
+        });
     } catch (err) {
         console.error('GET /api/book-sales error:', err);
         res.status(500).json({ success: false, message: err.message });
