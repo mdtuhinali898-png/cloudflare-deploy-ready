@@ -194,6 +194,19 @@ router.get('/summary', async (req, res) => {
 });
 
 // Category routes
+function normalizeExpenseSubCategories(subCategories) {
+    if (!Array.isArray(subCategories)) return [];
+
+    return subCategories.map(item => {
+        const value = typeof item === 'string'
+            ? item
+            : item?.name ?? item?.label ?? item?.title ?? item?.value
+                ?? item?.subCategory ?? item?.sub_category ?? item?.subcategory;
+        const name = value == null ? '' : String(value).trim();
+        return name ? { name } : null;
+    }).filter(Boolean);
+}
+
 router.get('/categories/all', async (req, res) => {
     try {
         const { data: categories, error } = await supabase
@@ -210,7 +223,9 @@ router.get('/categories/all', async (req, res) => {
                 _id: c.id,
                 id: c.id,
                 name: c.name,
-                subCategories: c.sub_categories || [],
+                // Older category rows may store subcategories as strings (or
+                // use a legacy label key); the frontend expects { name }.
+                subCategories: normalizeExpenseSubCategories(c.sub_categories),
                 status: c.status
             }))
         });

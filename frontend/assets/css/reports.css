@@ -806,6 +806,22 @@
         page-break-inside: avoid !important;
     }
 
+    /* Keep all six daily-summary columns inside the printable page width. */
+    .report-content,
+    #collectionTab,
+    .daily-summary-section {
+        width: 100% !important;
+        max-width: 100% !important;
+        overflow: visible !important;
+    }
+
+    .daily-summary-section .table-responsive {
+        display: block !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        overflow: visible !important;
+    }
+
     .daily-summary-section .card-header {
         padding: 6px 10px !important;
         background: #f8f9fc !important;
@@ -816,8 +832,44 @@
     }
 
     .daily-table {
-        font-size: 8px !important;
+        display: table !important;
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+        table-layout: fixed !important;
+        font-size: 7px !important;
     }
+
+    .daily-table thead { display: table-header-group !important; }
+    .daily-table tbody { display: table-row-group !important; }
+    .daily-table tr { display: table-row !important; }
+
+    .daily-table th,
+    .daily-table td {
+        display: table-cell !important;
+        visibility: visible !important;
+        padding: 3px 4px !important;
+        font-size: 7px !important;
+    }
+
+    .daily-table th,
+    .daily-table td {
+        overflow-wrap: anywhere !important;
+        word-break: normal !important;
+    }
+
+    .daily-table th:nth-child(1),
+    .daily-table td:nth-child(1) { width: 17% !important; }
+    .daily-table th:nth-child(2),
+    .daily-table td:nth-child(2) { width: 13% !important; }
+    .daily-table th:nth-child(3),
+    .daily-table td:nth-child(3),
+    .daily-table th:nth-child(4),
+    .daily-table td:nth-child(4),
+    .daily-table th:nth-child(5),
+    .daily-table td:nth-child(5),
+    .daily-table th:nth-child(6),
+    .daily-table td:nth-child(6) { width: 17.5% !important; }
 
     .daily-table th {
         padding: 4px 8px !important;
@@ -850,6 +902,13 @@
 
     .daily-table .daily-day {
         font-size: 7px !important;
+    }
+
+    .daily-summary-section .daily-table th,
+    .daily-summary-section .daily-table td {
+        padding: 3px 4px !important;
+        font-size: 7px !important;
+        white-space: normal !important;
     }
 
     /* Data Table */

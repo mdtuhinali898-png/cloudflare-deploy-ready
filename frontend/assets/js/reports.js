@@ -6,6 +6,7 @@ let allBookSales = [];   // ← Book Sale data
 let charts = {};
 let multiMonthPaymentStatusReport = null;
 let tabRenderToken = 0;
+let reportDataPromise = Promise.resolve();
 
 const reportTabLabels = {
     collection: 'Collection report',
@@ -80,8 +81,19 @@ function initializeReports() {
     // Load institute info for print headers
     loadInstituteInfo();
     
-    // Load all data (this will also populate batch dropdowns after loading)
-    loadAllData();
+    // Keep the loader visible while the datasets needed by all report tabs load.
+    showReportTabLoader();
+    const initialRenderToken = tabRenderToken;
+    reportDataPromise = loadAllData();
+    reportDataPromise.then(() => {
+        // A tab click during the initial fetch owns rendering and loader cleanup.
+        if (initialRenderToken !== tabRenderToken) return;
+        return Promise.resolve(refreshCurrentTab())
+            .catch(error => console.error('Could not render initial report:', error))
+            .finally(() => {
+                if (initialRenderToken === tabRenderToken) hideReportTabLoader();
+            });
+    });
 }
 
 // Load institute info for use in print headers
@@ -172,8 +184,6 @@ async function loadAllData() {
             allBookSales = [];
         }
 
-        // Load data for current tab
-        refreshCurrentTab();
     } catch (error) {
         console.error('Error loading data:', error);
     }
@@ -226,19 +236,17 @@ function switchTab(tabName) {
     document.getElementById('dueFilterBar').style.display    = isDue ? 'flex' : 'none';
 
     // Allow the browser to paint the overlay first, then start report work.
-    requestAnimationFrame(() => setTimeout(() => {
+    requestAnimationFrame(() => setTimeout(async () => {
         if (renderToken !== tabRenderToken) return;
         try {
+            // Tab rendering must wait for payments, students, and book sales.
+            await reportDataPromise;
+            if (renderToken !== tabRenderToken) return;
             updateSummaryCards();
-            Promise.resolve(refreshCurrentTab())
-                .catch(error => {
-                    console.error('Could not render report tab:', error);
-                })
-                .finally(() => {
-                    if (renderToken === tabRenderToken) hideReportTabLoader();
-                });
+            await refreshCurrentTab();
         } catch (error) {
             console.error('Could not render report tab:', error);
+        } finally {
             if (renderToken === tabRenderToken) hideReportTabLoader();
         }
     }, 0));

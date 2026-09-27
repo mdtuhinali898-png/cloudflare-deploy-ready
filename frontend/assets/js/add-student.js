@@ -4,10 +4,33 @@ document.addEventListener('DOMContentLoaded', () => {
     const batchSelect = document.getElementById('batch');
     const batchHelp = document.getElementById('batchHelp');
     const monthlyFee = document.getElementById('monthlyFee');
+    const admissionFeeOnly = document.getElementById('admissionFeeOnly');
+    const counterDiscountInput = document.getElementById('counterDiscount');
     const photoInput = document.getElementById('studentPhoto');
     let batches = [];
     let students = [];
     let photo = '';
+    let monthlyFeeBeforeAdmissionOnly = '';
+
+    function syncAdmissionFeeOnlyMode(restoreMonthlyFee = true) {
+        if (admissionFeeOnly.checked) {
+            if (!monthlyFee.disabled) monthlyFeeBeforeAdmissionOnly = monthlyFee.value;
+            monthlyFee.value = '';
+            monthlyFee.disabled = true;
+            monthlyFee.required = false;
+        } else {
+            monthlyFee.disabled = false;
+            monthlyFee.required = true;
+            if (restoreMonthlyFee && !monthlyFee.value) {
+                const selectedBatch = batches.find(batch => batch.name === batchSelect.value);
+                monthlyFee.value = monthlyFeeBeforeAdmissionOnly || (selectedBatch?.fee != null ? String(selectedBatch.fee) : '');
+            }
+            monthlyFeeBeforeAdmissionOnly = '';
+        }
+        monthlyFee.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+
+    admissionFeeOnly.addEventListener('change', () => syncAdmissionFeeOnlyMode());
 
     async function loadBatches() {
         batchSelect.innerHTML = '<option value="">Loading batches...</option>';
@@ -77,7 +100,10 @@ document.addEventListener('DOMContentLoaded', () => {
     batchSelect.addEventListener('change', () => {
         const batchName = batchSelect.value;
         const selected = batches.find(batch => batch.name === batchName);
-        if (selected && selected.fee !== undefined) monthlyFee.value = selected.fee;
+        if (selected && selected.fee !== undefined) {
+            if (admissionFeeOnly.checked) monthlyFeeBeforeAdmissionOnly = String(selected.fee);
+            else monthlyFee.value = selected.fee;
+        }
 
         const rollInput = document.getElementById('rollNo');
         const rollHelp = document.getElementById('rollHelp');
@@ -184,7 +210,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('modalStudentId').textContent = student.studentId;
         document.getElementById('modalStudentName').textContent = student.name;
         document.getElementById('modalBatch').textContent = student.batch;
-        document.getElementById('modalTotalAmount').textContent = '৳' + Number((payload.fee || 0) + (payload.admissionFee || 0)).toLocaleString();
+        document.getElementById('modalTotalAmount').textContent = '৳' + Number(payload.payableToday || 0).toLocaleString();
 
         // Store data for print
         window.__admissionData = { student, payload, receiptNo, institute };
@@ -205,6 +231,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const monthlyFee = Number(payload.fee || 0);
         const admissionFee = Number(payload.admissionFee || 0);
         const totalAmount = monthlyFee + admissionFee;
+        const discount = Number(payload.discount || 0);
+        const paidAmount = Math.max(0, totalAmount - discount);
+        const feeRows = [];
+        if (monthlyFee > 0) feeRows.push(`<tr><td>${feeRows.length + 1}</td><td>Monthly Course Fee</td><td>${monthlyFee.toFixed(2)}</td></tr>`);
+        if (admissionFee > 0 || payload.admissionFeeOnly) feeRows.push(`<tr><td>${feeRows.length + 1}</td><td>Admission Fee</td><td>${admissionFee.toFixed(2)}</td></tr>`);
+        if (discount > 0) feeRows.push(`<tr><td colspan="2">Discount</td><td>−${discount.toFixed(2)}</td></tr>`);
+        if (!feeRows.length) feeRows.push('<tr><td colspan="3">No fee collected at admission</td></tr>');
 
         const origin = window.location.origin;
         const basePath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') + 1);
@@ -258,7 +291,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div class="info-item"><span class="label">Student ID:</span><span class="value">${student.studentId}</span></div>
                         <div class="info-item"><span class="label">Name:</span><span class="value">${student.name}</span></div>
                         <div class="info-item"><span class="label">Father's Name:</span><span class="value">${student.guardianName || 'N/A'}</span></div>
-                        <div class="info-item"><span class="label">Mother's Name:</span><span class="value">${student.motherName || 'N/A'}</span></div>
+                        <div class="info-item"><span class="label">Group:</span><span class="value">${student.group || payload.group || 'N/A'}</span></div>
                         <div class="info-item"><span class="label">Course/Batch:</span><span class="value">${student.batch}</span></div>
                         <div class="info-item"><span class="label">Phone:</span><span class="value">${student.phone}</span></div>
                         <div class="info-item"><span class="label">Admission Date:</span><span class="value">${admissionDate}</span></div>
@@ -283,17 +316,15 @@ document.addEventListener('DOMContentLoaded', () => {
                         <tr><th>SL</th><th>Description</th><th>Amount (৳)</th></tr>
                     </thead>
                     <tbody>
-                        <tr><td>01</td><td>Monthly Course Fee</td><td>${monthlyFee.toFixed(2)}</td></tr>
-                        <tr id="admissionFeeRow" style="${admissionFee > 0 ? '' : 'display:none;'}">
-                            <td>02</td><td>Admission Fee</td><td>${admissionFee.toFixed(2)}</td>
-                        </tr>
+                        ${feeRows.join('')}
                     </tbody>
                 </table>
             </div>
             <div class="summary-section">
                 <div class="summary-grid">
                     <div class="summary-item"><span>Total Fee</span><strong>৳${totalAmount.toFixed(2)}</strong></div>
-                    <div class="summary-item"><span>Paid Amount</span><strong class="paid-amount">৳${totalAmount.toFixed(2)}</strong></div>
+                    ${discount > 0 ? `<div class="summary-item"><span>Discount</span><strong>−৳${discount.toFixed(2)}</strong></div>` : ''}
+                    <div class="summary-item"><span>Paid Amount</span><strong class="paid-amount">৳${paidAmount.toFixed(2)}</strong></div>
                     <div class="summary-item"><span>Due Amount</span><strong class="due-amount">৳0.00</strong></div>
                 </div>
             </div>
@@ -369,15 +400,22 @@ document.addEventListener('DOMContentLoaded', () => {
             phone: document.getElementById('phone').value.trim(),
             guardianPhone: document.getElementById('guardianPhone').value.trim(),
             previousSchool: document.getElementById('institution').value.trim(),
+            group: document.getElementById('studentGroup').value,
             batch: batchName,
             roll: enteredRoll || finalId,
-            fee: Number(monthlyFee.value),
+            fee: admissionFeeOnly.checked ? 0 : Number(monthlyFee.value),
             admissionFee: Number(document.getElementById('admissionFee').value || 0),
+            admissionFeeOnly: admissionFeeOnly.checked,
             photo,
             status: 'Active',
             reference: document.getElementById('reference').value.trim() || ''
         };
-        if (!payload.name || !payload.phone || !payload.guardianPhone || !payload.fee) return alert('Please fill in all required fields.');
+        const grossTotal = payload.fee + payload.admissionFee;
+        payload.discount = Math.min(grossTotal, Math.max(0, Number(counterDiscountInput.value) || 0));
+        payload.payableToday = grossTotal - payload.discount;
+        if (!payload.name || !payload.phone || !payload.guardianPhone || !payload.group || (!payload.admissionFeeOnly && !payload.fee)) {
+            return alert('Please fill in all required fields.');
+        }
         const submitButton = form.querySelector('[type="submit"]');
         submitButton.disabled = true;
 
@@ -397,6 +435,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const currentMonth = new Date().toLocaleString('default', { month: 'long' });
             const currentYear = new Date().getFullYear();
             const paymentErrors = [];
+            let remainingDiscount = payload.discount;
+
+            function discountFor(amount) {
+                const applied = Math.min(amount, remainingDiscount);
+                remainingDiscount -= applied;
+                return applied;
+            }
 
             async function createAdmissionPayment(paymentData, useReceipt = false) {
                 try {
@@ -417,6 +462,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             if (payload.admissionFee > 0) {
+                const admissionDiscount = discountFor(payload.admissionFee);
                 await createAdmissionPayment({
                     studentId: student.studentId,
                     studentName: student.name,
@@ -425,9 +471,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     fee: payload.admissionFee,
                     monthlyFee: 0,
                     admissionFee: payload.admissionFee,
-                    discount: 0,
+                    discount: admissionDiscount,
                     fine: 0,
-                    amount: payload.admissionFee,
+                    amount: payload.admissionFee - admissionDiscount,
                     paymentMethod: 'Cash',
                     type: 'Admission',
                     status: 'Paid',
@@ -437,6 +483,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             if (payload.fee > 0) {
+                const monthlyDiscount = discountFor(payload.fee);
                 await createAdmissionPayment({
                     studentId: student.studentId,
                     studentName: student.name,
@@ -445,9 +492,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     fee: payload.fee,
                     monthlyFee: payload.fee,
                     admissionFee: 0,
-                    discount: 0,
+                    discount: monthlyDiscount,
                     fine: 0,
-                    amount: payload.fee,
+                    amount: payload.fee - monthlyDiscount,
                     paymentMethod: 'Cash',
                     type: 'Monthly',
                     status: 'Paid',
@@ -475,6 +522,13 @@ document.addEventListener('DOMContentLoaded', () => {
     function resetAdmissionForm() {
         form.reset();
         photo = '';
+        monthlyFeeBeforeAdmissionOnly = '';
+        monthlyFee.disabled = false;
+        monthlyFee.required = true;
+        const counterDiscount = document.getElementById('counterDiscount');
+        if (counterDiscount) counterDiscount.value = '0';
+        monthlyFee.dispatchEvent(new Event('input', { bubbles: true }));
+        counterDiscount?.dispatchEvent(new Event('input', { bubbles: true }));
 
         // Reset photo preview to default placeholder
         const previewImg = document.getElementById('photoPreviewImg');

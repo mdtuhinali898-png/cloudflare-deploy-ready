@@ -270,6 +270,30 @@
             gap: 5px;
         }
 
+        .admission-only-toggle {
+            display: flex;
+            align-items: flex-start;
+            justify-content: flex-start;
+            gap: 11px;
+            margin: 2px 0 16px;
+            padding: 13px 15px;
+            border: 1px solid #c7d2fe;
+            border-radius: 12px;
+            background: #eef2ff;
+            cursor: pointer;
+        }
+        .admission-only-toggle input {
+            width: 17px;
+            height: 17px;
+            margin: 2px 0 0;
+            accent-color: var(--p);
+            flex: 0 0 auto;
+        }
+        .admission-only-copy { display: grid; gap: 3px; }
+        .admission-only-copy strong { color: var(--ink); font-size: 13px; }
+        .admission-only-copy small { color: var(--muted); font-size: 11px; font-weight: 500; }
+        #monthlyFee:disabled { background: #f1f5f9; color: #64748b; cursor: not-allowed; }
+
         /* Input wrapper with left icon */
         .input-wrap {
             position: relative;
@@ -984,6 +1008,19 @@
                                     </div>
                                 </div>
 
+                                <div class="fgroup">
+                                    <label for="studentGroup">Group <span class="req">*</span></label>
+                                    <div class="sel-wrap has-icon">
+                                        <i class="iico fas fa-layer-group" style="position:absolute;left:13px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--light);pointer-events:none;z-index:1;"></i>
+                                        <select id="studentGroup" required>
+                                            <option value="">Select Group</option>
+                                            <option value="Science">Science</option>
+                                            <option value="Humanities">Humanities</option>
+                                            <option value="Commerce">Commerce</option>
+                                        </select>
+                                    </div>
+                                </div>
+
                                 <div class="fgroup fg-full">
                                     <label for="reference">Reference <span style="font-size:11px;font-weight:500;color:var(--muted);">(optional)</span></label>
                                     <div class="input-wrap">
@@ -1043,6 +1080,14 @@
                         </div>
                         <div class="panel-body">
 
+                            <label class="admission-only-toggle" for="admissionFeeOnly">
+                                <input type="checkbox" id="admissionFeeOnly">
+                                <span class="admission-only-copy">
+                                    <strong>Admission Fee Only</strong>
+                                    <small>Monthly fee will be set and collected later.</small>
+                                </span>
+                            </label>
+
                             <div class="fg">
                                 <div class="fgroup">
                                     <label for="monthlyFee">Monthly Fee (BDT) <span class="req">*</span></label>
@@ -1060,6 +1105,14 @@
                                 </div>
                             </div>
 
+                            <div class="fgroup fg-full counter-discount-field">
+                                <label for="counterDiscount">Counter Discount (BDT)</label>
+                                <div class="input-wrap">
+                                    <i class="iico fas fa-tag"></i>
+                                    <input type="number" id="counterDiscount" min="0" step="0.01" value="0" placeholder="0">
+                                </div>
+                            </div>
+
                             <!-- Live Payment Summary Slip -->
                             <div class="slip">
                                 <div class="slip-head">
@@ -1067,13 +1120,17 @@
                                     <span class="slip-badge">Live Preview</span>
                                 </div>
                                 <div class="slip-body">
-                                    <div class="slip-row">
+                                    <div class="slip-row" id="sumMonthlyRow">
                                         <span>Monthly Course Fee</span>
                                         <b id="sumMonthlyFee">৳ 0</b>
                                     </div>
                                     <div class="slip-row">
                                         <span>One-time Admission Fee</span>
                                         <b id="sumAdmissionFee">৳ 0</b>
+                                    </div>
+                                    <div class="slip-row" id="sumDiscountRow" style="display:none;">
+                                        <span>Discount</span>
+                                        <b id="sumDiscount" style="color:#dc2626;">−৳ 0</b>
                                     </div>
                                     <div class="slip-divider"></div>
                                     <div class="slip-total">
@@ -1180,20 +1237,32 @@
             /* ── Real-time Fee Calc ── */
             const monthlyFeeInp   = document.getElementById('monthlyFee');
             const admissionFeeInp = document.getElementById('admissionFee');
+            const admissionOnly  = document.getElementById('admissionFeeOnly');
+            const discountInp    = document.getElementById('counterDiscount');
             const sumMonthly      = document.getElementById('sumMonthlyFee');
             const sumAdm          = document.getElementById('sumAdmissionFee');
             const sumTotal        = document.getElementById('sumTotalInitial');
+            const sumMonthlyRow   = document.getElementById('sumMonthlyRow');
+            const sumDiscountRow  = document.getElementById('sumDiscountRow');
+            const sumDiscount     = document.getElementById('sumDiscount');
 
             function updateCalc() {
-                const m = parseFloat(monthlyFeeInp?.value)   || 0;
+                const m = admissionOnly?.checked ? 0 : (parseFloat(monthlyFeeInp?.value) || 0);
                 const a = parseFloat(admissionFeeInp?.value) || 0;
+                const gross = m + a;
+                const discount = Math.min(gross, Math.max(0, parseFloat(discountInp?.value) || 0));
                 if (sumMonthly) sumMonthly.textContent = '৳ ' + m.toLocaleString();
                 if (sumAdm)     sumAdm.textContent     = '৳ ' + a.toLocaleString();
-                if (sumTotal)   sumTotal.textContent   = '৳ ' + (m + a).toLocaleString();
+                if (sumTotal)   sumTotal.textContent   = '৳ ' + (gross - discount).toLocaleString();
+                if (sumMonthlyRow) sumMonthlyRow.style.display = admissionOnly?.checked ? 'none' : 'flex';
+                if (sumDiscountRow) sumDiscountRow.style.display = discount > 0 ? 'flex' : 'none';
+                if (sumDiscount) sumDiscount.textContent = '−৳ ' + discount.toLocaleString();
             }
 
             monthlyFeeInp?.addEventListener('input', updateCalc);
             admissionFeeInp?.addEventListener('input', updateCalc);
+            admissionOnly?.addEventListener('change', updateCalc);
+            discountInp?.addEventListener('input', updateCalc);
 
             /* ── Batch info strip ── */
             const batchSel   = document.getElementById('batch');
