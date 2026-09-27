@@ -1007,7 +1007,7 @@ function openPrintWindow(data, reportType, instituteName) {
     
     printFrame = document.createElement('iframe');
     printFrame.id = 'financePrintFrame';
-    printFrame.style.cssText = 'position:fixed;top:0;left:0;width:0;height:0;border:none;opacity:0;pointer-events:none;z-index:-9999;';
+    printFrame.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;border:none;opacity:0;pointer-events:none;z-index:-9999;';
     document.body.appendChild(printFrame);
     
     const frameDoc = printFrame.contentDocument || printFrame.contentWindow.document;
@@ -1433,10 +1433,19 @@ function generateEnhancedPrintContent(data, reportType, instituteName) {
         /* ── Print Optimizations ── */
         @media print {
             thead { display: table-header-group; }
-            tr { page-break-inside: avoid; }
+            tr { page-break-inside: avoid; break-inside: avoid; }
             .ds-signatures { page-break-inside: avoid; }
             .ds-summary-strip { page-break-inside: avoid; }
-            .ds-section { page-break-inside: avoid; }
+            /* Keep each section heading with its table, but let long sections flow across pages. */
+            .ds-section { page-break-inside: auto; break-inside: auto; }
+            .ds-section-title {
+                page-break-inside: avoid;
+                break-inside: avoid;
+                page-break-after: avoid;
+                break-after: avoid-page;
+            }
+            .report-table { page-break-inside: auto; break-inside: auto; }
+            .report-table thead { display: table-header-group; }
         }
     </style>
 </head>
