@@ -135,7 +135,7 @@
                 <button class="btn-today" onclick="setTodayFilter()">
                     <i class="fas fa-calendar-day"></i> Today
                 </button>
-                <button class="btn-apply" onclick="applyFilters()">
+                <button class="btn-apply" onclick="runReportAction(this, applyFilters)">
                     <i class="fas fa-check"></i> Apply
                 </button>
                 <button class="btn-reset" onclick="resetFilters()">
@@ -175,7 +175,7 @@
                         <option value="all">All Batches</option>
                     </select>
                 </div>
-                <button class="btn-apply" onclick="loadDueReport()">
+                <button class="btn-apply" onclick="runReportAction(this, loadDueReport)">
                     <i class="fas fa-search"></i> Show Report
                 </button>
                 <button class="btn-reset" onclick="resetDueFilter()">
@@ -511,7 +511,7 @@
                                 <label><input type="checkbox" value="January"> Jan</label><label><input type="checkbox" value="February"> Feb</label><label><input type="checkbox" value="March"> Mar</label><label><input type="checkbox" value="April"> Apr</label><label><input type="checkbox" value="May"> May</label><label><input type="checkbox" value="June"> Jun</label><label><input type="checkbox" value="July"> Jul</label><label><input type="checkbox" value="August"> Aug</label><label><input type="checkbox" value="September"> Sep</label><label><input type="checkbox" value="October"> Oct</label><label><input type="checkbox" value="November"> Nov</label><label><input type="checkbox" value="December"> Dec</label>
                             </div>
                         </div>
-                        <button class="btn-apply" type="button" onclick="loadMultiMonthPaymentStatus()"><i class="fas fa-search"></i> Show Report</button>
+                        <button class="btn-apply" type="button" onclick="runReportAction(this, loadMultiMonthPaymentStatus)"><i class="fas fa-search"></i> Show Report</button>
                     </div>
                     <p class="multi-month-hint">Batch, year and one or more months select করুন।</p>
                     <div class="table-responsive" id="multiMonthTableWrap" style="display:none;"><table class="data-table multi-month-table"><thead id="multiMonthTableHead"></thead><tbody id="multiMonthTableBody"></tbody></table></div>
@@ -924,7 +924,7 @@
                         <button class="btn-today" onclick="setBsToday()">
                             <i class="fas fa-calendar-day"></i> Today
                         </button>
-                        <button class="btn-apply" onclick="loadBookSalesTab()">
+                        <button class="btn-apply" onclick="runReportAction(this, loadBookSalesTab)">
                             <i class="fas fa-check"></i> Apply
                         </button>
                         <button class="btn-reset" onclick="resetBsFilter()">

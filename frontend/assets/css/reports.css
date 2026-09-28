@@ -229,6 +229,30 @@
     background: #e9ecef;
 }
 
+.btn-apply.is-loading {
+    cursor: progress;
+    filter: brightness(0.92);
+    box-shadow: 0 0 0 3px rgba(78, 115, 223, 0.18);
+}
+
+.report-action-spinner {
+    width: 14px;
+    height: 14px;
+    flex: 0 0 14px;
+    border: 2px solid currentColor;
+    border-left-color: transparent;
+    border-radius: 50%;
+    animation: report-action-rotation 0.7s linear infinite;
+}
+
+@keyframes report-action-rotation {
+    to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .report-action-spinner { animation-duration: 1.5s; }
+}
+
 /* Summary Cards */
 .summary-cards {
     display: grid;
@@ -581,10 +605,12 @@
     
     .header-actions {
         width: 100%;
+        flex-wrap: wrap;
     }
     
     .header-actions button {
-        flex: 1;
+        flex: 1 1 100%;
+        justify-content: center;
     }
     
     .report-tabs {
@@ -598,6 +624,68 @@
     
     .filter-group {
         flex-direction: column;
+    }
+
+    /* Keep report filter actions together on mobile. */
+    #dateRangeFilter {
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    #dateRangeFilter .filter-item {
+        flex: 1 1 100%;
+        width: 100%;
+    }
+
+    #booksalesTab .filter-group .filter-item {
+        grid-column: 1 / -1;
+    }
+
+    #dateRangeFilter > .btn-today,
+    #dateRangeFilter > .btn-apply,
+    #dateRangeFilter > .btn-reset,
+    #booksalesTab .filter-group > .btn-today,
+    #booksalesTab .filter-group > .btn-apply,
+    #booksalesTab .filter-group > .btn-reset {
+        min-width: 0;
+        padding: 10px 5px;
+        justify-content: center;
+        white-space: nowrap;
+        font-size: 12px;
+    }
+
+    #dateRangeFilter > .btn-today,
+    #dateRangeFilter > .btn-apply,
+    #dateRangeFilter > .btn-reset {
+        flex: 1 1 0;
+    }
+
+    #booksalesTab .filter-group {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+    }
+
+    #dueFilterBar {
+        flex-direction: row;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    #dueFilterBar .filter-item {
+        flex: 1 1 100%;
+        width: 100%;
+    }
+
+    #dueFilterBar > .btn-apply,
+    #dueFilterBar > .btn-reset {
+        flex: 1 1 0;
+        min-width: 0;
+        padding: 10px 6px;
+        justify-content: center;
+        white-space: nowrap;
+        font-size: 12px;
     }
     
     .filter-item {
@@ -618,6 +706,14 @@
 @media (max-width: 480px) {
     .summary-cards {
         grid-template-columns: 1fr;
+    }
+
+    .page-header-action {
+        padding: 16px;
+    }
+
+    .header-actions {
+        flex-direction: column;
     }
 }
 

@@ -413,6 +413,36 @@ function hideReportTabLoader() {
     loader.setAttribute('aria-hidden', 'true');
 }
 
+// Give immediate, accessible feedback while report filters are being applied.
+async function runReportAction(button, action) {
+    if (!button || button.disabled || typeof action !== 'function') return;
+
+    const startedAt = performance.now();
+    const spinner = document.createElement('span');
+    spinner.className = 'report-action-spinner';
+    spinner.setAttribute('aria-hidden', 'true');
+    button.insertBefore(spinner, button.firstChild);
+    button.classList.add('is-loading');
+    button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+
+    // Let the browser paint the spinner before synchronous report calculations.
+    await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
+
+    try {
+        await action();
+    } catch (error) {
+        console.error('Could not apply report filter:', error);
+    } finally {
+        const remaining = 400 - (performance.now() - startedAt);
+        if (remaining > 0) await new Promise(resolve => setTimeout(resolve, remaining));
+        spinner.remove();
+        button.classList.remove('is-loading');
+        button.disabled = false;
+        button.removeAttribute('aria-busy');
+    }
+}
+
 async function retryReportLoad() {
     showReportTabLoader();
     try {
@@ -436,7 +466,7 @@ function setTodayFilter() {
 
 // Apply filters
 function applyFilters() {
-    refreshCurrentTab();
+    return refreshCurrentTab();
 }
 
 // Reset filters
