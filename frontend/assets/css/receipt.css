@@ -565,6 +565,25 @@ body::before {
     text-overflow: ellipsis;
 }
 
+.payment-info-section .info-item .label,
+.payment-info-section .info-item .value {
+    min-width: 0;
+    font-size: 7.5px;
+    line-height: 1.15;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+}
+
+.payment-info-section .info-item .label {
+    flex: 0 1 auto;
+}
+
+.payment-info-section .info-item .value {
+    flex: 0 1 auto;
+    overflow-wrap: anywhere;
+}
+
 /* ============================================
    STATUS BADGES
    ============================================ */
@@ -977,6 +996,25 @@ body::before {
         flex-direction: row !important;
         justify-content: space-between !important;
         padding: 2.5px 5px !important;
+    }
+
+    .payment-info-section .info-item .label,
+    .payment-info-section .info-item .value {
+        min-width: 0 !important;
+        font-size: 7.5px !important;
+        line-height: 1.15 !important;
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+    }
+
+    .payment-info-section .info-item .label {
+        flex: 0 1 auto !important;
+    }
+
+    .payment-info-section .info-item .value {
+        flex: 0 1 auto !important;
+        overflow-wrap: anywhere !important;
     }
 
     /* Compact table padding for print fit */
