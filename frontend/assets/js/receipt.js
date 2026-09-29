@@ -138,6 +138,21 @@ const API_BASE_URL = (window.location.hostname === 'localhost' || window.locatio
         return studentsData.find(s => s.studentId === studentId || s.id === studentId);
     }
 
+    async function findStudentDataOrFetch(studentId) {
+        const loadedStudent = findStudentData(studentId);
+        if (loadedStudent || !studentId) return loadedStudent;
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/students/${encodeURIComponent(studentId)}`);
+            if (!response.ok) return null;
+            const result = await response.json();
+            return result.student || null;
+        } catch (error) {
+            console.error('Error loading student for receipt:', error);
+            return null;
+        }
+    }
+
     // ============================================
     // 5. POPULATE RECEIPT
     // ============================================
@@ -166,7 +181,7 @@ const API_BASE_URL = (window.location.hostname === 'localhost' || window.locatio
             document.getElementById('fatherName').innerText = student.guardianName || student.father || 'N/A';
             document.getElementById('motherName').innerText = student.motherName || 'N/A';
             document.getElementById('batch').innerText = student.batch || 'N/A';
-            document.getElementById('className').innerText = student.batch || student.className || 'N/A';
+            document.getElementById('className').innerText = student.group || 'N/A';
             document.getElementById('phone').innerText = student.phone || 'N/A';
             
             const statusEl = document.getElementById('studentStatus');
@@ -178,7 +193,7 @@ const API_BASE_URL = (window.location.hostname === 'localhost' || window.locatio
             document.getElementById('fatherName').innerText = 'N/A';
             document.getElementById('motherName').innerText = 'N/A';
             document.getElementById('batch').innerText = payment.batch || 'General';
-            document.getElementById('className').innerText = payment.className || 'General';
+            document.getElementById('className').innerText = payment.group || 'N/A';
             document.getElementById('phone').innerText = payment.phone || 'N/A';
             
             const statusEl = document.getElementById('studentStatus');
@@ -336,15 +351,15 @@ const API_BASE_URL = (window.location.hostname === 'localhost' || window.locatio
         const receiptId = getReceiptIdFromURL();
         if (receiptId) {
             // First try to fetch directly from API by receipt number
-            fetchPaymentByReceipt(receiptId).then(payment => {
+            fetchPaymentByReceipt(receiptId).then(async payment => {
                 if (payment) {
-                    const student = findStudentData(payment.studentId);
+                    const student = await findStudentDataOrFetch(payment.studentId);
                     populateReceipt(payment, student);
                 } else {
                     // Fallback: search in locally loaded payments
                     const localPayment = findPaymentData(receiptId);
                     if (localPayment) {
-                        const student = findStudentData(localPayment.studentId);
+                        const student = await findStudentDataOrFetch(localPayment.studentId);
                         populateReceipt(localPayment, student);
                     } else {
                         document.getElementById('receiptNo').innerText = receiptId;
