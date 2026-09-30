@@ -44,6 +44,8 @@
             max-width: 1260px;
             margin: 0 auto;
             padding: 0 16px 40px;
+            container-name: pay-content;
+            container-type: inline-size;
         }
 
         /* ── Top Portal Banner ── */
@@ -188,6 +190,8 @@
         }
         .pay-card-body {
             padding: 26px 28px;
+            container-name: payment-form-body;
+            container-type: inline-size;
         }
         .step-title {
             font-size: 15px;
@@ -389,7 +393,7 @@
             margin-bottom: 24px;
             align-items: start;
         }
-        @media (min-width: 1040px) {
+        @container pay-content (min-width: 1160px) {
             .pay-workspace-grid {
                 grid-template-columns: 1.14fr 0.86fr;
             }
@@ -627,8 +631,13 @@
             gap: 14px;
             margin-bottom: 16px;
         }
-        @media (max-width: 520px) {
+        @container payment-form-body (max-width: 560px) {
+            .fg3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @container payment-form-body (max-width: 400px) {
             .fg2, .fg3 { grid-template-columns: 1fr; }
+            #paymentForm > div:last-child { flex-direction: column; }
+            #paymentForm > div:last-child button { width: 100%; }
         }
         .fl {
             display: flex;
