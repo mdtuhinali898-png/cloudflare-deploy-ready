@@ -314,6 +314,43 @@
     border: 1px solid rgba(244, 63, 94, 0.2);
 }
 
+.stat-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.today-collection-breakdown {
+    display: grid;
+    gap: 4px;
+    margin-top: 8px;
+    width: 100%;
+}
+
+.today-collection-breakdown > div {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    line-height: 1.3;
+}
+
+.today-collection-breakdown strong {
+    color: var(--text-main);
+    font-size: 0.72rem;
+    white-space: nowrap;
+}
+
+.today-collection-breakdown + .stat-change {
+    display: block;
+    margin-top: 7px;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    font-size: 0.68rem;
+}
+
 /* Charts Row Layout */
 .charts-row {
     display: grid;
@@ -353,6 +390,20 @@
     padding: 8px;
     border-radius: 10px;
     font-size: 1rem;
+}
+
+.collection-breakdown-section {
+    margin-bottom: 32px;
+}
+
+.collection-breakdown-chart-card {
+    height: 390px;
+}
+
+.chart-year {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    font-weight: 600;
 }
 
 /* Tables & Bottom Row Layout */
@@ -495,6 +546,12 @@
 @media (max-width: 992px) {
     .charts-row, .tables-row, .bottom-row {
         grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .collection-breakdown-chart-card {
+        height: 350px;
     }
 }
 

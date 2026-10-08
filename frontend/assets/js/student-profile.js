@@ -184,9 +184,7 @@ async function loadData() {
         document.getElementById('dob').innerText = student.dob ? formatDate(student.dob) : '--';
         document.getElementById('gender').innerText = student.gender || '--';
         document.getElementById('address').innerText = student.address || '--';
-        document.getElementById('guardian').innerText = student.guardianName 
-            ? `${student.guardianName} (${student.guardianPhone || 'N/A'})` 
-            : '--';
+        document.getElementById('guardian').innerText = student.guardianPhone || '--';
 
         // Academic Info
         document.getElementById('batch').innerText = student.batch || '--';

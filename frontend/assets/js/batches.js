@@ -605,10 +605,19 @@ if (sidebarToggle) {
 
         // Add students list
         csvContent += 'STUDENTS LIST\n';
-        csvContent += 'Student ID,Name,Phone,Fee,Status\n';
+        csvContent += 'Student ID,Name,Phone,Guardian Phone,Group,Fee,Status\n';
 
         batchStudents.forEach(student => {
-            csvContent += `"${student.studentId}","${student.name}","${student.phone}",৳${student.fee},${student.status}\n`;
+            const csvCell = value => `"${String(value ?? '').replace(/"/g, '""')}"`;
+            csvContent += [
+                student.studentId,
+                student.name,
+                student.phone,
+                student.guardianPhone,
+                student.group,
+                `৳${student.fee}`,
+                student.status
+            ].map(csvCell).join(',') + '\n';
         });
 
         const filename = `${batch.name.replace(/\s+/g, '_')}_details.csv`;

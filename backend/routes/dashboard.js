@@ -7,10 +7,12 @@ const cache = {
     stats: { data: null, expiry: 0 },
     dueStudents: { data: null, expiry: 0 },
     monthlyCollection: { data: null, expiry: 0 },
+    monthlyCollectionBreakdown: { data: null, expiry: 0 },
     batchWise: { data: null, expiry: 0 }
 };
 const CACHE_TTL = 30 * 1000;
 let paymentsCache = { data: null, expiry: 0, pending: null };
+let bookSalesCache = { data: null, expiry: 0, pending: null };
 
 async function getAllDashboardPayments() {
     if (paymentsCache.data && Date.now() < paymentsCache.expiry) return paymentsCache.data;
@@ -26,7 +28,7 @@ async function getAllDashboardPayments() {
         const pageCount = Math.ceil((count || 0) / pageSize);
         const pages = await Promise.all(Array.from({ length: pageCount }, (_, page) =>
             supabase.from('payments')
-                .select('student_id, month, year, amount, type')
+                .select('student_id, month, year, amount, type, date')
                 .order('id', { ascending: true })
                 .range(page * pageSize, (page + 1) * pageSize - 1)
         ));
@@ -42,6 +44,44 @@ async function getAllDashboardPayments() {
         return await paymentsCache.pending;
     } finally {
         if (paymentsCache.pending) paymentsCache.pending = null;
+    }
+}
+
+async function getAllDashboardBookSales() {
+    if (bookSalesCache.data && Date.now() < bookSalesCache.expiry) return bookSalesCache.data;
+    if (bookSalesCache.pending) return bookSalesCache.pending;
+
+    bookSalesCache.pending = (async () => {
+        const currentYear = new Date().getFullYear();
+        const { count, error: countError } = await supabase
+            .from('book_sales')
+            .select('id', { count: 'exact', head: true })
+            .gte('sale_date', `${currentYear}-01-01`)
+            .lte('sale_date', `${currentYear}-12-31`);
+        if (countError) throw countError;
+
+        const pageSize = 1000;
+        const pageCount = Math.ceil((count || 0) / pageSize);
+        const pages = await Promise.all(Array.from({ length: pageCount }, (_, page) =>
+            supabase.from('book_sales')
+                .select('sale_date, net_amount, payment_status')
+                .gte('sale_date', `${currentYear}-01-01`)
+                .lte('sale_date', `${currentYear}-12-31`)
+                .order('id', { ascending: true })
+                .range(page * pageSize, (page + 1) * pageSize - 1)
+        ));
+        const failedPage = pages.find(page => page.error);
+        if (failedPage) throw failedPage.error;
+
+        const data = pages.flatMap(page => page.data || []);
+        bookSalesCache = { data, expiry: Date.now() + CACHE_TTL, pending: null };
+        return data;
+    })();
+
+    try {
+        return await bookSalesCache.pending;
+    } finally {
+        if (bookSalesCache.pending) bookSalesCache.pending = null;
     }
 }
 
@@ -77,20 +117,29 @@ router.get('/stats', async (req, res) => {
         const [
             { count: totalStudents },
             { count: newAdmissions },
-            { data: todayPayments },
             { data: monthPayments },
             { data: activeStudents },
-            { data: allPayments }
+            { data: allPayments },
+            { data: allBookSales }
         ] = await Promise.all([
             supabase.from('students').select('*', { count: 'exact', head: true }),
             supabase.from('students').select('*', { count: 'exact', head: true }).gte('created_at', thirtyDaysAgo),
-            supabase.from('payments').select('amount').eq('date', today),
             supabase.from('payments').select('amount').eq('month', currentMonthName).eq('year', currentYear),
             supabase.from('students').select('student_id, fee').eq('status', 'Active'),
-            getAllDashboardPayments().then(data => ({ data }))
+            getAllDashboardPayments().then(data => ({ data })),
+            getAllDashboardBookSales().then(data => ({ data }))
         ]);
 
-        const todayCollection = (todayPayments || []).reduce((sum, p) => sum + Number(p.amount || 0), 0);
+        const todayPayments = (allPayments || []).filter(p => p.date === today);
+        const todayAdmissionCollection = todayPayments
+            .filter(p => String(p.type || '').toLowerCase() === 'admission')
+            .reduce((sum, p) => sum + Number(p.amount || 0), 0);
+        const todayRegularCollection = todayPayments
+            .filter(p => String(p.type || '').toLowerCase() !== 'admission')
+            .reduce((sum, p) => sum + Number(p.amount || 0), 0);
+        const todayBookSales = (allBookSales || []).filter(s => s.sale_date === today && s.payment_status === 'Paid');
+        const todayBookSalesCollection = todayBookSales.reduce((sum, s) => sum + Number(s.net_amount || 0), 0);
+        const todayCollection = todayAdmissionCollection + todayRegularCollection + todayBookSalesCollection;
         const monthlyIncome = (monthPayments || []).reduce((sum, p) => sum + Number(p.amount || 0), 0);
 
         // Index payments by student_id
@@ -131,6 +180,10 @@ router.get('/stats', async (req, res) => {
             newAdmissions: newAdmissions || 0,
             todayCollection,
             todayPaymentsCount: (todayPayments || []).length,
+            todayAdmissionCollection,
+            todayRegularCollection,
+            todayBookSalesCollection,
+            todayBookSalesCount: todayBookSales.length,
             monthlyIncome,
             currentMonth: currentMonthName,
             dueStudentsCount: dueCount
@@ -320,6 +373,60 @@ router.get('/monthly-collection', async (req, res) => {
     } catch (error) {
         console.error('Error fetching monthly collection:', error);
         res.status(500).json({ success: false, message: 'Error fetching monthly collection' });
+    }
+});
+
+// @route   GET /api/dashboard/monthly-collection-breakdown
+// @desc    Get collected amounts by transaction date, split by source, for the current year
+// @access  Public
+router.get('/monthly-collection-breakdown', async (req, res) => {
+    try {
+        if (cache.monthlyCollectionBreakdown.data && Date.now() < cache.monthlyCollectionBreakdown.expiry) {
+            return res.json(cache.monthlyCollectionBreakdown.data);
+        }
+
+        const [payments, bookSales] = await Promise.all([
+            getAllDashboardPayments(),
+            getAllDashboardBookSales()
+        ]);
+        const currentYear = new Date().getFullYear();
+        const labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const admission = Array(12).fill(0);
+        const regular = Array(12).fill(0);
+        const books = Array(12).fill(0);
+
+        (payments || []).forEach(payment => {
+            const date = String(payment.date || '').slice(0, 10);
+            const year = Number(date.slice(0, 4));
+            const monthIndex = Number(date.slice(5, 7)) - 1;
+            if (year !== currentYear || monthIndex < 0 || monthIndex > 11) return;
+            const target = String(payment.type || '').toLowerCase() === 'admission' ? admission : regular;
+            target[monthIndex] += Number(payment.amount || 0);
+        });
+
+        (bookSales || []).forEach(sale => {
+            if (sale.payment_status !== 'Paid') return;
+            const date = String(sale.sale_date || '').slice(0, 10);
+            const year = Number(date.slice(0, 4));
+            const monthIndex = Number(date.slice(5, 7)) - 1;
+            if (year !== currentYear || monthIndex < 0 || monthIndex > 11) return;
+            books[monthIndex] += Number(sale.net_amount || 0);
+        });
+
+        const result = {
+            year: currentYear,
+            labels,
+            datasets: [
+                { key: 'admission', label: 'Admission Payment', data: admission },
+                { key: 'regular', label: 'Regular Payment', data: regular },
+                { key: 'books', label: 'Book Sales', data: books }
+            ]
+        };
+        cache.monthlyCollectionBreakdown = { data: result, expiry: Date.now() + CACHE_TTL };
+        res.json(result);
+    } catch (error) {
+        console.error('Error fetching monthly collection breakdown:', error);
+        res.status(500).json({ success: false, message: 'Error fetching monthly collection breakdown' });
     }
 });
 

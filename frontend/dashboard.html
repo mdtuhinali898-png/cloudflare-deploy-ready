@@ -79,7 +79,12 @@
                 <div class="stat-info">
                     <h3 id="todayCollection">৳0</h3>
                     <p>Today's Collection</p>
-                    <small class="stat-change"><span id="todayPayments">0</span> Payments</small>
+                    <div class="today-collection-breakdown" aria-label="Today's collection by source">
+                        <div><span>Admission Payment</span><strong id="todayAdmissionCollection">৳0</strong></div>
+                        <div><span>Regular Payment</span><strong id="todayRegularCollection">৳0</strong></div>
+                        <div><span>Book Sales</span><strong id="todayBookSalesCollection">৳0</strong></div>
+                    </div>
+                    <small class="stat-change"><span id="todayPayments">0</span> payments · <span id="todayBookSalesCount">0</span> book sales</small>
                 </div>
             </div>
             <div class="stat-card card-purple">
@@ -109,6 +114,13 @@
             <div class="chart-card">
                 <h3><i class="fas fa-chart-pie"></i> Batch Wise Students</h3>
                 <canvas id="batchChart"></canvas>
+            </div>
+        </section>
+
+        <section class="collection-breakdown-section">
+            <div class="chart-card collection-breakdown-chart-card">
+                <h3><i class="fas fa-chart-column"></i> Monthly Collection Breakdown <span class="chart-year" id="collectionBreakdownYear"></span></h3>
+                <canvas id="monthlyCollectionBreakdownChart" aria-label="Monthly admission payments, regular payments, and book sales"></canvas>
             </div>
         </section>
 
@@ -200,4 +212,3 @@
     <script>window.API_BASE_URL = (window.location.protocol === 'http:' && window.location.hostname === 'localhost') ? 'http://localhost:5002/api' : '/api';</script>
 </body>
 </html>
-

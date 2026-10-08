@@ -12,6 +12,7 @@ const API_BASE_URL = window.location.protocol === 'http:' && window.location.hos
 let dashboardData = {
     stats: {},
     monthlyCollection: { labels: [], data: [] },
+    monthlyCollectionBreakdown: { labels: [], datasets: [] },
     batchWise: { labels: [], data: [] },
     recentPayments: [],
     latestAdmissions: [],
@@ -37,6 +38,7 @@ async function loadDashboardData() {
             fetch(`${API_BASE_URL}/dashboard/recent-admissions`).then(r => r.ok ? r.json() : Promise.reject(r.status)).then(value => { dashboardData.latestAdmissions = value; loadLatestAdmissions(); }),
             fetch(`${API_BASE_URL}/dashboard/due-students`).then(r => r.ok ? r.json() : Promise.reject(r.status)).then(value => { dashboardData.dueStudents = value; loadDueStudents(); }),
             fetch(`${API_BASE_URL}/dashboard/monthly-collection`).then(r => r.ok ? r.json() : Promise.reject(r.status)).then(value => { dashboardData.monthlyCollection = value; loadCharts(); }),
+            fetch(`${API_BASE_URL}/dashboard/monthly-collection-breakdown`).then(r => r.ok ? r.json() : Promise.reject(r.status)).then(value => { dashboardData.monthlyCollectionBreakdown = value; loadCharts(); }),
             fetch(`${API_BASE_URL}/dashboard/batch-wise`).then(r => r.ok ? r.json() : Promise.reject(r.status)).then(value => { dashboardData.batchWise = value; loadCharts(); })
         ];
         const results = await Promise.allSettled(requests);
@@ -58,6 +60,10 @@ function loadStats() {
         document.getElementById('newStudents').innerText = s.newAdmissions || 0;
         document.getElementById('todayCollection').innerText = '৳' + (s.todayCollection || 0).toLocaleString();
         document.getElementById('todayPayments').innerText = s.todayPaymentsCount || 0;
+        document.getElementById('todayAdmissionCollection').innerText = '৳' + (s.todayAdmissionCollection || 0).toLocaleString();
+        document.getElementById('todayRegularCollection').innerText = '৳' + (s.todayRegularCollection || 0).toLocaleString();
+        document.getElementById('todayBookSalesCollection').innerText = '৳' + (s.todayBookSalesCollection || 0).toLocaleString();
+        document.getElementById('todayBookSalesCount').innerText = s.todayBookSalesCount || 0;
         document.getElementById('monthlyIncome').innerText = '৳' + (s.monthlyIncome || 0).toLocaleString();
         document.getElementById('currentMonth').innerText = s.currentMonth || 'N/A';
         document.getElementById('dueStudents').innerText = s.dueStudentsCount || 0;
@@ -159,6 +165,54 @@ function loadStats() {
             }
         });
 
+        }
+
+        // Monthly received collections split by source and transaction date.
+        const breakdownCtx = document.getElementById('monthlyCollectionBreakdownChart');
+        if (breakdownCtx && dashboardData.monthlyCollectionBreakdown.labels.length) {
+            const breakdownYear = document.getElementById('collectionBreakdownYear');
+            if (breakdownYear) breakdownYear.innerText = `(${dashboardData.monthlyCollectionBreakdown.year})`;
+            const existingBreakdownChart = Chart.getChart(breakdownCtx);
+            if (existingBreakdownChart) existingBreakdownChart.destroy();
+            new Chart(breakdownCtx.getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: dashboardData.monthlyCollectionBreakdown.labels,
+                    datasets: dashboardData.monthlyCollectionBreakdown.datasets.map(dataset => ({
+                        label: dataset.label,
+                        data: dataset.data,
+                        backgroundColor: {
+                            admission: '#8b5cf6',
+                            regular: '#4e73df',
+                            books: '#10b981'
+                        }[dataset.key] || '#64748b',
+                        borderRadius: 4,
+                        maxBarThickness: 44
+                    }))
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { position: 'bottom', labels: { padding: 16, usePointStyle: true } },
+                        tooltip: {
+                            callbacks: {
+                                label: context => `${context.dataset.label}: ৳${Number(context.raw || 0).toLocaleString()}`,
+                                footer: items => `Total: ৳${items.reduce((sum, item) => sum + Number(item.raw || 0), 0).toLocaleString()}`
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { stacked: true, grid: { display: false } },
+                        y: {
+                            stacked: true,
+                            beginAtZero: true,
+                            ticks: { callback: value => `৳${Number(value).toLocaleString()}` }
+                        }
+                    }
+                }
+            });
         }
 
         // Batch Wise Doughnut Chart
