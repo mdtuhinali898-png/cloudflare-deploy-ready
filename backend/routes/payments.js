@@ -86,6 +86,8 @@ router.get('/', async (req, res) => {
         const method = req.query.method;
         const status = req.query.status;
         const studentId = req.query.studentId;
+        const dateFrom = req.query.dateFrom;
+        const dateTo = req.query.dateTo;
         const reportView = req.query.view === 'report';
         const includeCount = req.query.includeCount !== 'false';
         const selectColumns = reportView
@@ -102,6 +104,10 @@ router.get('/', async (req, res) => {
         if (method && method !== 'all') query = query.eq('payment_method', method);
         if (status && status !== 'all') query = query.eq('status', status);
         if (studentId) query = query.eq('student_id', studentId.trim());
+        // Calendar-date filtering lets batch summaries request only this
+        // month's receipts instead of downloading the full payment history.
+        if (dateFrom && /^\d{4}-\d{2}-\d{2}$/.test(dateFrom)) query = query.gte('date', dateFrom);
+        if (dateTo && /^\d{4}-\d{2}-\d{2}$/.test(dateTo)) query = query.lte('date', dateTo);
 
         // Return one PostgREST-sized page with a total so clients can request
         // every page without relying on a single large response.

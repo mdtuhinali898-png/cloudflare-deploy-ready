@@ -4,6 +4,8 @@ let allPayments  = [];
 let allStudents  = [];
 let allBookSales = [];   // ← Book Sale data
 let allBookSalesSummary = [];
+let allBatches = [];
+let batchDefaultsByName = new Map();
 let allBookSalesLoaded = false;
 let bookSalesDetailsPromise = null;
 let charts = {};
@@ -283,11 +285,17 @@ async function fetchAllReportPages(endpoint, collectionKey) {
 // Load all necessary data
 async function loadAllData() {
     console.log('Loading data from API...');
-    const [payments, students, bookSalesSummary] = await Promise.all([
+    const [payments, students, bookSalesSummary, batchesResponse] = await Promise.all([
         fetchAllReportPages('/api/payments?view=report', 'payments'),
         fetchAllReportPages('/api/students?view=report', 'students'),
-        fetchAllReportPages('/api/book-sales?view=summary', 'sales')
+        fetchAllReportPages('/api/book-sales?view=summary', 'sales'),
+        fetch('/api/batches')
     ]);
+    if (!batchesResponse.ok) throw new Error('Could not load batch monthly fees');
+    const batchesResult = await batchesResponse.json();
+    if (!batchesResult.success || !Array.isArray(batchesResult.data)) throw new Error('Invalid batch monthly fee data');
+    allBatches = batchesResult.data;
+    batchDefaultsByName = new Map(allBatches.map(batch => [String(batch.name || '').trim().replace(/\s+/g, ' ').toLocaleLowerCase(), Number(batch.fee || 0)]));
 
     allPayments = payments;
     allStudents = students;
@@ -298,6 +306,18 @@ async function loadAllData() {
     rebuildReportIndexes();
     console.log('Report records loaded:', { payments: allPayments.length, students: allStudents.length, bookSales: allBookSalesSummary.length });
     populateBatchDropdowns();
+}
+
+function currentMonthBatchCollection(batch) {
+    const now = new Date();
+    const monthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-`;
+    return (reportIndexes.paymentsByBatch.get(batch) || []).reduce((sum, payment) =>
+        payment.type !== 'Admission' && String(payment.date || '').slice(0, 10).startsWith(monthPrefix)
+            ? sum + Number(payment.amount || 0) : sum, 0);
+}
+
+function defaultBatchMonthlyFee(batch) {
+    return batchDefaultsByName.get(String(batch || '').trim().replace(/\s+/g, ' ').toLocaleLowerCase()) || 0;
 }
 
 async function ensureBookSalesDetails() {
@@ -947,9 +967,7 @@ function loadBatchCollectionChart() {
     if (!ctx) return;
     
     const batches = [...new Set(allStudents.map(s => s.batch))];
-    const collectionData = batches.map(batch =>
-        (reportIndexes.paymentsByBatch.get(batch) || []).reduce((sum, p) => sum + Number(p.amount || 0), 0)
-    );
+    const collectionData = batches.map(batch => currentMonthBatchCollection(batch));
     
     renderChart('batchCollection', ctx, {
         type: 'bar',
@@ -982,9 +1000,9 @@ function loadBatchTable() {
         
         const totalStudents   = students.length;
         const activeStudents  = students.filter(s => s.status === 'Active').length;
-        const monthlyFee      = Number(students[0]?.fee || 0);
-        const expected        = totalStudents * monthlyFee;
-        const collected       = payments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
+        const monthlyFee      = defaultBatchMonthlyFee(batch);
+        const expected        = activeStudents * monthlyFee;
+        const collected       = currentMonthBatchCollection(batch);
         const due             = Math.max(0, expected - collected);
         const collectionRate  = expected > 0 ? ((collected / expected) * 100).toFixed(1) : 0;
         
@@ -1019,9 +1037,9 @@ function showBatchDetails(batch) {
     // Quick stats
     const totalStudents  = students.length;
     const activeStudents = students.filter(s => s.status === 'Active').length;
-    const monthlyFee     = Number(students[0]?.fee || 0);
-    const collected      = payments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
-    const expected       = totalStudents * monthlyFee;
+    const monthlyFee     = defaultBatchMonthlyFee(batch);
+    const collected      = currentMonthBatchCollection(batch);
+    const expected       = activeStudents * monthlyFee;
     const rate           = expected > 0 ? ((collected / expected) * 100).toFixed(1) : 0;
 
     document.getElementById('batchDetailStats').innerHTML = `
@@ -1040,11 +1058,11 @@ function showBatchDetails(batch) {
             </div>
             <div style="background:#d4edda;padding:10px 16px;border-radius:8px;border-left:3px solid #1cc88a;">
                 <div style="font-size:18px;font-weight:700;color:#1cc88a;">৳${collected.toLocaleString()}</div>
-                <div style="font-size:11px;color:#6c757d;">Total Collected</div>
+            <div style="font-size:11px;color:#6c757d;">Collected This Month</div>
             </div>
             <div style="background:#f8d7da;padding:10px 16px;border-radius:8px;border-left:3px solid #e74a3b;">
                 <div style="font-size:18px;font-weight:700;color:#e74a3b;">৳${Math.max(0, expected - collected).toLocaleString()}</div>
-                <div style="font-size:11px;color:#6c757d;">Total Due</div>
+                <div style="font-size:11px;color:#6c757d;">Due This Month</div>
             </div>
             <div style="background:#e8d5fb;padding:10px 16px;border-radius:8px;border-left:3px solid #8b5cf6;">
                 <div style="font-size:18px;font-weight:700;color:#8b5cf6;">${rate}%</div>
@@ -1751,10 +1769,11 @@ function exportBatchToExcel() {
     const batches = [...new Set(allStudents.map(student => student.batch))];
     batches.forEach(batch => {
         const students = allStudents.filter(student => student.batch === batch);
-        const fee = Number(students[0]?.fee || 0);
-        const collected = (reportIndexes.paymentsByBatch.get(batch) || []).reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
-        const expected = students.length * fee;
-        rows.push([batch, students.length, students.filter(student => student.status === 'Active').length, fee, expected, collected, Math.max(0, expected - collected), expected ? ((collected / expected) * 100).toFixed(1) + '%' : '0%']);
+        const fee = defaultBatchMonthlyFee(batch);
+        const activeCount = students.filter(student => student.status === 'Active').length;
+        const collected = currentMonthBatchCollection(batch);
+        const expected = activeCount * fee;
+        rows.push([batch, students.length, activeCount, fee, expected, collected, Math.max(0, expected - collected), expected ? ((collected / expected) * 100).toFixed(1) + '%' : '0%']);
     });
     downloadCsv('batch_report.csv', rows);
 }

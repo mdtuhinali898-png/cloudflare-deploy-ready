@@ -13,6 +13,8 @@ const API_BASE_URL = window.location.protocol === 'http:' && window.location.hos
     let batchesData = [];
     let studentsData = [];
     let paymentsData = [];
+    let batchDefaultsByName = new Map();
+    let batchStatsCache = null;
     let overviewStats = null;
     let editingBatchId = null;
     let charts = {};
@@ -22,12 +24,24 @@ const API_BASE_URL = window.location.protocol === 'http:' && window.location.hos
     // ============================================
     async function loadData() {
         try {
-            // Fetch batches from database
-            const batchesResponse = await fetch(`${API_BASE_URL}/batches`);
+            batchStatsCache = null;
+            // Load batch defaults, all students, this month's receipts, and
+            // overview totals concurrently to reduce the page's waiting time.
+            const now = new Date();
+            const dateText = date => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+            const monthStart = dateText(new Date(now.getFullYear(), now.getMonth(), 1));
+            const monthEnd = dateText(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+            const [batchesResponse, studentsResponse, firstPaymentsResponse, statsResponse] = await Promise.all([
+                fetch(`${API_BASE_URL}/batches`),
+                fetch(`${API_BASE_URL}/students?limit=1000&page=1`),
+                fetch(`${API_BASE_URL}/payments?view=report&dateFrom=${monthStart}&dateTo=${monthEnd}&limit=1000&page=1`),
+                fetch(`${API_BASE_URL}/batches/stats/overview`)
+            ]);
             const batchesResult = await batchesResponse.json();
             
             if (batchesResult.success) {
                 batchesData = batchesResult.data;
+                batchDefaultsByName = new Map(batchesData.map(batch => [String(batch.name || '').trim().replace(/\s+/g, ' ').toLocaleLowerCase(), Number(batch.fee || 0)]));
             } else {
                 console.error('Failed to load batches:', batchesResult.message);
                 batchesData = [];
@@ -35,7 +49,6 @@ const API_BASE_URL = window.location.protocol === 'http:' && window.location.hos
             
             // Fetch every student page. The database can contain more than the
             // first 1,000 records, which otherwise makes older batches appear empty.
-            const studentsResponse = await fetch(`${API_BASE_URL}/students?limit=1000&page=1`);
             if (!studentsResponse.ok) throw new Error(`Students request failed (${studentsResponse.status})`);
             const studentsResult = await studentsResponse.json();
             
@@ -58,24 +71,31 @@ const API_BASE_URL = window.location.protocol === 'http:' && window.location.hos
                 studentsData = [];
             }
             
-            // Fetch payments from database
+            // Fetch all current-calendar-month receipts in bounded parallel
+            // pages. The old single-page request silently dropped older rows.
             try {
-                const paymentsResponse = await fetch(`${API_BASE_URL}/payments?limit=1000`);
-                const paymentsResult = await paymentsResponse.json();
-                paymentsData = paymentsResult.payments || paymentsResult.data || [];
+                if (!firstPaymentsResponse.ok) throw new Error(`Payments request failed (${firstPaymentsResponse.status})`);
+                const firstPaymentsResult = await firstPaymentsResponse.json();
+                paymentsData = firstPaymentsResult.payments || [];
+                const totalPages = Number(firstPaymentsResult.totalPages || 1);
+                for (let firstPage = 2; firstPage <= totalPages; firstPage += 5) {
+                    const pageNumbers = Array.from({ length: Math.min(5, totalPages - firstPage + 1) }, (_, index) => firstPage + index);
+                    const pages = await Promise.all(pageNumbers.map(async page => {
+                        const response = await fetch(`${API_BASE_URL}/payments?view=report&dateFrom=${monthStart}&dateTo=${monthEnd}&limit=1000&page=${page}&includeCount=false`);
+                        if (!response.ok) throw new Error(`Payments page ${page} failed (${response.status})`);
+                        const result = await response.json();
+                        if (!Array.isArray(result.payments)) throw new Error(`Invalid payments page ${page}`);
+                        return result.payments;
+                    }));
+                    paymentsData.push(...pages.flat());
+                }
+                if (paymentsData.length !== Number(firstPaymentsResult.total)) throw new Error('Incomplete current-month payment data');
             } catch (paymentError) {
-                console.log('Payment collection not available yet:', paymentError.message);
-                paymentsData = [];
+                throw new Error(`Could not load the complete current-month payment data: ${paymentError.message}`);
             }
 
-            try {
-                const statsResponse = await fetch(`${API_BASE_URL}/batches/stats/overview`);
-                const statsResult = await statsResponse.json();
-                overviewStats = statsResponse.ok && statsResult.success ? statsResult.data : null;
-            } catch (statsError) {
-                console.error('Failed to load exact batch summary:', statsError);
-                overviewStats = null;
-            }
+            const statsResult = await statsResponse.json();
+            overviewStats = statsResponse.ok && statsResult.success ? statsResult.data : null;
             
             updateStats();
             renderBatchTable();
@@ -92,25 +112,49 @@ const API_BASE_URL = window.location.protocol === 'http:' && window.location.hos
     // ============================================
     function getBatchStats(batchName) {
         const normalizeBatchName = value => String(value || '').trim().replace(/\s+/g, ' ').toLocaleLowerCase();
-        const batchKey = normalizeBatchName(batchName);
-        const batchStudents = studentsData.filter(s => normalizeBatchName(s.batch) === batchKey);
-        const studentIds = batchStudents.map(s => s.studentId);
-        const batchPayments = paymentsData.filter(p => studentIds.includes(p.studentId));
-        
-        const totalStudents = batchStudents.length;
-        const activeStudents = batchStudents.filter(s => s.status === 'Active').length;
-        const expected = totalStudents * (batchStudents[0]?.fee || 0);
-        const collected = batchPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
-        const due = Math.max(0, expected - collected);
-        const rate = expected > 0 ? ((collected / expected) * 100).toFixed(1) : 0;
-        
-        return {
-            totalStudents,
-            activeStudents,
-            expected,
-            collected,
-            due,
-            rate
+        if (!batchStatsCache) {
+            const groups = new Map();
+            const studentBatch = new Map();
+            for (const student of studentsData) {
+                const key = normalizeBatchName(student.batch);
+                if (!key) continue;
+                if (!groups.has(key)) groups.set(key, { totalStudents: 0, activeStudents: 0 });
+                const group = groups.get(key);
+                group.totalStudents++;
+                if (String(student.status || '').toLowerCase() === 'active') group.activeStudents++;
+                if (student.studentId != null) studentBatch.set(String(student.studentId), key);
+            }
+
+            const now = new Date();
+            const monthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-`;
+            const collectedByBatch = new Map();
+            for (const payment of paymentsData) {
+                const batchKey = studentBatch.get(String(payment.studentId));
+                if (!batchKey || payment.type === 'Admission' || !String(payment.date || '').slice(0, 10).startsWith(monthPrefix)) continue;
+                collectedByBatch.set(batchKey, (collectedByBatch.get(batchKey) || 0) + Number(payment.amount || 0));
+            }
+
+            batchStatsCache = new Map();
+            for (const batch of batchesData) {
+                const key = normalizeBatchName(batch.name);
+                const group = groups.get(key) || { totalStudents: 0, activeStudents: 0 };
+                const monthlyFee = Number(batch.fee || 0);
+                const expected = group.activeStudents * monthlyFee;
+                const collected = collectedByBatch.get(key) || 0;
+                batchStatsCache.set(key, {
+                    ...group,
+                    monthlyFee,
+                    expected,
+                    collected,
+                    due: Math.max(0, expected - collected),
+                    rate: expected > 0 ? ((collected / expected) * 100).toFixed(1) : 0
+                });
+            }
+        }
+
+        return batchStatsCache.get(normalizeBatchName(batchName)) || {
+            totalStudents: 0, activeStudents: 0, monthlyFee: 0,
+            expected: 0, collected: 0, due: 0, rate: 0
         };
     }
 
@@ -427,6 +471,7 @@ const API_BASE_URL = window.location.protocol === 'http:' && window.location.hos
                 
                 if (result.success) {
                     batchesData = batchesData.filter(b => b._id !== batchId);
+                    batchStatsCache = null;
                     renderBatchTable();
                     updateStats();
                     renderCharts();
@@ -496,6 +541,7 @@ const API_BASE_URL = window.location.protocol === 'http:' && window.location.hos
                 }
                 
                 closeBatchModal();
+                batchStatsCache = null;
                 renderBatchTable();
                 updateStats();
                 renderCharts();
