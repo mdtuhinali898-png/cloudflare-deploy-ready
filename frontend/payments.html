@@ -913,6 +913,87 @@
             animation: spin .8s linear infinite; margin: 0 auto;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Payments page mobile layout. Desktop rules above remain unchanged. */
+        @media (max-width: 768px) {
+            body { overflow-x: hidden; }
+            .main-content { min-width: 0; box-sizing: border-box; }
+            .pay-max {
+                width: 100%;
+                max-width: none;
+                padding: 0 2px 24px;
+                box-sizing: border-box;
+            }
+            .pay-banner {
+                padding: 20px;
+                gap: 14px;
+                border-radius: 18px;
+            }
+            .pay-banner-left { width: 100%; min-width: 0; }
+            .pay-banner h2 { font-size: 20px; }
+            .pay-banner p { font-size: 13px; }
+            .pay-chip { width: 100%; box-sizing: border-box; padding: 12px 16px; }
+
+            .search-card-pro { padding: 18px; border-radius: 16px; }
+            .search-wrap { flex-direction: column; align-items: stretch; gap: 10px; }
+            .search-field-box { width: 100%; min-width: 0; }
+            .btn-search, .btn-clear { width: 100%; min-height: 48px; }
+
+            .pay-workspace-grid { gap: 16px; }
+            .pay-card { border-radius: 16px; }
+            .pay-card-hdr { padding: 14px 16px; gap: 10px; }
+            .pay-card-hdr .step-title { min-width: 0; font-size: 14px; }
+            .stu-body { flex-direction: column; padding: 18px; gap: 14px; }
+            .stu-avatar-wrap { align-self: center; }
+            .stu-body > div:last-child { width: 100%; min-width: 0; }
+            .stu-name-row { flex-wrap: wrap; gap: 8px; }
+            .stu-name { font-size: 19px; overflow-wrap: anywhere; }
+            .stu-meta-chips { gap: 6px; }
+            .stu-meta-chip { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+            .fin-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+            .fin-item { min-width: 0; padding: 10px 6px; }
+            .fin-item strong { font-size: 15px; overflow-wrap: anywhere; }
+
+            .monthly-card { padding: 16px; border-radius: 16px; }
+            .monthly-card > div:first-child { align-items: flex-start !important; flex-direction: column; }
+            #monthlyStatsSummary { display: flex; flex-wrap: wrap; gap: 6px; }
+            .summary-badge { margin: 0; }
+            .monthly-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+            .month-item { min-width: 0; padding: 10px 4px; }
+            .month-amount { overflow-wrap: anywhere; }
+
+            .pay-card-body { padding: 16px; }
+            #paymentForm > div:last-child { flex-direction: column; }
+            #paymentForm > div:last-child button { width: 100%; min-width: 0; }
+            .calc-banner { padding: 16px 14px; }
+            .calc-row { gap: 10px; }
+            .calc-row > strong { min-width: 0; text-align: right; overflow-wrap: anywhere; }
+            .calc-row.final { align-items: flex-start; gap: 8px; font-size: 15px; }
+            .calc-row.final #sumTotal { font-size: 19px; text-align: right; }
+
+            .hist-card { padding: 16px; border-radius: 16px; }
+            .hist-card > div:first-child { align-items: flex-start !important; flex-direction: column; }
+            .hist-filters { padding: 12px; gap: 8px; }
+            .hist-filters select, .hist-filters input { flex: 1 1 100%; width: 100%; min-width: 0; }
+            .hist-card .table-responsive { width: 100%; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+            .hist-card .data-table { min-width: 980px; }
+            #paymentPaginationContainer { padding: 12px !important; }
+            #paymentPaginationContainer > div:first-child,
+            #paymentPaginationContainer > div:last-child { width: 100%; }
+            #paymentPaginationContainer > div:last-child { justify-content: space-between; gap: 4px; }
+        }
+
+        @media (max-width: 400px) {
+            .pay-banner { padding: 16px; }
+            .search-card-pro { padding: 14px; }
+            .pay-card-hdr { padding: 12px; }
+            .pay-card-body { padding: 12px; }
+            .monthly-card, .hist-card { padding: 12px; }
+            .monthly-grid { gap: 5px; }
+            .month-item { border-radius: 10px; }
+            .month-amount { font-size: 10px; }
+            .pagination-container { gap: 8px !important; }
+        }
     </style>
 </head>
 <body>

@@ -263,6 +263,21 @@ router.get('/student/:studentId/monthly-status', async (req, res) => {
             .order('date', { ascending: false });
 
         const payments = (paymentsRaw || []).map(formatPayment);
+        let monthlyFee = Number(student.fee || 0);
+        if (monthlyFee <= 0 && student.batch) {
+            const { data: batch, error: batchError } = await supabase
+                .from('batches')
+                .select('fee')
+                .eq('name', student.batch)
+                .maybeSingle();
+            if (batchError) throw batchError;
+            monthlyFee = Number(batch?.fee || 0);
+        }
+        if (monthlyFee <= 0) {
+            monthlyFee = payments
+                .filter(payment => payment.type !== 'Admission')
+                .reduce((highest, payment) => Math.max(highest, Number(payment.monthlyFee || payment.fee || 0)), 0);
+        }
         const currentYear = new Date().getFullYear();
 
         const months = [
@@ -282,14 +297,22 @@ router.get('/student/:studentId/monthly-status', async (req, res) => {
 
         const currentMonthIndex = new Date().getMonth();
         const monthlyStatus = months.map((month, idx) => {
-            let monthYear = currentYear;
-            if (idx > currentMonthIndex) {
-                monthYear = currentYear - 1;
-            }
-
-            const monthPayments = payments.filter(p =>
-                p.type !== 'Admission' && p.month === month.name && Number(p.year) === monthYear
+            const currentYearPayments = payments.filter(p =>
+                p.type !== 'Admission' && p.month === month.name && Number(p.year) === currentYear
             );
+            const previousYearPayments = payments.filter(p =>
+                p.type !== 'Admission' && p.month === month.name && Number(p.year) === currentYear - 1
+            );
+
+            // Keep the 12-month view rolling, but prefer a real current-year
+            // payment for a future month when one has already been collected.
+            // This avoids hiding advance payments such as November 2026 in October.
+            const monthYear = idx > currentMonthIndex && currentYearPayments.length > 0
+                ? currentYear
+                : (idx > currentMonthIndex ? currentYear - 1 : currentYear);
+            const monthPayments = monthYear === currentYear
+                ? currentYearPayments
+                : previousYearPayments;
 
             if (monthPayments.length === 0) {
                 return {
@@ -304,7 +327,6 @@ router.get('/student/:studentId/monthly-status', async (req, res) => {
 
             const latestPayment = monthPayments[0];
             const totalPaid = monthPayments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
-            const fee = Number(student.fee || 0);
 
             let status = 'Due';
             if (totalPaid > 0) {
@@ -316,7 +338,7 @@ router.get('/student/:studentId/monthly-status', async (req, res) => {
                 monthNum: month.num,
                 status,
                 amount: totalPaid,
-                fee,
+                fee: monthlyFee,
                 paidDate: latestPayment.date,
                 receiptNo: latestPayment.receiptNo,
                 paymentMethod: latestPayment.paymentMethod
@@ -327,7 +349,7 @@ router.get('/student/:studentId/monthly-status', async (req, res) => {
         const partialMonths = monthlyStatus.filter(m => m.status === 'Partial').length;
         const unpaidMonths = monthlyStatus.filter(m => m.status === 'Unpaid').length;
         const totalPaidAmount = monthlyStatus.reduce((sum, m) => sum + m.amount, 0);
-        const totalExpected = Number(student.fee || 0) * 12;
+        const totalExpected = monthlyFee * 12;
         const totalDue = Math.max(0, totalExpected - totalPaidAmount);
 
         res.json({
@@ -336,7 +358,7 @@ router.get('/student/:studentId/monthly-status', async (req, res) => {
                 studentId: student.student_id,
                 name: student.name,
                 batch: student.batch,
-                fee: Number(student.fee || 0),
+                fee: monthlyFee,
                 phone: student.phone,
                 guardianName: student.guardian_name,
                 photo: student.photo,

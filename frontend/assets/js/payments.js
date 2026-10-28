@@ -240,6 +240,19 @@ window.searchStudent = async () => {
             const result = await response.json();
             
             if (result.success) {
+                if (result.student && Number.isFinite(Number(result.student.fee))) {
+                    const effectiveFee = Number(result.student.fee);
+                    document.getElementById('displayStudentFee').innerText = '৳' + effectiveFee.toLocaleString();
+                    if (currentStudent && String(currentStudent.studentId || currentStudent.id) === String(studentId)) {
+                        const previousFee = Number(currentStudent.fee || 0);
+                        currentStudent.fee = effectiveFee;
+                        const monthlyFeeInput = document.getElementById('monthlyFee');
+                        if (monthlyFeeInput && Number(monthlyFeeInput.value || 0) === previousFee) {
+                            monthlyFeeInput.value = effectiveFee;
+                            updateSummary();
+                        }
+                    }
+                }
                 renderMonthlyStatus(result);
             }
         } catch (error) {
